@@ -202,12 +202,31 @@ openbor_video_reader #(.LEAN_SCANOUT(LEAN_SCANOUT)) reader (
 );
 
 // -- Output assignments ------------------------------------------------
+// The reader registers its RGB output, so a pixel appears one ce_pix after the
+// `de` cycle that produced it. Delay the sync/enable outputs by the same one
+// pixel; the reader keeps using the undelayed timing internally. Without this
+// the whole frame is one pixel late relative to `de`, which the fixed 320x240
+// mode hid inside its borders but native-width present does not.
+reg dly_hs = 1'b1, dly_vs = 1'b1, dly_de = 1'b0;
+always @(posedge clk_vid) begin
+    if (reset) begin
+        dly_hs <= 1'b1;
+        dly_vs <= 1'b1;
+        dly_de <= 1'b0;
+    end
+    else if (ce_pix) begin
+        dly_hs <= tim_hsync;
+        dly_vs <= tim_vsync;
+        dly_de <= tim_de;
+    end
+end
+
 assign vga_r     = reader_r;
 assign vga_g     = reader_g;
 assign vga_b     = reader_b;
-assign vga_hs    = tim_hsync;
-assign vga_vs    = tim_vsync;
-assign vga_de    = tim_de;
+assign vga_hs    = dly_hs;
+assign vga_vs    = dly_vs;
+assign vga_de    = dly_de;
 assign active    = enable & reader_frame_ready;
 assign vsync_out = tim_vsync;
 

@@ -12,9 +12,9 @@ VVP      ?= vvp
 RTL      := ../rtl
 FLAGS    := -g2012 -Wall -I$(RTL)
 
-.PHONY: all timing ce clean
+.PHONY: all timing ce reader clean
 
-all: timing ce
+all: timing ce reader
 	@echo "fpga/sim: all testbenches passed"
 
 timing: tb_video_timing.vvp
@@ -33,3 +33,10 @@ tb_ce_pixel.vvp: tb_ce_pixel.sv $(RTL)/mame_ce_pixel.sv
 
 clean:
 	rm -f *.vvp *.vcd *.log
+
+reader: tb_video_reader.vvp
+	@$(VVP) $< | tee $@.log
+	@! grep -qE 'FAIL|TIMEOUT|ERROR' $@.log
+
+tb_video_reader.vvp: tb_video_reader.sv $(RTL)/openbor_video_top.sv $(RTL)/openbor_video_timing.sv $(RTL)/openbor_video_reader.sv $(RTL)/mame_ce_pixel.sv stubs/dcfifo.v
+	$(IVERILOG) $(FLAGS) -o $@ $^

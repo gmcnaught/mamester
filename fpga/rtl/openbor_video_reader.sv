@@ -938,10 +938,14 @@ always @(posedge clk_vid) begin
                     end
                 end
                 else if (!fifo_empty) begin
-                    // Load first word from FIFO (show-ahead)
+                    // Load first word from FIFO (show-ahead) and emit its
+                    // pixel 0 in the same cycle, so the next cycle must emit
+                    // pixel 1 — with pixel_sub left at 0 the first pixel of
+                    // every line came out twice and the last column of the
+                    // line fell outside `de`.
                     pixel_word       <= fifo_rd_data;
                     pixel_word_valid <= 1'b1;
-                    pixel_sub        <= 2'd0;
+                    pixel_sub        <= 2'd1;
                     fifo_rd          <= 1'b1;
                     // Output first pixel immediately
                     r_out <= {fifo_rd_data[15:11], fifo_rd_data[15:13]};
@@ -955,12 +959,20 @@ always @(posedge clk_vid) begin
                 end
             end
             else begin
-                // Outside active display
-                r_out            <= 8'd0;
-                g_out            <= 8'd0;
-                b_out            <= 8'd0;
-                pixel_sub        <= 2'd0;
-                pixel_word_valid <= 1'b0;
+                // Outside active display. The last active pixel of a line
+                // (always sub-pixel 3, since the pitch is a multiple of 4)
+                // has already popped the next line's first word, so that word
+                // must survive hblank — dropping it started every line after
+                // the first four pixels late.
+                r_out <= 8'd0;
+                g_out <= 8'd0;
+                b_out <= 8'd0;
+                if (vblank) begin
+                    // Frame boundary: the FIFO is cleared and refilled, so any
+                    // word held from the last line is stale.
+                    pixel_sub        <= 2'd0;
+                    pixel_word_valid <= 1'b0;
+                end
             end
         end
     end
