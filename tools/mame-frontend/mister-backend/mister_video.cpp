@@ -64,7 +64,7 @@ extern void mouse_motion_process(int x, int y);
 extern void mouse_button_process(Uint8 button, SDL_bool pressed);
 
 static SDL_Surface* sdlscreen = NULL;
-static SDL_Joystick* myjoy[4] = {0, 0, 0, 0};
+SDL_Joystick* myjoy[4] = {0, 0, 0, 0};   // global: src/rpi/input.cpp references it
 
 // ---- timing (verbatim from minimal.cpp) -----------------------------------
 unsigned long gp2x_timer_read(void)
