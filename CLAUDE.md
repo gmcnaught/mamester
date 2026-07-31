@@ -11,12 +11,13 @@ a DDR framebuffer into MiSTer's stock scaler/shader pipeline. When reasoning abo
 symptom, first decide which side it lives on: the **emulator** (CPU/driver
 correctness, speed) or the **present path** (DDR scanout, timing, scaler).
 
-**Current stage: bench build works; CPU validation pending on hardware.** The
-anchor document is [`docs/feasibility.md`](docs/feasibility.md) — read it first; it
-settles the architecture and the open risks. The mame4all-pi armhf bench binary
-builds and runs (see "Bench build" below); the next step is measuring per-driver
-fps on the real DE10-Nano. Do not invent implementation detail that contradicts the
-feasibility study without saying so.
+**Current stage: a real game runs on the MAME core (Stages 1/2/4 done). Stage 3
+(programmable timing) is next.** **Read [`docs/superpowers/progress.md`](docs/superpowers/progress.md)
+first when resuming** — it is the durable execution ledger (what's done, how to
+build/deploy/verify, and the detailed Stage-3 plan). The plan is
+[`docs/superpowers/plans/2026-07-31-mame4all-mister-v1.md`](docs/superpowers/plans/2026-07-31-mame4all-mister-v1.md);
+the feasibility study is [`docs/feasibility.md`](docs/feasibility.md). Do not invent
+implementation detail that contradicts these without saying so.
 
 ## Bench build (works today)
 
