@@ -1,6 +1,6 @@
-name: Build MAME RBF
+name: Build MAMESTer RBF
 
-# Compiles the MAME MiSTer FPGA core (fpga/MAME.qpf) into an RBF via
+# Compiles the MAMESTer MiSTer FPGA core (fpga/MAME.qpf) into an RBF via
 # fpga/build_mame.sh. Runs on GitHub-hosted ubuntu-latest using the
 # raetro/quartus:17.0 Docker image (Quartus Lite 17.0 — the version MiSTer cores
 # require). A self-hosted Windows runner can be added later as a faster default;
@@ -55,5 +55,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mame-rbf
-          path: _Other/MAME_*.rbf
+          path: _Other/MAMESTer_*.rbf
           if-no-files-found: error

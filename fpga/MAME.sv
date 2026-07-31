@@ -260,12 +260,13 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // scans it out to HDMI 1:1, identically to the full core.
 //
 // What is removed (and WHY it matters for HPS CPU usage):
-//   * setname is "ScanOut" (not "OpenBOR"). The MiSTer_Frontier
-//     Master_Daemon dispatches its OpenBOR engine handler ONLY when the
-//     loaded core's setname == "OpenBOR" (see games/OpenBOR/_handler.sh,
-//     which keys off /tmp/CORENAME). With setname "ScanOut" the daemon does
-//     NOT auto-launch the OpenBOR ARM engine — so the hybrid engine that
-//     busy-polls DDR (audio ring read-ptr / input handshake) never starts.
+//   * setname is "MAMESTer" (not "OpenBOR"). setname == the CONF_STR first
+//     token == /tmp/CORENAME. The MiSTer_Frontier Master_Daemon dispatches its
+//     OpenBOR engine handler ONLY when the loaded core's setname == "OpenBOR"
+//     (see games/OpenBOR/_handler.sh, which keys off /tmp/CORENAME). With
+//     setname "MAMESTer" the daemon does NOT auto-launch the OpenBOR ARM engine
+//     — so the hybrid engine that busy-polls DDR (audio ring read-ptr / input
+//     handshake) never starts.
 //   * No "SC0,PAK" mount slot. The mount/disk (img_mounted / sd_lba / sd_rd
 //     / sd_wr) handshake that MiSTer Main services for a mounted image is
 //     gone, so Main has nothing to keep servicing for this core.
@@ -275,7 +276,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // unpack, timing) is UNCHANGED.
 // -------------------------------------------------------------------------
 localparam CONF_STR = {
-	"MAME;;",
+	"MAMESTer;;",
 	"-;",
 	"OCE,H Position (CRT),0,+1,+2,+3,-3,-2,-1;",
 	"OFH,V Position (CRT),0,+1,+2,+3,-3,-2,-1;",

@@ -6,12 +6,12 @@
 #
 # Stages the MiSTer backend + Makefile.mister into the submodule tree, then runs
 # make inside the armhf container (qemu). Requires the image from
-# `docker build -f tools/mister/Dockerfile.mame-build -t mame-mister-armhf-build`.
+# `docker build -f tools/mister/Dockerfile.mame-build -t mamester-armhf-build`.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$REPO/vendor/mame4all-pi"
-IMAGE="mame-mister-armhf-build"
+IMAGE="mamester-armhf-build"
 
 [ -f "$SRC/Makefile" ] || { echo "submodule missing — run: git submodule update --init"; exit 1; }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deploy the MAME MiSTer port to a running MiSTer over SSH.
+Deploy the MAMESTer MiSTer port to a running MiSTer over SSH.
 
 STATUS: SKELETON. The port has no build artifacts yet, so this script cannot
 deploy an emulator or a core — it wires up the transport (ssh/scp + sha1 verify),
@@ -14,11 +14,11 @@ truncated ELF segfaults before main with no output, so every binary is verified)
 
 Intended device tree (once artifacts exist):
 
-  /media/fat/_Other/MAME_YYYYMMDD.rbf        <- RBF (FPGA passthrough core)
+  /media/fat/_Other/MAMESTer_YYYYMMDD.rbf    <- RBF (FPGA passthrough core)
   /media/fat/games/mame/
       mame                                    <- emulator ELF (armhf, static)
       roms/                                   <- ROMs (USER-SUPPLIED; never shipped)
-  /media/fat/games/MAME/_handler.sh           <- launch handler (this repo)
+  /media/fat/games/MAMESTer/_handler.sh           <- launch handler (this repo)
 
 AUTO-LAUNCH: the emulator is started by MiSTer's Master_Daemon, which watches
 /tmp/CORENAME and runs games/<setname>/_handler.sh when the core loads. Stock
@@ -27,7 +27,7 @@ MiSTer.ini `main=` wrapper — the sibling ports measured it causing frame-1 wed
 
 Usage:
   ./deploy.py --dry-run        show what would happen (default until artifacts exist)
-  ./deploy.py --handler-only   install just games/MAME/_handler.sh (works today)
+  ./deploy.py --handler-only   install just games/MAMESTer/_handler.sh (works today)
   ./deploy.py                  full deploy (NOT YET — errors: no artifacts)
 """
 
@@ -40,9 +40,10 @@ import sys
 HOST = os.environ.get("MISTER_HOST", "root@192.168.20.81")  # MiSTer device (see CLAUDE.md)
 REPO = os.path.dirname(os.path.abspath(__file__))
 
-# Provisional core/setname. The handler dir name MUST equal the RBF's CONF_STR
-# setname; update both together when the core exists.
-SETNAME = "MAME"
+# Core setname == RBF CONF_STR first token == /tmp/CORENAME. The handler dir
+# name MUST equal it (Master_Daemon runs games/<CORENAME>/_handler.sh). This is
+# the core display name; the emulator ELF + ROMs live under lowercase games/mame.
+SETNAME = "MAMESTer"
 HANDLER_SRC = os.path.join(REPO, "games", SETNAME, "_handler.sh")
 HANDLER_DST = f"/media/fat/games/{SETNAME}/_handler.sh"
 
@@ -89,9 +90,9 @@ def install_handler(dry_run):
 
 def deploy_artifacts(dry_run):
     # TODO: once builds exist, deploy in this order:
-    #   1. RBF     newest _Other/MAME_*.rbf  -> /media/fat/_Other/   (scp_verified)
+    #   1. RBF     newest _Other/MAMESTer_*.rbf  -> /media/fat/_Other/   (scp_verified)
     #   2. ELF     tools build output        -> /media/fat/games/mame/mame
-    #   3. handler games/MAME/_handler.sh    -> HANDLER_DST
+    #   3. handler games/MAMESTer/_handler.sh    -> HANDLER_DST
     # ROMs are NEVER deployed by this script (user-supplied, license).
     sys.exit(
         "Nothing to deploy: no RBF or emulator binary exists yet.\n"
@@ -102,16 +103,16 @@ def deploy_artifacts(dry_run):
 
 def main():
     global HOST
-    ap = argparse.ArgumentParser(description="Deploy the MAME MiSTer port.")
+    ap = argparse.ArgumentParser(description="Deploy the MAMESTer MiSTer port.")
     ap.add_argument("--host", default=HOST, help=f"ssh target (default {HOST})")
     ap.add_argument("--dry-run", action="store_true",
                     help="print planned actions without touching the device")
     ap.add_argument("--handler-only", action="store_true",
-                    help="install only games/MAME/_handler.sh (works today)")
+                    help="install only games/MAMESTer/_handler.sh (works today)")
     args = ap.parse_args()
     HOST = args.host
 
-    print(f"# MAME MiSTer deploy -> {HOST}  (repo: {REPO})")
+    print(f"# MAMESTer MiSTer deploy -> {HOST}  (repo: {REPO})")
     if args.handler_only or args.dry_run:
         install_handler(args.dry_run)
         if args.dry_run:

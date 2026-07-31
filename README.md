@@ -1,4 +1,7 @@
-# mame-mister — software MAME on MiSTer FPGA
+# MAMESTer — software MAME on MiSTer FPGA
+
+> Repo/build slug: `mamester` (lowercase). `MAMESTer` is the core's user-facing
+> name — the RBF filename, the OSD title, and `/tmp/CORENAME`.
 
 A port of a **software MAME** arcade emulator to the [MiSTer FPGA](https://mister-devel.github.io/MkDocs_MiSTer/)
 platform (DE10-Nano), running as an ARM/Linux app on the Cortex-A9 HPS and

@@ -1,4 +1,4 @@
-# mame-mister — execution ledger
+# mamester — execution ledger
 
 Durable multi-session progress record. Read this first when resuming. The full plan
 is `docs/superpowers/plans/2026-07-31-mame4all-mister-v1.md`; the feasibility study
@@ -11,6 +11,15 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 - **A real game runs on the MAME core**: Ghosts'n Goblins, 60 fps, correct colors,
   256×224 centered in 320×240.
 - Fabric = MiSTer_OpenBOR rebranded (RGB565 `0x3A000000` reader + `sys_top` scaler).
+- **Naming (renamed 2026-07-31):** core display name = **`MAMESTer`** (RBF filename,
+  CONF_STR/OSD title, `/tmp/CORENAME`, handler dir `games/MAMESTer/`,
+  screenshots dir). Repo/build slug = lowercase **`mamester`** (renamed from
+  `mame-mister` 2026-07-31; GitHub `gmcnaught/mamester`, local
+  `~/MisterFPGA-Projects/mamester`). Quartus
+  project files stay **`MAME.qpf/.qsf/.sv/.sdc`** and `PROJECT="MAME"` (internal
+  build id, decoupled from RBF filename via `RBF_PREFIX`). The **emulator** and its
+  data path stay lowercase **`mame`** (`games/mame/mame` ELF + ROMs). Don't blanket
+  rename "MAME" — it means the emulator in most refs.
 - Present path: mame4all → `mister_video.cpp` `nv_present()` → `0x3A000000` DDR
   double-buffer → `openbor_video_reader` → scaler → HDMI/analog.
 
@@ -28,14 +37,14 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 ## How to resume / environment
 
 - **Device:** MiSTer @ `root@192.168.20.81` (passwordless SSH). Load core:
-  `echo "load_core /media/fat/_Other/MAME_YYYYMMDD.rbf" > /dev/MiSTer_cmd`.
+  `echo "load_core /media/fat/_Other/MAMESTer_YYYYMMDD.rbf" > /dev/MiSTer_cmd`.
   Screenshot: `echo screenshot > /dev/MiSTer_cmd` → newest PNG in
-  `/media/fat/screenshots/MAME/` (scp back + view). Register peek: `busybox devmem`.
+  `/media/fat/screenshots/MAMESTer/` (scp back + view). Register peek: `busybox devmem`.
 - **Build the ARM binary:** `tools/build-mame.sh` (armhf/qemu Docker → `vendor/mame4all-pi/mame`).
 - **Build the RBF:** push `fpga/**` → GitHub Actions `Build MAME RBF` (ubuntu +
   `raetro/quartus:17.0`) → `gh run download <id> -n mame-rbf -D _Other`. (Windows
   self-hosted runner to be added later; Linux is the path today.)
-- **Deploy:** `mame` → `/media/fat/games/mame/mame`; `MAME_*.rbf` → `/media/fat/_Other/`.
+- **Deploy:** `mame` → `/media/fat/games/mame/mame`; `MAMESTer_*.rbf` → `/media/fat/_Other/`.
   ROMs (0.37b5, archive.org Ghostware set) live in `/media/fat/games/mame/*.zip`;
   the modern MiSTer set there verifyroms-OK for many titles.
 - **Fabric test without emulator:** `tools/mister/test_frame_writer.c` (writes a
@@ -116,7 +125,7 @@ the common gap-game resolutions first, arbitrary later).
   feed mame's input, or use the sonic-mania joy-SHM bridge. OSD pause.
 - **6 Audio:** mame4all ALSA already works on device (mk/nbajam ran with sound in
   the bench). Validate routing; native DDR audio ring (maldita) as fallback.
-- **7 Launch/packaging:** `deploy.py` full path; `games/MAME/_handler.sh` (already a
+- **7 Launch/packaging:** `deploy.py` full path; `games/MAMESTer/_handler.sh` (already a
   template) launched by Master_Daemon; per-game selection.
 - **8 Driver/romset triage:** ~40% of drivers fail (dkong/rtype ROM-load;
   sf2/mk2/tmnt/… post-init hang) — establish the shippable list. See

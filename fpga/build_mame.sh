@@ -1,7 +1,7 @@
 #!/bin/bash
 #============================================================================
 #
-#  build_mame.sh -- Build the OpenBOR MiSTer RBF from the command line.
+#  build_mame.sh -- Build the MAMESTer MiSTer RBF from the command line.
 #
 #  Run from fpga/ directory. Requires Quartus Prime Lite 17.0+ in PATH
 #  or at the standard Windows location.
@@ -16,13 +16,13 @@
 set -e
 
 OUTPUT_DIR="${1:-../_Other}"
-PROJECT="MAME"           # matches OpenBOR.qpf (don't change)
+PROJECT="MAME"           # Quartus project/revision name = MAME.qpf (internal build id; don't change)
 # Lean scanout build. NOTE the prefix deliberately contains neither
 # "OpenBOR" nor "7533": the MiSTer_Frontier Master_Daemon / _handler.sh
 # dispatch the busy-polling OpenBOR ARM engine when EITHER the core setname
-# is "OpenBOR" OR the loaded RBF path matches *7533*/*4086*. This lean core
-# uses setname "ScanOut" and this neutral filename so neither trigger fires.
-RBF_PREFIX="MAME"        # output filename prefix
+# is "OpenBOR" OR the loaded RBF path matches *7533*/*4086*. "MAMESTer"
+# contains none of those triggers, so neither fires.
+RBF_PREFIX="MAMESTer"    # output filename prefix (core display name)
 DATE=$(date +%Y%m%d)
 
 # Locate quartus_sh. Prefer PATH, then the raetro/quartus Docker image (CI),
@@ -40,7 +40,7 @@ else
 fi
 
 echo "============================================"
-echo "  MiSTer_MAME -- Quartus Build"
+echo "  MAMESTer -- Quartus Build"
 echo "  Quartus: $QUARTUS_SH"
 echo "============================================"
 echo ""

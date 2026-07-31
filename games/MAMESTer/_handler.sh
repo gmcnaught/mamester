@@ -1,12 +1,13 @@
 #!/bin/bash
 #
-# MAME auto-launch handler (TEMPLATE — the port does not exist yet).
+# MAMESTer auto-launch handler (TEMPLATE — the port does not exist yet).
 #
-# Invoked by MiSTer's Master_Daemon (Frontier) when the MAME FPGA core loads:
+# Invoked by MiSTer's Master_Daemon (Frontier) when the MAMESTer FPGA core loads:
 # the daemon watches /tmp/CORENAME and routes a loaded core by name (from the
 # RBF's CONF_STR setname) to games/<setname>/_handler.sh. The directory name
-# MUST equal the CONF_STR setname exactly. "MAME" here is PROVISIONAL — set it
-# to whatever the core's CONF_STR declares.
+# MUST equal the CONF_STR setname exactly — "MAMESTer" here matches the core's
+# CONF_STR first token (fpga/MAME.sv). The emulator binary + ROMs live under the
+# lowercase data path games/mame (GAMEDIR below), not here.
 #
 # WHY A HANDLER, NOT A `main=` WRAPPER: a `main=` binary REPLACES MiSTer's
 # main() and inherits its obligations to the core — notably the scheduler's
