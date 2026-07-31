@@ -63,10 +63,10 @@ Each stage produces working, testable software and is gated by an on-hardware (o
 
 - [x] **Task 1.2 — Add the Linux CI build.** `.github/workflows/build-rbf.yml`: ubuntu-latest + `raetro/quartus:17.0` runs `build_mame.sh`, uploads `_Other/MAME_*.rbf`. **Done.**
 
-- [ ] **Task 1.3 — CI produces `MAME_*.rbf`.**
+- [x] **Task 1.3 — CI produces `MAME_*.rbf`.**
   - **Verify:** the `Build MAME RBF` run succeeds; `gh run download <id> -n mame-rbf -D _Other` yields `MAME_<date>.rbf`. If the build fails, diagnose from the log (fitter/STA) and iterate on the branch.
 
-- [ ] **Task 1.4 — Deploy + load on `.81`; verify the core comes up.**
+- [x] **Task 1.4 — Deploy + load on `.81`; verify the core comes up.**
   - **Do:** scp `MAME_*.rbf` to `/media/fat/_Other/`; `echo "load_core /media/fat/_Other/MAME_<date>.rbf" > /dev/MiSTer_cmd`.
   - **Verify:** the core loads with no crash; HDMI and analog CRT both show the reader's idle scanout (whatever `openbor_video_reader` outputs with no HPS writer); `echo screenshot > /dev/MiSTer_cmd` produces a PNG. Record the idle-scanout appearance as the Stage-2 baseline.
   - **Commit** the verified state; open a PR from `stage1-core-skeleton`.
