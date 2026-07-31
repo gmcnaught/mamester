@@ -29,7 +29,7 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 1 Core builds + loads | ✅ | `f95b8aa` | CI `MAME_*.rbf`; loads `CORENAME:MAME`; 320×240 scanout |
 | 2 RGB565 present path | ✅ | `9a9024e` | `test_frame_writer` → full-screen color bars, correct RGB order |
 | 4 mame4all present shim | ✅ | `82f00ea` | gng title @ 60 fps, 256×224 centered, palette→RGB565 correct |
-| 3 Programmable timing | ✅ | (branch) | sweep: 256×224/320×240/384×224/400×254/224×288 raster exact, 1-px borders intact all 4 edges; gng 256×224, mk 416×254@53.2 Hz |
+| 3 Programmable timing | ✅ | (branch) | sweep: 5 geometries raster-exact, borders intact; gng 256×224, mk 416×254@53.2 Hz, 1943 224×256 3:4, popeye 512×448; 99.5% of drivers native |
 | 5 Input | ⏳ NEXT | — | |
 | 6 Audio | ⬜ | — | |
 | 7 Launch/packaging | ⬜ | — | |
@@ -111,6 +111,13 @@ raster with all four 1-px borders intact; `mame gng` → 256×224 @60 Hz;
 3. **Portrait orientation is a launch flag, no code needed** — mame4all parses
    `-norotate`/`-ror`/`-rol`. Measured: `1943` → 224×256 @16.32 kHz 3:4;
    `1943 -norotate` → 256×224 @15.72 kHz 4:3 (the real cabinet signal, CRT-legal).
+
+**Batch verified on device** (RBF sha1 `04837c9d`): sweep unchanged after the
+map move (all five geometries exact, borders intact); gng 256×224 @15.72 kHz
+4:3 animating; 1943 224×256 @16.32 kHz 3:4 upright and animating; popeye
+512×448 @27.84 kHz — a frame that could not be presented at all before —
+scans out intact, though that driver sits in a frozen self-test (Stage 8);
+spyhunt publishes 480×496 3:4 then exits (Stage 8).
 
 **Still open:** CPS1 exits silently right after `set_video_mode` (ghouls,
 strider, willow, ffight all die within ~20 s, no message) — driver-level,
