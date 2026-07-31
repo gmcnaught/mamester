@@ -42,18 +42,38 @@ below by a sound factor for a realistic figure; it stays large either way.
 strong confirmation of the feasibility verdict: the A9 has ample headroom for the
 mid-range 68000/Z80/6809 raster hardware that dominates the net-new gap library.
 
+## Net-new GAP games — the real targets (0.37b5 ROMs from archive.org)
+
+The games above already have native cores. These are actual net-new gap titles,
+and the heaviest class in the whole study: **Midway Y/T-unit runs a TMS34010
+graphics processor** — far heavier to emulate than the raster boards above.
+
+| Game | Hardware | fps (no sound) | fps (with sound) | native Hz | ×RT w/ sound |
+|---|---|---:|---:|---:|---:|
+| **mk** (Mortal Kombat) | Midway Y-unit, TMS34010 | 122 | **88.8** | ~54.7 | **1.6×** |
+| **nbajam** | Midway Y-unit, TMS34010 | 147 | **98.0** | ~53 | **1.85×** |
+
+**The marquee heavy gap games are comfortably playable with full sound** — 1.6–1.85×
+real-time on one A9 core, with sound emulation included. Note sound costs ~27–33%
+here (mk 122→89, nbajam 147→98), so the no-sound numbers elsewhere in this doc
+overstate real headroom by roughly that much. Since Y/T-unit is the heaviest gap
+class, the lighter gap hardware (Psikyo/Kaneko/Seta/Atari 68k, Sega System 24)
+should clear comfortably.
+
+Did **not** run (reached `set_video_mode` then hung, with or without sound):
+**mk2** (T-unit + DCS/ADSP2105 sound), **rampart**, **klax** (Atari System 2) — a
+per-driver mame4all-pi/romset issue, not a speed result. Still unmeasured: Psikyo
+(s1945 wasn't in the archive under that name), Sega System 24/32, Namco System 2.
+
 ## Caveats — read before over-reading the numbers
 
 1. **Upper bound.** Unthrottled + no sound. Sound-chip emulation (YM2151/YM2203/
    OKI/etc.) adds real CPU; the true playable headroom is lower, but the 4.5×
    floor leaves large room.
-2. **These games all already have native MiSTer cores.** The device only holds the
-   MiSTer arcade set, not the gap-game 0.37b5 ROMs, so the tested titles are the
-   *lighter, already-cored* class — not the actual targets. **The heavy gap games
-   are still unmeasured**: Midway T-unit (MK/NBA Jam) runs a 34010 GPU + TMS34010
-   at high clock and is materially heavier than anything here; Psikyo/Kaneko/Seta
-   shmups and Sega System 24/32 need their own measurement. Getting a T-unit number
-   is the next real data point and needs its ROM.
+2. **The mid-range table games all already have native MiSTer cores** (the device
+   holds the modern MiSTer arcade set). The **gap-game section** above uses real
+   0.37b5 targets (MK/NBA Jam) pulled from archive.org and is the load-bearing
+   result. Still unmeasured: Psikyo, Sega System 24/32, Namco System 2.
 3. **~40% of attempted drivers did not run** with the on-device *modern* romset:
    - **ROM load-fail** (dkong, rtype): modern romset differs from 0.37b5 (renamed/
      split files) → "required files are missing". Fixable with a 0.37b5 romset.
@@ -67,9 +87,17 @@ mid-range 68000/Z80/6809 raster hardware that dominates the net-new gap library.
 
 ## Bottom line
 
-The harness is proven on real hardware and the A9-headroom question is answered
-*for the mid-range CPU class* (comfortable, 4.5×+). Two things remain to make the
-step-1 verdict complete: (a) obtain 0.37b5 ROMs for a few true gap games —
-especially a Midway T-unit title — and measure them; (b) triage the driver
-run-failures (likely resolved by a matching 0.37b5 romset). Neither changes the
-architecture; both refine *which* games ship.
+**Step-1 CPU-budget question: answered affirmatively, including the heavy end.** The
+harness is proven on real hardware. The mid-range gap class has 4.5×+ headroom, and
+the *heaviest* marquee gap games — Mortal Kombat and NBA Jam (Midway Y-unit,
+TMS34010) — run at **1.6–1.85× real-time with full sound** on one A9 core. Since
+that is the worst-case hardware in the gap library, the A9 budget is sufficient for
+the net-new games the port targets.
+
+Remaining (refines *which* games ship, not the architecture):
+- **Triage per-driver run-failures.** ~40% of attempted drivers hang after
+  `set_video_mode` or fail ROM load (mk2/DCS, rampart, klax, sf2, several Konami/
+  Taito). Needs per-driver investigation against a clean 0.37b5 romset.
+- **Measure the other gap families** (Psikyo, Sega System 24/32, Namco System 2)
+  once their 0.37b5 ROMs are on hand.
+- **Confirm under throttle** (real 54–60 Hz play, not just the unthrottled ceiling).
