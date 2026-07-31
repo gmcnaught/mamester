@@ -1,0 +1,59 @@
+name: Build MAME RBF
+
+# Compiles the MAME MiSTer FPGA core (fpga/MAME.qpf) into an RBF via
+# fpga/build_mame.sh. Runs on GitHub-hosted ubuntu-latest using the
+# raetro/quartus:17.0 Docker image (Quartus Lite 17.0 — the version MiSTer cores
+# require). A self-hosted Windows runner can be added later as a faster default;
+# until then this Linux job is the build path.
+#
+#   push touching fpga/**  -> build (skips fpga/sim, fpga/docs)
+#   workflow_dispatch      -> manual build
+#
+# Fetch the result:  gh run download <id> -n mame-rbf -D _Other
+
+on:
+  push:
+    paths:
+      - 'fpga/**'
+      - '!fpga/sim/**'
+      - '!fpga/docs/**'
+      - '.github/workflows/build-rbf.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-rbf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false   # the RBF build does not need vendor/mame4all-pi
+
+      - name: Free disk space (Quartus needs ~24 GB)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Compile RBF (Quartus Lite 17.0 in Docker)
+        run: |
+          docker run --rm -v "$PWD:/build" raetro/quartus:17.0 \
+            bash -c "cd /build/fpga && bash build_mame.sh ../_Other"
+
+      - name: Show result
+        run: ls -la _Other/ || true
+
+      - name: Upload RBF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mame-rbf
+          path: _Other/MAME_*.rbf
+          if-no-files-found: error
