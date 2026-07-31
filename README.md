@@ -31,13 +31,15 @@ in software on this ARM.
 
 ## Status
 
-**Design / kickoff.** The architecture is settled and documented in
-[docs/feasibility.md](docs/feasibility.md); no port code exists yet. The immediate
-next step is **empirical, not RTL**: run stock mame4all-pi (or MAME 2003-Plus) on
-the real DE10-Nano HPS Linux and measure sustained fps on a spread of target
-drivers (a Midway T-unit title, a Psikyo/NMK shmup, a Sega System 24 game). The
-present path is not in doubt; the only open risk is whether one A9 core emulates a
-given driver at full speed. See the feasibility study's §6 recommendation.
+**Bench build works; on-hardware CPU validation pending.** The architecture is
+settled in [docs/feasibility.md](docs/feasibility.md), and `tools/build-mame.sh`
+now produces an armhf mame4all-pi binary with a MiSTer present backend (it links,
+runs, and reports achieved fps). The immediate next step is **empirical, not RTL**:
+deploy that binary to the real DE10-Nano HPS and measure sustained fps on a spread
+of target drivers (a Midway T-unit title, a Psikyo/NMK shmup, a Sega System 24
+game). The present path is not in doubt; the only open risk is whether one A9 core
+emulates a given driver at full speed. See the feasibility study's §6 and
+[CLAUDE.md](CLAUDE.md) "Bench build".
 
 ## Design summary
 

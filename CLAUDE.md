@@ -11,10 +11,30 @@ a DDR framebuffer into MiSTer's stock scaler/shader pipeline. When reasoning abo
 symptom, first decide which side it lives on: the **emulator** (CPU/driver
 correctness, speed) or the **present path** (DDR scanout, timing, scaler).
 
-**Current stage: design/kickoff.** The anchor document is
-[`docs/feasibility.md`](docs/feasibility.md) — read it first; it settles the
-architecture and the open risks. No port code exists yet. Do not invent
-implementation detail that contradicts the feasibility study without saying so.
+**Current stage: bench build works; CPU validation pending on hardware.** The
+anchor document is [`docs/feasibility.md`](docs/feasibility.md) — read it first; it
+settles the architecture and the open risks. The mame4all-pi armhf bench binary
+builds and runs (see "Bench build" below); the next step is measuring per-driver
+fps on the real DE10-Nano. Do not invent implementation detail that contradicts the
+feasibility study without saying so.
+
+## Bench build (works today)
+
+`tools/build-mame.sh` produces `vendor/mame4all-pi/mame` — an armhf ELF (MAME
+0.37b5) with the MiSTer present backend (`tools/mame-frontend/mister-backend/mister_video.cpp`)
+swapped in for the Raspberry Pi VideoCore path via `tools/mister/Makefile.mister`.
+The backend v0 counts frames and reports achieved fps (`MISTER-BENCH fps=…` to
+stderr); `MISTER_BENCH_FRAMES=N` exits after N frames, `MISTER_FB=1` blits RGB565
+to `/dev/fb0`. Build container: `tools/mister/Dockerfile.mame-build` (armhf/qemu).
+Verified: links (~10 MB, `ld-linux-armhf.so.3`), runs under qemu (prints the MAME
+banner). Driver set includes the gap targets (Midway T/Y-unit, Atari System 1/2,
+Psikyo, Kaneko, Seta, Namco System 2).
+
+To bench on hardware: scp `mame` to `/media/fat/games/mame/mame`, put a
+0.37b5-romset game zip in `.../roms/`, and run headless — e.g.
+`SDL_VIDEODRIVER=dummy MISTER_BENCH_FRAMES=1800 ./mame <game> -nothrottle` — reading
+the `MISTER-BENCH fps=` line. `-nothrottle` runs the emulation flat-out so the fps
+number is the A9's actual ceiling for that driver.
 
 ## Settled architecture (from the feasibility study)
 
@@ -62,10 +82,11 @@ harness comes from these, so consult them before hand-rolling:
 
 ## Next steps (in order)
 
-1. **Empirical CPU validation FIRST (no RTL yet).** Run stock mame4all-pi (and/or
-   MAME 2003-Plus) on the real DE10-Nano HPS Linux at the console; measure sustained
-   fps on target drivers (Midway T-unit, Psikyo/NMK shmup, Sega System 24). This
-   decides which games actually ship. The present path is not the risk.
+1. **Empirical CPU validation FIRST (no RTL yet).** The bench binary is built (see
+   "Bench build"). Deploy it to the real DE10-Nano HPS and measure sustained fps on
+   target drivers (Midway T-unit, Psikyo/NMK shmup, Sega System 24). This decides
+   which games actually ship. The present path is not the risk. (Needs user-supplied
+   0.37b5 ROMs; none are committed.)
 2. Bring up the present path from `sonic-mania`'s `test-frame-writer.c` against a
    reader that feeds the standard pipeline (adapt `maldita`/`solarus`).
 3. Write the MAME-bitmap→DDR-writer shim (replace mame4all's `update_screen`/
