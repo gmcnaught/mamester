@@ -57,6 +57,30 @@ static size_t    fb_len    = 0;
 static uint32_t  fb_w = 0, fb_h = 0, fb_stride = 0, fb_bpp = 0;
 static bool      fb_enabled = false;
 
+// ---- MiSTer native-video DDR present (the real core output) ---------------
+// 0x3A000000 RGB565 double-buffer. Contract from MiSTer_OpenBOR
+// native_video_writer.c, proven by tools/mister/test_frame_writer.c:
+//   +0x000 control = (frame_counter<<2)|active_buf ; +0x040 BUF0 ; +0x40040 BUF1
+// The openbor_video_reader stale-frame watchdog blanks on a stalled counter, so
+// we bump the control word every frame (DisplayScreen is per-frame). mame4all's
+// gp2x_screen15 is already RGB565 (gp2x_video_color15 macro) — no BGR swap.
+// Stage 4 presents at the core's FIXED 320x240; the game surface is center-
+// clipped. Stage 3 will make the timing per-game programmable.
+static const uintptr_t NV_BASE   = 0x3A000000u;
+static const size_t    NV_REGION = 0x00100000u;   // 1 MB
+static const size_t    NV_BUF0   = 0x00000040u;
+static const size_t    NV_BUF1   = 0x00040040u;
+static const int       NV_W = 320, NV_H = 240;
+static int               nv_fd    = -1;
+static volatile uint8_t *nv_base  = 0;
+static volatile uint32_t*nv_ctrl  = 0;
+static uint16_t         *nv_buf[2] = {0, 0};
+static uint32_t          nv_frame = 0;
+static int               nv_active = 0;
+static bool              nv_enabled = false;
+static void nv_init(void);
+static void nv_present(void);
+
 // SDL input event handlers live in src/rpi/input.cpp.
 extern void keyprocess(SDLKey inkey, SDL_bool pressed);
 extern void joyprocess(Uint8 button, SDL_bool pressed, Uint8 njoy);
@@ -142,6 +166,8 @@ void deinit_SDL(void)
 
 void gp2x_deinit(void)
 {
+    if (nv_base) { munmap((void*)nv_base, NV_REGION); nv_base = 0; nv_enabled = false; }
+    if (nv_fd >= 0) { close(nv_fd); nv_fd = -1; }
     if (fb_mem) { munmap(fb_mem, fb_len); fb_mem = 0; }
     if (fb_fd >= 0) { close(fb_fd); fb_fd = -1; }
     if (gp2x_screen8)  free(gp2x_screen8);
@@ -165,6 +191,7 @@ void gp2x_set_video_mode(struct osd_bitmap *bitmap, int bpp, int width, int heig
     }
     fprintf(stderr, "mister_video: set_video_mode %dx%d depth=%d\n",
             width, height, bitmap->depth);
+    nv_init();
 }
 
 // ---- the present seam -----------------------------------------------------
@@ -203,8 +230,61 @@ static void fb_blit16(void)
                (size_t)w * 2);
 }
 
+// Map the native-video DDR region. Fails gracefully off-device (no /dev/mem or
+// not root) so the bench mode still works. Idempotent.
+static void nv_init(void)
+{
+    if (nv_enabled || getenv("MISTER_NO_NATIVE")) return;
+    nv_fd = open("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC);
+    if (nv_fd < 0) return;
+    void* m = mmap(NULL, NV_REGION, PROT_READ | PROT_WRITE, MAP_SHARED, nv_fd,
+                   (off_t)NV_BASE);
+    if (m == MAP_FAILED) { close(nv_fd); nv_fd = -1; return; }
+    nv_base = (volatile uint8_t*)m;
+    nv_ctrl = (volatile uint32_t*)(nv_base);
+    nv_buf[0] = (uint16_t*)(nv_base + NV_BUF0);
+    nv_buf[1] = (uint16_t*)(nv_base + NV_BUF1);
+    memset((void*)nv_buf[0], 0, (size_t)NV_W * NV_H * 2);
+    memset((void*)nv_buf[1], 0, (size_t)NV_W * NV_H * 2);
+    *nv_ctrl = 0;
+    nv_frame = 0; nv_active = 0; nv_enabled = true;
+    fprintf(stderr, "mister_video: native video DDR @ 0x%08lx (%dx%d RGB565)\n",
+            (unsigned long)NV_BASE, NV_W, NV_H);
+}
+
+// Write the current mame frame into the inactive DDR buffer (center-clipped to
+// 320x240) and ring the doorbell.
+static void nv_present(void)
+{
+    if (!nv_enabled) return;
+    uint16_t* dst = nv_buf[nv_active];
+    const int cw = surface_width  < NV_W ? surface_width  : NV_W;
+    const int ch = surface_height < NV_H ? surface_height : NV_H;
+    const int dx = (NV_W - cw) / 2, dy = (NV_H - ch) / 2;
+    const int sx = (surface_width  - cw) / 2, sy = (surface_height - ch) / 2;
+    memset(dst, 0, (size_t)NV_W * NV_H * 2);   // black borders
+    if (gp2x_screen15) {
+        for (int y = 0; y < ch; y++)
+            memcpy(dst + (size_t)(dy + y) * NV_W + dx,
+                   gp2x_screen15 + (size_t)(sy + y) * surface_width + sx,
+                   (size_t)cw * 2);
+    } else if (gp2x_screen8) {
+        for (int y = 0; y < ch; y++) {
+            const unsigned char* srow =
+                gp2x_screen8 + (size_t)(sy + y) * surface_width + sx;
+            uint16_t* drow = dst + (size_t)(dy + y) * NV_W + dx;
+            for (int x = 0; x < cw; x++) drow[x] = gp2x_palette[srow[x]];
+        }
+    }
+    __sync_synchronize();
+    nv_frame++;
+    *nv_ctrl = (nv_frame << 2) | (uint32_t)nv_active;
+    nv_active ^= 1;
+}
+
 void DisplayScreen(void)
 {
+    nv_present();
     fb_blit16();
     bench_tick();
 }
