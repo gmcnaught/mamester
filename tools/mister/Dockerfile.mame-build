@@ -1,0 +1,21 @@
+# armhf cross-build container for the mame4all-pi MiSTer bench build.
+#
+# The MiSTer HPS is an ARMv7 Cortex-A9 (armhf, glibc) with NO Raspberry Pi
+# VideoCore GPU, so we build against a plain armhf Debian rootfs — none of the
+# /opt/vc bcm_host/EGL/GLES libs the stock rpi backend links. The MiSTer present
+# backend (tools/mame-frontend/mister-backend/) replaces that path.
+#
+# Native armhf via qemu emulation (matches the sibling ports' "Docker armhf
+# cross-compile"). Emulated compilation is slow; the first full build of the MAME
+# driver set can take a while — trim drivers via Makefile.mister for fast iteration.
+FROM --platform=linux/arm/v7 debian:bullseye
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libsdl1.2-dev \
+        libglib2.0-dev \
+        libasound2-dev \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src

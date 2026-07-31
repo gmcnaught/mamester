@@ -1,0 +1,3 @@
+[submodule "vendor/mame4all-pi"]
+	path = vendor/mame4all-pi
+	url = https://github.com/RetroPie/mame4all-pi.git
