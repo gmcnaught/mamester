@@ -41,3 +41,4 @@ compile_commands.json
 *.vcd
 *.fst
 *.vvp
+tools/mister/test_frame_writer
