@@ -1,0 +1,43 @@
+# Build output
+/build/
+/_Other/
+*.rbf
+*.rbf.*
+
+# ARM binaries / objects
+*.o
+*.a
+*.so
+*.so.*
+*.armhf
+*.elf
+
+# ROMs and copyrighted content — NEVER commit
+*.zip
+*.7z
+/roms/
+/games/*/roms/
+
+# Quartus
+/fpga/db/
+/fpga/incremental_db/
+/fpga/output_files/
+/fpga/simulation/
+/fpga/greybox_tmp/
+/fpga/*.qws
+/fpga/*.rpt
+/fpga/*.summary
+/fpga/*.smsg
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+compile_commands.json
+/.ccls-cache/
+
+# Sim artifacts
+*.vcd
+*.fst
+*.vvp
