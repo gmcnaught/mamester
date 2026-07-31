@@ -98,17 +98,23 @@ registered RGB.
 raster with all four 1-px borders intact; `mame gng` → 256×224 @60 Hz;
 `mame mk` → 416×254 @53.2 Hz (16bpp path, off-60 refresh).
 
-**Known follow-ups (need one more RBF build; batch them):**
-1. **Aspect ratio** is still hardwired 4:3 (`VIDEO_ARX/ARY` in `MAME.sv`).
-   Portrait games are therefore stretched. Add an aspect to the timing block
-   (spare bits in `+0x18`) and drive `VIDEO_ARX/ARY` from it.
-2. **512 KB buffers** would bring 51 of the 62 fallback drivers to native
-   (BUF1 `+0x40040` → `+0x80040`, timing block after it, HPS map 1 MB → 2 MB).
-3. **Portrait H rate** — 326 vertical drivers land at 18–24 kHz because
-   mame4all presents them in game orientation. HDMI is fine; a 15 kHz CRT is
-   not. See the survey doc for the trade-off.
-4. **CPS1 exits silently** right after `set_video_mode` (ghouls, strider,
-   willow, ffight all die within ~20 s, no message) — driver-level, Stage 8.
+**Follow-up batch (done, second RBF build):**
+1. **1 MB buffer slots.** The upper 512 MB of DDR belongs to the FPGA, so the
+   map no longer packs into 1 MB: BUF0 `+0x40`, BUF1 `+0x100040`, cart
+   `+0x200000`, audio ring `+0x280000`, timing `+0x300000`; the HPS maps 4 MB.
+   Native-present coverage 97.2% → **99.5%** (popeye 512×448, kroozr 512×480,
+   spyhunt 480×496 and friends now fit). The 11 remaining fallbacks are wider
+   than the reader's 512-pixel line.
+2. **Per-game aspect.** `+0x18` carries `arx`/`ary` beside `ce_inc`; the reader
+   publishes them (4:3 default) and `MAME.sv` drives `VIDEO_ARX/ARY` from them.
+   `nv_make_modeline` picks 3:4 when the frame is taller than it is wide.
+3. **Portrait orientation is a launch flag, no code needed** — mame4all parses
+   `-norotate`/`-ror`/`-rol`. Measured: `1943` → 224×256 @16.32 kHz 3:4;
+   `1943 -norotate` → 256×224 @15.72 kHz 4:3 (the real cabinet signal, CRT-legal).
+
+**Still open:** CPS1 exits silently right after `set_video_mode` (ghouls,
+strider, willow, ffight all die within ~20 s, no message) — driver-level,
+Stage 8.
 
 ## Later stages (pointers)
 

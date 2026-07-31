@@ -20,35 +20,30 @@ cc -O2 -o modeline_report tools/mister/modeline_report.c && ./modeline_report ge
 
 | | count | share |
 |---|---:|---:|
-| present at native geometry | 2,153 | 97.2% |
-| fall back to 320×240 center-clip | 62 | 2.8% |
+| present at native geometry | 2,204 | 99.5% |
+| fall back to 320×240 center-clip | 11 | 0.5% |
 | H rate 14.8–16.5 kHz (analog CRT ok) | 1,822 | 82.3% |
-| H rate above 16.5 kHz (HDMI / multisync only) | 331 | 15.0% |
+| H rate above 16.5 kHz (HDMI / multisync only) | 382 | 17.2% |
 | bad porch / bad CE increment | 0 | — |
 
-Max pixel clock 10.550 MHz (`polyplay` 512×256) — far below the 26.8 MHz where
-the fractional CE divider could fire on consecutive clocks. Max H rate
-29.76 kHz (`punchout`, 256×480 dual screen).
+Max pixel clock 20.022 MHz (`solarfox` 480×512) — below the 26.8 MHz where the
+fractional CE divider could fire on consecutive clocks. Max H rate 31.68 kHz
+(same driver; it runs at 30 Hz, which the modeline builder presents as 60 Hz
+timing with each frame shown twice).
 
-## The 62 fallbacks
-
-All are over the 256 KB buffer or wider than the reader's 512-pixel limit:
+With the original 256 KB buffers this was 97.2% native / 62 fallbacks; 1 MB
+buffer slots recovered 51 of them. The remaining 11 are wider than the reader's
+512-pixel line limit:
 
 | surface | drivers | examples |
 |---|---:|---|
-| 512×480 | 24 | kroozr, wacko, twotiger |
-| 480×512 | 9 | solarfox, kick, shollow |
 | 672×240 | 6 | skullxbo, cyberbal |
-| 512×384 | 5 | paperboy, ssprint, 720 |
-| 384×512 | 5 | apb, toobin |
-| 512×448 | 3 | popeye |
 | 640×240 | 3 | blstroid |
 | 800×600 | 2 | dotron |
-| 480×480, 512×401, 480×496 | 5 | crater, narc, spyhunt |
 
-51 of the 62 come back if the DDR buffers grow from 256 KB to 512 KB (move BUF1
-from `+0x40040` to `+0x80040` and the timing block past it). Only the 11 wider
-than 512 px (672/640/800) would still need a wider reader.
+Going wider needs more than a bigger buffer: the line FIFO holds two 512-pixel
+lines, and an 800×600 mode would want a ~39 MHz pixel clock, past the point
+where the fractional CE divider would have to fire on consecutive clocks.
 
 ## Portrait games and the H rate
 
@@ -57,8 +52,15 @@ in **game** orientation — Pac-Man arrives as a 224×288 surface, so the raster
 288 lines and the line rate is 18.2 kHz at 60 Hz instead of 15.7 kHz. HDMI is
 unaffected (ascal scales it); a 15 kHz analog CRT cannot lock to it.
 
-The alternative is to present the **hardware** orientation (Pac-Man's real
-288×224 @ 15.7 kHz signal) and rotate the display, as a real cabinet does.
-That is a product decision, not a fabric limit — both are one flag away, and
-the trade is: portrait-in-game-orientation is what an HDMI user expects, while
-hardware orientation is what a CRT (or a physically rotated monitor) needs.
+The alternative — the hardware orientation, as a real cabinet emits it — is a
+**launch flag**, not a build option: mame4all parses `-norotate` / `-ror` /
+`-rol` from the command line (`src/rpi/config.cpp`). Measured on device:
+
+| launch | surface | H rate | aspect |
+|---|---|---|---|
+| `mame 1943` | 224×256 portrait | 16.32 kHz | 3:4 |
+| `mame 1943 -norotate` | 256×224 hardware orientation | 15.72 kHz | 4:3 |
+
+So the default suits HDMI (upright portrait, pillarboxed, correct 3:4 aspect)
+and `-norotate` suits a 15 kHz CRT on a rotated monitor. The handler can expose
+it per game.
