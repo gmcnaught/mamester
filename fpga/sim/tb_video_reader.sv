@@ -43,8 +43,8 @@ integer LINE_WORDS = 64;
 localparam [28:0] QBASE      = 29'h07400000;
 localparam [28:0] CTRL_Q     = 29'h07400000;
 localparam [28:0] BUF0_Q     = 29'h07400008;
-localparam [28:0] TIMING_Q   = 29'h0741C000;
-localparam integer MEM_WORDS = 131072;       // 1 MB / 8
+localparam [28:0] TIMING_Q   = 29'h07460000;   // 0x3A300000 >> 3
+localparam integer MEM_WORDS = 786432;         // 6 MB / 8, covers the reg block
 
 reg [63:0] mem [0:MEM_WORDS-1];
 
@@ -87,6 +87,7 @@ wire [7:0] vga_r, vga_g, vga_b;
 wire       vga_hs, vga_vs, vga_de;
 wire       nv_active;
 wire [23:0] ce_inc;
+wire [15:0] arx, ary;
 
 openbor_video_top #(.LEAN_SCANOUT(1)) dut (
     .clk_sys(clk_sys), .clk_vid(clk_vid), .ce_pix(ce_pix), .reset(reset),
@@ -96,6 +97,7 @@ openbor_video_top #(.LEAN_SCANOUT(1)) dut (
     .vga_r(vga_r), .vga_g(vga_g), .vga_b(vga_b),
     .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_de(vga_de),
     .enable(1'b1), .active(nv_active), .vsync_out(), .ce_inc(ce_inc),
+    .arx(arx), .ary(ary),
     .h_offset(3'd0), .v_offset(3'd0),
     .joystick_0(32'd0), .joystick_1(32'd0), .joystick_2(32'd0),
     .joystick_3(32'd0), .joystick_l_analog_0(16'd0),
@@ -125,14 +127,14 @@ endtask
 
 task publish_timing(input integer ha, input integer hf, input integer hs, input integer ht,
                     input integer va, input integer vf, input integer vs, input integer vt,
-                    input [23:0] inc);
+                    input [23:0] inc, input integer arx, input integer ary);
     integer base;
 begin
     base = TIMING_Q - QBASE;
     mem[base + 0] = 64'h0000_0000_5449_4D31;   // magic "TIM1" in [31:0]
     mem[base + 1] = {ht[15:0], hs[15:0], hf[15:0], ha[15:0]};
     mem[base + 2] = {vt[15:0], vs[15:0], vf[15:0], va[15:0]};
-    mem[base + 3] = {40'd0, inc};
+    mem[base + 3] = {16'd0, ary[15:0], arx[15:0], inc};
 end
 endtask
 
@@ -185,7 +187,8 @@ begin
     LINE_WORDS = w / 4;
 
     load_frame;
-    publish_timing(w, hfp, hsy, ht, h, vfp, vsy, vt, inc);
+    publish_timing(w, hfp, hsy, ht, h, vfp, vsy, vt, inc,
+                   (h > w) ? 3 : 4, (h > w) ? 4 : 3);
 
     // Two identical reads to confirm, one frame boundary to latch, and a
     // couple more for the reader to fetch a full frame at the new pitch.
@@ -207,6 +210,11 @@ begin
     end
     if (!nv_active) begin
         $display("  FAIL reader never reported a ready frame");
+        errors = errors + 1;
+    end
+    if (arx !== ((h > w) ? 16'd3 : 16'd4) || ary !== ((h > w) ? 16'd4 : 16'd3)) begin
+        $display("  FAIL aspect %0d:%0d (want %0d:%0d)", arx, ary,
+                 (h > w) ? 3 : 4, (h > w) ? 4 : 3);
         errors = errors + 1;
     end
 
@@ -236,7 +244,7 @@ initial begin
 
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     load_frame;
-    publish_timing(W, HFP, HSY, HT, H, VFP, VSY, VT, 24'd1650478);
+    publish_timing(W, HFP, HSY, HT, H, VFP, VSY, VT, 24'd1650478, 4, 3);
     mem[CTRL_Q - QBASE] = 64'h0000_0000_0000_0004;   // frame 1, buffer 0
 
     repeat (20) @(posedge clk_sys);
@@ -245,6 +253,8 @@ initial begin
     run_mode("256x224 (gng)",  256, 224, 14, 30, 336,  8, 3, 262, 24'd1650478);
     run_mode("320x240 (default)", 320, 240, 17, 38, 420,  2, 3, 262, 24'd2060470);
     run_mode("384x224 (sf2)",  384, 224, 20, 46, 504,  8, 3, 262, 24'd2473198);
+    run_mode("224x288 (tate)",  224, 288, 12, 27, 296,  4, 3, 304, 24'd1687000);
+    run_mode("512x448 (popeye)",512, 448, 26, 60, 672,  4, 3, 464, 24'd5850000);
 
     if (errors == 0) $display("tb_video_reader: PASS");
     else             $display("tb_video_reader: FAIL (%0d errors)", errors);

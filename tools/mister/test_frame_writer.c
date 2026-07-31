@@ -7,9 +7,9 @@
  * MiSTer_OpenBOR src/native_video_writer.c):
  *
  *   0x3A000000 + 0x000   control word = (frame_counter<<2) | active_buf[1:0]
- *   0x3A000000 + 0x040   buffer 0   (RGB565, max 256 KB)
- *   0x3A000000 + 0x40040 buffer 1
- *   0x3A000000 + 0xE0000 per-game timing registers (Stage 3, see nv_modeline.h)
+ *   0x3A000000 + 0x040   buffer 0   (RGB565, 1 MB slot)
+ *   0x3A100040           buffer 1
+ *   0x3A300000           per-game timing registers (Stage 3, see nv_modeline.h)
  *
  * RGB565: R=[15:11] G=[10:5] B=[4:0]. mame4all outputs this natively (no BGR
  * swap, unlike OpenBOR's SDL surfaces), so color bars here also verify the
@@ -45,11 +45,11 @@
 #include "../mame-frontend/mister-backend/nv_modeline.h"
 
 #define NV_BASE     0x3A000000u
-#define NV_REGION   0x00100000u   /* 1 MB */
+#define NV_REGION   0x00400000u   /* 4 MB */
 #define NV_CTRL     0x00000000u
 #define NV_BUF0     0x00000040u
-#define NV_BUF1     0x00040040u
-#define NV_BUF_BYTES 0x00040000u
+#define NV_BUF1     0x00100040u
+#define NV_BUF_BYTES 0x00100000u
 #define NV_MAX_W    512
 #define NV_MAX_H    512
 

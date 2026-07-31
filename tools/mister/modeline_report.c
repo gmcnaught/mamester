@@ -26,7 +26,7 @@
 
 #define MAX_W 512
 #define MAX_H 512
-#define BUF_BYTES 0x40000
+#define BUF_BYTES 0x100000   /* 1 MB buffer slot */
 
 int main(int argc, char **argv)
 {

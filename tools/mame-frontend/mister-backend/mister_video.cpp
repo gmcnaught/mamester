@@ -62,20 +62,20 @@ static bool      fb_enabled = false;
 // ---- MiSTer native-video DDR present (the real core output) ---------------
 // 0x3A000000 RGB565 double-buffer. Contract from MiSTer_OpenBOR
 // native_video_writer.c, proven by tools/mister/test_frame_writer.c:
-//   +0x000 control = (frame_counter<<2)|active_buf ; +0x040 BUF0 ; +0x40040 BUF1
+//   +0x000 control = (frame_counter<<2)|active_buf ; +0x040 BUF0 ; +0x100040 BUF1
 // The openbor_video_reader stale-frame watchdog blanks on a stalled counter, so
 // we bump the control word every frame (DisplayScreen is per-frame). mame4all's
 // gp2x_screen15 is already RGB565 (gp2x_video_color15 macro) — no BGR swap.
 // Stage 3 presents at the driver's NATIVE size: gp2x_set_video_mode publishes a
-// modeline to the timing registers at +0xE0000 and the frame is written at its
-// own width/height (padded to a multiple of 4 pixels per line). Frames too big
-// for a 256 KB buffer fall back to the fixed 320x240 center-clip.
+// modeline to the timing registers at +0x300000 and the frame is written at its
+// own width/height (padded to a multiple of 4 pixels per line). Frames wider or
+// taller than the reader supports fall back to the fixed 320x240 center-clip.
 static const uintptr_t NV_BASE   = 0x3A000000u;
-static const size_t    NV_REGION = 0x00100000u;   // 1 MB
+static const size_t    NV_REGION = 0x00400000u;   // 4 MB (upper 512 MB is the FPGA's)
 static const size_t    NV_BUF0   = 0x00000040u;
-static const size_t    NV_BUF1   = 0x00040040u;
-// BUF0 runs from +0x40 to BUF1 at +0x40040, so a frame may not exceed 256 KB.
-static const size_t    NV_BUF_BYTES = 0x00040000u;
+static const size_t    NV_BUF1   = 0x00100040u;
+// 1 MB per buffer slot; the reader's largest frame (512x512) is half of that.
+static const size_t    NV_BUF_BYTES = 0x00100000u;
 // Widest / tallest the reader supports (line FIFO and counter widths).
 static const int       NV_MAX_W = 512, NV_MAX_H = 512;
 // Fallback mode = the fixed Stage-4 geometry.
@@ -315,9 +315,9 @@ static void nv_configure(int width, int height)
 
     fprintf(stderr,
             "mister_video: present %dx%d (pitch %d) — %dx%d total, "
-            "%.3f MHz pix, %.2f kHz H, %.2f Hz V, ce_inc=%u\n",
+            "%.3f MHz pix, %.2f kHz H, %.2f Hz V, ce_inc=%u, aspect %d:%d\n",
             nv_view_w, nv_view_h, nv_pitch, m.h_total, m.v_total,
-            m.pixclk / 1e6, m.h_rate / 1e3, m.refresh, m.ce_inc);
+            m.pixclk / 1e6, m.h_rate / 1e3, m.refresh, m.ce_inc, m.arx, m.ary);
     if (m.h_rate > 16500.0)
         fprintf(stderr, "mister_video: WARNING H rate %.2f kHz is above 15 kHz "
                         "CRT range (HDMI/multisync only)\n", m.h_rate / 1e3);

@@ -193,6 +193,7 @@ assign DDRAM_CLK = clk_sys;
 // mode used, so the pre-Stage-3 behaviour is preserved.
 wire        ce_pix_gen;
 wire [23:0] nv_ce_inc;
+wire [15:0] nv_arx, nv_ary;
 
 mame_ce_pixel ce_pixel_gen (
 	.clk    (CLK_VIDEO),
@@ -205,9 +206,11 @@ assign CE_PIXEL = ce_pix_gen;
 
 assign VGA_SL = 0;
 assign VGA_F1 = 0;
-// OpenBOR renders at 320x240. 4:3 aspect ratio.
-assign VIDEO_ARX = 13'd4;
-assign VIDEO_ARY = 13'd3;
+// Display aspect comes from the per-game timing registers (4:3 for a landscape
+// game, 3:4 for a portrait one); the reader falls back to 4:3 when the HPS has
+// published nothing.
+assign VIDEO_ARX = nv_arx[12:0];
+assign VIDEO_ARY = nv_ary[12:0];
 assign VGA_SCALER= 0;
 assign VGA_DISABLE = 0;
 
@@ -725,6 +728,8 @@ openbor_video_top #(.LEAN_SCANOUT(1)) native_video
 	.active         (nv_active),
 	.vsync_out      (),
 	.ce_inc         (nv_ce_inc),
+	.arx            (nv_arx),
+	.ary            (nv_ary),
 
 	// CRT position adjustment
 	.h_offset       (h_pos),

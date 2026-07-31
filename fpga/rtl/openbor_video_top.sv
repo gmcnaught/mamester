@@ -57,6 +57,11 @@ module openbor_video_top #(
     // Comes from the HPS timing registers via the reader; 0 = built-in default.
     output wire [23:0] ce_inc,
 
+    // Display aspect for the current game, from the same registers
+    // (4:3 landscape, 3:4 portrait). Drives VIDEO_ARX/ARY.
+    output wire [15:0] arx,
+    output wire [15:0] ary,
+
     // CRT position adjustment (0..6 from OSD)
     input  wire  [2:0] h_offset,
     input  wire  [2:0] v_offset,
@@ -176,6 +181,8 @@ openbor_video_reader #(.LEAN_SCANOUT(LEAN_SCANOUT)) reader (
     .tim_v_sync     (geo_v_sync),
     .tim_v_total    (geo_v_total),
     .tim_ce_inc     (ce_inc),
+    .tim_arx        (arx),
+    .tim_ary        (ary),
 
     .r_out          (reader_r),
     .g_out          (reader_g),

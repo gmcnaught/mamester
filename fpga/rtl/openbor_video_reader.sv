@@ -79,6 +79,8 @@ module openbor_video_reader #(
     output reg  [11:0] tim_v_sync,
     output reg  [11:0] tim_v_total,
     output reg  [23:0] tim_ce_inc,
+    output reg  [15:0] tim_arx,
+    output reg  [15:0] tim_ary,
 
     // Cart loading via ioctl (from hps_io)
     input  wire        ioctl_download,
@@ -115,9 +117,11 @@ assign ddr_be  = 8'hFF;
 // -- DDR3 Address Constants --------------------------------------------
 // 29-bit qword addresses = physical >> 3
 //
-// Buffer layout: 320*240*2 = 153,600 bytes per buffer.
-// Round up to 256KB per buffer for clean addressing and headroom.
-// 256KB = 0x40000 bytes = 0x8000 qwords.
+// The upper 512 MB of DDR (0x20000000-0x3FFFFFFF) is reserved for the FPGA, so
+// the map is laid out with room to spare rather than packed: 1 MB per frame
+// buffer (the reader's largest frame, 512x512 RGB565, is 512 KB) and the
+// register blocks well clear of them. Before Stage 3 the buffers were 256 KB
+// apart, which capped a frame at 320x240-and-a-bit.
 //
 //   Physical          Qword (>>3)        Purpose
 //   0x3A000000        29'h07400000       Control word
@@ -126,14 +130,12 @@ assign ddr_be  = 8'hFF;
 //   0x3A000018        29'h07400003       Joystick P2 data
 //   0x3A000020        29'h07400004       Joystick P3 data
 //   0x3A000028        29'h07400005       Joystick P4 data
-//   0x3A000040        29'h07400008       Buffer 0 base
-//   0x3A040040        29'h07408008       Buffer 1 base
-//   0x3A080000        29'h07410000       Cart data buffer (past video buffers)
+//   0x3A000040        29'h07400008       Buffer 0 base (1 MB slot)
+//   0x3A100040        29'h07420008       Buffer 1 base (1 MB slot)
+//   0x3A200000        29'h07440000       Cart data buffer (unused when lean)
+//   0x3A280000        29'h07450000       Audio ring, 64 KiB (unused when lean)
+//   0x3A300000        29'h07460000       Per-game timing registers
 //
-// Each buffer holds 240 lines × 320 pixels × 2 bytes = 153,600 bytes
-// = 19,200 qwords. The next buffer starts 256KB later (0x40000 bytes
-// = 0x8000 qwords) leaving plenty of headroom. Cart data lives well
-// past the end of BUF1 to allow hot-swap during gameplay without overlap.
 localparam [28:0] CTRL_ADDR      = 29'h07400000;  // 0x3A000000 >> 3
 localparam [28:0] JOY0_ADDR      = 29'h07400001;  // 0x3A000008 >> 3
 localparam [28:0] CART_CTRL_ADDR = 29'h07400002;  // 0x3A000010 >> 3
@@ -143,24 +145,25 @@ localparam [28:0] JOY3_ADDR      = 29'h07400005;  // 0x3A000028 >> 3
 localparam [28:0] AUDIO_WR_ADDR   = 29'h07400006;  // 0x3A000030 >> 3
 localparam [28:0] AUDIO_RD_ADDR   = 29'h07400007;  // 0x3A000038 >> 3
 localparam [28:0] BUF0_ADDR      = 29'h07400008;  // 0x3A000040 >> 3
-localparam [28:0] BUF1_ADDR      = 29'h07408008;  // 0x3A040040 >> 3
-localparam [28:0] CART_DATA_ADDR = 29'h07410000;  // 0x3A080000 >> 3
-localparam [28:0] AUDIO_RING_ADDR = 29'h0741A000; // 0x3A0D0000 >> 3
+localparam [28:0] BUF1_ADDR      = 29'h07420008;  // 0x3A100040 >> 3
+localparam [28:0] CART_DATA_ADDR = 29'h07440000;  // 0x3A200000 >> 3
+localparam [28:0] AUDIO_RING_ADDR = 29'h07450000; // 0x3A280000 >> 3
 localparam [31:0] AUDIO_RING_BYTES = 32'h00010000; // 64 KiB
 localparam [31:0] AUDIO_RING_MASK  = 32'h0000FFFF;
 
 // -- Per-game timing registers (HPS writes, FPGA reads) ----------------
-// 0x3A0E0000, four qwords, past the audio ring (0x3A0D0000 + 64 KiB) so it
-// collides with nothing in the OpenBOR-inherited map:
+// 0x3A300000, four qwords, clear of both 1 MB buffer slots:
 //
 //   +0x00  [31:0]  magic 'TIM1'  (written LAST by the HPS)
 //   +0x08  [15:0] h_active  [31:16] h_fp  [47:32] h_sync  [63:48] h_total
 //   +0x10  [15:0] v_active  [31:16] v_fp  [47:32] v_sync  [63:48] v_total
 //   +0x18  [23:0] ce_inc (CE_PIXEL phase increment, f_pix = 53.693182M*inc/2^24)
+//          [39:24] arx  [55:40] ary — display aspect (4:3 landscape, 3:4 for a
+//          portrait game); 0 keeps the core default.
 //
 // Back porches are implied (total - active - fp - sync). h_active also sets
 // the frame stride: the HPS must pad each line to a multiple of 4 pixels.
-localparam [28:0] TIMING_ADDR  = 29'h0741C000;  // 0x3A0E0000 >> 3
+localparam [28:0] TIMING_ADDR  = 29'h07460000;  // 0x3A300000 >> 3
 localparam [31:0] TIMING_MAGIC = 32'h54494D31;  // "TIM1" little-endian
 
 // Fallback geometry — the fixed mode that shipped in Stage 4.
@@ -173,10 +176,12 @@ localparam [11:0] DEF_V_FP     = 12'd2;
 localparam [11:0] DEF_V_SYNC   = 12'd3;
 localparam [11:0] DEF_V_TOTAL  = 12'd262;
 localparam [23:0] DEF_CE_INC   = 24'd2060470;   // 6.594 MHz
+localparam [15:0] DEF_ARX      = 16'd4;
+localparam [15:0] DEF_ARY      = 16'd3;
 
-// Widest / tallest frame the line FIFO and the 256 KB buffer allow:
-// 512 px = 128 qwords per line (FIFO is 512 deep, so two preloaded lines fit),
-// and 512*512*2 = 512 KB would not — the HPS also has to keep w*h*2 <= 256 KB.
+// Widest / tallest frame the line FIFO and the buffer slots allow: 512 px =
+// 128 qwords per line (the FIFO is 512 deep, so two preloaded lines fit), and
+// 512*512*2 = 512 KB, half of a 1 MB slot.
 localparam [11:0] MAX_H_ACTIVE = 12'd512;
 localparam [11:0] MAX_V_ACTIVE = 12'd512;
 
@@ -358,6 +363,8 @@ wire [11:0] rd_v_fp     = tim_geom_v[27:16];
 wire [11:0] rd_v_sync   = tim_geom_v[43:32];
 wire [11:0] rd_v_total  = tim_geom_v[59:48];
 wire [23:0] rd_ce_inc   = tim_misc[23:0];
+wire [15:0] rd_arx      = tim_misc[39:24];
+wire [15:0] rd_ary      = tim_misc[55:40];
 
 wire [12:0] rd_h_need = {1'b0, rd_h_active} + {1'b0, rd_h_fp} + {1'b0, rd_h_sync};
 wire [12:0] rd_v_need = {1'b0, rd_v_active} + {1'b0, rd_v_fp} + {1'b0, rd_v_sync};
@@ -412,6 +419,8 @@ always @(posedge ddr_clk) begin
         tim_v_sync         <= DEF_V_SYNC;
         tim_v_total        <= DEF_V_TOTAL;
         tim_ce_inc         <= DEF_CE_INC;
+        tim_arx            <= DEF_ARX;
+        tim_ary            <= DEF_ARY;
         first_frame_loaded <= 1'b0;
         frame_ready_reg    <= 1'b0;
         stale_vblank_count <= 5'd0;
@@ -650,6 +659,9 @@ always @(posedge ddr_clk) begin
                         tim_v_sync   <= rd_v_sync;
                         tim_v_total  <= rd_v_total;
                         tim_ce_inc   <= rd_ce_inc;
+                        // 0 (or a zero pair) keeps the core default aspect.
+                        tim_arx      <= (rd_arx != 16'd0 && rd_ary != 16'd0) ? rd_arx : DEF_ARX;
+                        tim_ary      <= (rd_arx != 16'd0 && rd_ary != 16'd0) ? rd_ary : DEF_ARY;
                     end
                     else begin
                         // First sighting — confirm it on the next frame.

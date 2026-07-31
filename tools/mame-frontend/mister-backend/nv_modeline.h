@@ -10,12 +10,12 @@
  * the H rate can be held near 15.7 kHz across widths — which is what keeps the
  * analog output CRT-legal when the game's width changes. ascal scales HDMI.
  *
- * Register block at 0x3A0E0000 (see fpga/rtl/openbor_video_reader.sv):
+ * Register block at 0x3A300000 (see fpga/rtl/openbor_video_reader.sv):
  *
  *   +0x00  [31:0] magic 'TIM1'   (written LAST; 0 = ignore the block)
  *   +0x08  [15:0] h_active  [31:16] h_fp  [47:32] h_sync  [63:48] h_total
  *   +0x10  [15:0] v_active  [31:16] v_fp  [47:32] v_sync  [63:48] v_total
- *   +0x18  [23:0] ce_inc
+ *   +0x18  [23:0] ce_inc  [39:24] arx  [55:40] ary
  *
  * Back porches are implied (total - active - fp - sync). h_active is also the
  * DDR line stride, so lines must be padded to a multiple of 4 pixels.
@@ -26,7 +26,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define NV_TIMING_OFFSET 0x000E0000u
+#define NV_TIMING_OFFSET 0x00300000u
 #define NV_TIMING_MAGIC  0x54494D31u   /* "TIM1" */
 
 #define NV_CLK_VIDEO_HZ  53693182.0
@@ -36,6 +36,7 @@ struct nv_modeline {
     int h_active, h_fp, h_sync, h_total;
     int v_active, v_fp, v_sync, v_total;
     uint32_t ce_inc;
+    int      arx, ary;          /* display aspect: 4:3, or 3:4 when portrait */
     double   pixclk, h_rate, refresh;
 };
 
@@ -81,6 +82,11 @@ static void nv_make_modeline(int pitch, int height, double fps,
     m->refresh = fps;
     m->ce_inc  = (uint32_t)((m->pixclk / NV_CLK_VIDEO_HZ) * 16777216.0 + 0.5);
     if (m->ce_inc == 0) m->ce_inc = 1;
+
+    /* An arcade monitor is 4:3; a vertical game runs the same tube rotated, so
+     * a frame taller than it is wide is displayed 3:4. */
+    if (height > pitch) { m->arx = 3; m->ary = 4; }
+    else                { m->arx = 4; m->ary = 3; }
 }
 
 /*
@@ -100,7 +106,7 @@ static void nv_publish_timing(volatile uint8_t *nv_base,
     t[4] = (uint32_t)m->v_active | ((uint32_t)m->v_fp    << 16);
     t[5] = (uint32_t)m->v_sync   | ((uint32_t)m->v_total << 16);
     t[6] = m->ce_inc;
-    t[7] = 0;
+    t[7] = (uint32_t)m->arx | ((uint32_t)m->ary << 16);
     __sync_synchronize();
     t[0] = NV_TIMING_MAGIC;
     __sync_synchronize();
