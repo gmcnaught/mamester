@@ -18,6 +18,7 @@
  * Env knobs:
  *   MISTER_BENCH_FRAMES=N   exit after N presented frames (for fixed-length runs)
  *   MISTER_FB=1             blit 16bpp frames to /dev/fb0 when available
+ *   MISTER_JOY_DEBUG=1      log each MiSTer joystick word as it changes
  */
 
 #include "minimal.h"
@@ -99,6 +100,9 @@ static void nv_init(void);
 static void nv_configure(int width, int height);
 static void nv_present(void);
 
+// MISTER_JOY_DEBUG=1 logs each MiSTer joystick word as it changes.
+static bool nv_joy_debug = false;
+
 // ---- per-game modeline ----------------------------------------------------
 // Computation and the register layout are shared with the standalone fabric
 // test writer — see nv_modeline.h.
@@ -176,6 +180,7 @@ int init_SDL(void)
 
     const char* lim = getenv("MISTER_BENCH_FRAMES");
     bench_limit = lim ? strtoul(lim, 0, 10) : 0;
+    nv_joy_debug = getenv("MISTER_JOY_DEBUG") != 0;
     fb_open_if_requested();
     return 1;
 }
@@ -375,9 +380,93 @@ void gles2_create(int, int, int, int, int) {}
 void gles2_destroy(void) {}
 void gles2_palette_changed(void) {}
 
+// ---- MiSTer controllers ---------------------------------------------------
+// The FPGA writes each player's joystick word into DDR once per frame
+// (openbor_video_reader, ST_WRITE_JOY0..3). The bit map is the core's CONF_STR
+// J1 line and is identical for all four players — MAMESTer follows the
+// multi-game arcade convention (NeoGeo_MiSTer) of Start and Coin on each
+// player's own pad, rather than the Start 1P / Start 2P of a single-game core:
+//
+//   [0] right  [1] left  [2] down  [3] up
+//   [4..9] Fire 1..Fire 6   [10] Start   [11] Coin   [12] Pause
+//
+// Each bit is replayed as MAME's own default binding for that input
+// (src/inptport.cpp), so a pad works with every driver out of the box and the
+// TAB menu can still remap. MAME 0.37b5 has no keyboard defaults at all for
+// P4 movement or buttons (only Start 4 / Coin 4), and only three buttons for
+// P3, so a full four-player setup needs bindings at the joystick layer — see
+// the ledger.
+static const size_t NV_JOY_OFF[4] = { 0x08, 0x18, 0x20, 0x28 };
+
+enum {
+    NV_BIT_RIGHT = 0, NV_BIT_LEFT = 1, NV_BIT_DOWN = 2, NV_BIT_UP = 3,
+    NV_BIT_FIRE1 = 4, NV_BIT_START = 10, NV_BIT_COIN = 11, NV_BIT_PAUSE = 12
+};
+
+struct nv_padmap {
+    SDLKey dir[4];      // right, left, down, up — bit order
+    SDLKey fire[6];
+    SDLKey start, coin;
+};
+
+static const nv_padmap nv_pad[4] = {
+    // P1: arrows, LCtrl/LAlt/Space/LShift/Z/X, start 1, coin 5
+    { { SDLK_RIGHT, SDLK_LEFT, SDLK_DOWN, SDLK_UP },
+      { SDLK_LCTRL, SDLK_LALT, SDLK_SPACE, SDLK_LSHIFT, SDLK_z, SDLK_x },
+      SDLK_1, SDLK_5 },
+    // P2: G/D/F/R, A/S/Q/W, start 2, coin 6
+    { { SDLK_g, SDLK_d, SDLK_f, SDLK_r },
+      { SDLK_a, SDLK_s, SDLK_q, SDLK_w, SDLK_UNKNOWN, SDLK_UNKNOWN },
+      SDLK_2, SDLK_6 },
+    // P3: L/J/K/I, RCtrl/RShift/Enter, start 3, coin 7
+    { { SDLK_l, SDLK_j, SDLK_k, SDLK_i },
+      { SDLK_RCTRL, SDLK_RSHIFT, SDLK_RETURN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN },
+      SDLK_3, SDLK_7 },
+    // P4: no movement/button defaults exist in 0.37b5 — start/coin only
+    { { SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN },
+      { SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN },
+      SDLK_4, SDLK_8 },
+};
+
+static uint32_t nv_joy_prev[4];
+
+static void nv_key_edge(uint32_t changed, uint32_t state, int bit, SDLKey k)
+{
+    if (k == SDLK_UNKNOWN || !(changed & (1u << bit))) return;
+    keyprocess(k, (state & (1u << bit)) ? SDL_TRUE : SDL_FALSE);
+}
+
+// Replay pad edges as key presses. Called once per frame from
+// gp2x_joystick_read(), which MAME calls (via osd_poll_joysticks) immediately
+// before it reads the input ports.
+static void nv_poll_pads(void)
+{
+    if (!nv_enabled) return;
+
+    for (int p = 0; p < 4; p++) {
+        uint32_t w = *(volatile uint32_t*)(nv_base + NV_JOY_OFF[p]);
+        uint32_t changed = w ^ nv_joy_prev[p];
+        if (!changed) continue;
+        nv_joy_prev[p] = w;
+
+        if (nv_joy_debug)
+            fprintf(stderr, "mister_video: pad%d = 0x%08x\n", p + 1, w);
+
+        for (int i = 0; i < 4; i++)
+            nv_key_edge(changed, w, i, nv_pad[p].dir[i]);
+        for (int i = 0; i < 6; i++)
+            nv_key_edge(changed, w, NV_BIT_FIRE1 + i, nv_pad[p].fire[i]);
+        nv_key_edge(changed, w, NV_BIT_START, nv_pad[p].start);
+        nv_key_edge(changed, w, NV_BIT_COIN,  nv_pad[p].coin);
+        if (p == 0)
+            nv_key_edge(changed, w, NV_BIT_PAUSE, SDLK_p);   // MAME's UI pause
+    }
+}
+
 unsigned long gp2x_joystick_read(void)
 {
     SDL_Event event;
+    nv_poll_pads();          // MiSTer controllers, via the FPGA joystick words
     mouse_motion_process(0, 0);
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
