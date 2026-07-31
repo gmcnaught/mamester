@@ -20,6 +20,9 @@
  *   test_frame_writer solid RRGGBB      one solid 24-bit color (converted to 565)
  *   test_frame_writer animate           alternate bars/inverted every ~0.5s
  *   test_frame_writer grid              1-px border + 16-px grid — geometry check
+ *   test_frame_writer sweep [seconds]   cycle the arcade geometries Stage 3
+ *                                       targets (256x224, 320x240, 384x224,
+ *                                       400x254, tate), framed bars in each
  *
  * Any mode takes an optional geometry argument, which publishes a modeline and
  * draws at that size (default 320x240@59.92, the core's fallback mode):
@@ -81,6 +84,26 @@ static void fill_solid(uint16_t *buf, uint16_t c)
     int y, x;
     for (y = 0; y < H; y++)
         for (x = 0; x < W; x++) buf[y * PITCH + x] = c;
+}
+
+/* Color bars inside a 1-px white border with red corner pixels: checks channel
+ * order and edge clipping in one frame. */
+static void fill_bars_framed(uint16_t *buf, int inverted)
+{
+    int y, x;
+    fill_bars(buf, inverted);
+    for (x = 0; x < W; x++) {
+        buf[x]                         = 0xFFFF;
+        buf[(size_t)(H - 1) * PITCH+x] = 0xFFFF;
+    }
+    for (y = 0; y < H; y++) {
+        buf[(size_t)y * PITCH]         = 0xFFFF;
+        buf[(size_t)y * PITCH + W - 1] = 0xFFFF;
+    }
+    buf[0]                               = 0xF800;
+    buf[W - 1]                           = 0xF800;
+    buf[(size_t)(H - 1) * PITCH]         = 0xF800;
+    buf[(size_t)(H - 1) * PITCH + W - 1] = 0xF800;
 }
 
 /* 1-pixel white border, 16-px green grid, red corner pixels. Any missing edge
@@ -182,6 +205,56 @@ int main(int argc, char **argv)
         printf("grid written, buffer 0 active — the 1-px white border must be "
                "fully visible\n");
         return 0;
+    }
+
+    if (!strcmp(mode, "sweep")) {
+        /* Cycle the arcade geometries Stage 3 has to handle, holding each for
+         * a few seconds, so one run checks them all on a real display. */
+        static const struct { int w, h; double fps; const char *what; } modes[] = {
+            { 256, 224, 59.63, "gng / cps-ish"   },
+            { 320, 240, 59.92, "core default"    },
+            { 384, 224, 59.64, "sf2 / cps"       },
+            { 400, 254, 54.71, "mk / t-unit"     },
+            { 224, 288, 60.00, "tate (portrait)" },
+        };
+        int nmodes = (int)(sizeof(modes) / sizeof(modes[0]));
+        int hold = 5, mi, tick;
+        uint32_t frame = 0;
+        int active = 0;
+
+        if (argc > 2) { int v = atoi(argv[2]); if (v > 0) hold = v; }
+        printf("sweep: %d modes, %d s each (Ctrl-C to stop)\n", nmodes, hold);
+
+        for (mi = 0; ; mi = (mi + 1) % nmodes) {
+            W = modes[mi].w; H = modes[mi].h;
+            PITCH = (W + 3) & ~3; FPS = modes[mi].fps;
+            nv_make_modeline(PITCH, H, FPS, &m);
+
+            /* Draw at the new pitch first, then publish the geometry, so the
+             * reader never fetches old-pitch data with new timing. */
+            memset(buf0, 0, (size_t)PITCH * H * 2);
+            memset(buf1, 0, (size_t)PITCH * H * 2);
+            fill_bars_framed(buf0, 0);
+            fill_bars_framed(buf1, 0);
+            nv_publish_timing(base, &m);
+            printf("  %3dx%-3d @%.2f Hz  %-16s %dx%d total, %.2f kHz H, "
+                   "%.3f MHz pix\n",
+                   W, H, FPS, modes[mi].what, m.h_total, m.v_total,
+                   m.h_rate / 1e3, m.pixclk / 1e6);
+            fflush(stdout);
+
+            /* Keep the doorbell moving — the reader blanks on a stale frame
+             * counter — and blink the bars so a frozen image is obvious. */
+            for (tick = 0; tick < hold * 4; tick++) {
+                uint16_t *dst = active ? buf1 : buf0;
+                fill_bars_framed(dst, tick & 1);
+                __sync_synchronize();
+                frame++;
+                *ctrl = (frame << 2) | (uint32_t)active;
+                active ^= 1;
+                usleep(250000);
+            }
+        }
     }
 
     if (!strcmp(mode, "animate")) {
