@@ -15,12 +15,14 @@ IMAGE="mame-mister-armhf-build"
 
 [ -f "$SRC/Makefile" ] || { echo "submodule missing — run: git submodule update --init"; exit 1; }
 
-# Stage the MiSTer present backend and the make override into the source tree.
+# Stage the MiSTer present backend, make override, and SDL build script.
 mkdir -p "$SRC/src/mister"
 cp "$REPO/tools/mame-frontend/mister-backend/"*.cpp "$SRC/src/mister/"
 cp "$REPO/tools/mister/Makefile.mister" "$SRC/Makefile.mister"
+cp "$REPO/tools/mister/build-sdl12.sh" "$SRC/build-sdl12.sh"
 
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 echo "# building in $IMAGE (armhf/qemu), -j$JOBS, target: ${*:-all}"
+# Build the lean static SDL 1.2 first (idempotent), then mame against it.
 docker run --rm --platform linux/arm/v7 -v "$SRC:/src" -w /src "$IMAGE" \
-    make -f Makefile.mister -j"$JOBS" "$@"
+    bash -c "bash build-sdl12.sh && make -f Makefile.mister -j$JOBS ${*:-all}"

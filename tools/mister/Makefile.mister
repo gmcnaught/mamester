@@ -30,17 +30,24 @@ EMULATOR = $(TARGET)$(EXE)
 DEFS = -DGP2X -DLSB_FIRST -DALIGN_INTS -DALIGN_SHORTS -DINLINE="static __inline" \
 	-Dasm="__asm__ __volatile__" -DMAME_UNDERCLOCK -DENABLE_AUTOFIRE -DBIGCASE -DMISTER
 
+# Lean static SDL 1.2 (tools/mister/build-sdl12.sh) instead of Debian's shared
+# libSDL, which DT_NEEDEDs X11/pulse/etc. absent on MiSTer. Headers come from our
+# prefix so they match the archive we link.
+SDL_PREFIX = work/sdl12-prefix
+
 CFLAGS += -fsigned-char \
 	-Isrc -Isrc/$(MAMEOS) -Isrc/zlib \
-	-I/usr/include/SDL \
+	-I$(SDL_PREFIX)/include/SDL \
 	-I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include \
 	-O3 -ffast-math -fno-builtin -fsingle-precision-constant \
 	-Wall -Wno-sign-compare -Wunused -Wpointer-arith -Wno-narrowing
 
 LDFLAGS = $(CFLAGS)
 
-# No -lbcm_host -lbrcmGLESv2 -lbrcmEGL and no -L/opt/vc/lib.
-LIBS = -lm -lpthread -lSDL -lglib-2.0 -lasound -lrt
+# No -lbcm_host -lbrcmGLESv2 -lbrcmEGL and no -L/opt/vc/lib. SDL is the static
+# archive (pulled by input.o/gp2x_frontend.o/mister_video.o, which precede it in
+# the link line). glib/alsa/libstdc++ are present on the MiSTer rootfs.
+LIBS = -lm -lpthread $(SDL_PREFIX)/lib/libSDL.a -ldl -lglib-2.0 -lasound -lrt
 
 OBJ = obj_$(TARGET)_mister
 OBJDIRS = $(OBJ) $(OBJ)/cpu $(OBJ)/sound $(OBJ)/$(MAMEOS) $(OBJ)/mister \
