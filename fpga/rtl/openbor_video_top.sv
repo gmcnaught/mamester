@@ -53,6 +53,10 @@ module openbor_video_top #(
     output wire        active,        // module is outputting valid video
     output wire        vsync_out,     // active-low vsync for frame sync
 
+    // CE_PIXEL phase increment for the current game (see mame_ce_pixel.sv).
+    // Comes from the HPS timing registers via the reader; 0 = built-in default.
+    output wire [23:0] ce_inc,
+
     // CRT position adjustment (0..6 from OSD)
     input  wire  [2:0] h_offset,
     input  wire  [2:0] v_offset,
@@ -81,9 +85,17 @@ module openbor_video_top #(
 wire        tim_hsync, tim_vsync;
 wire        tim_hblank, tim_vblank;
 wire        tim_de;
-wire [9:0]  tim_hcount;
-wire [8:0]  tim_vcount;
+wire [11:0] tim_hcount;
+wire [11:0] tim_vcount;
 wire        tim_new_frame, tim_new_line;
+
+// Per-game geometry, published by the reader from the HPS timing registers.
+// These are ddr_clk-domain registers read in the clk_vid domain; the reader
+// only publishes a value it has read twice identically, and the timing
+// generator latches them at a frame boundary, so no per-bit synchroniser is
+// needed (a geometry change happens once, at game launch).
+wire [11:0] geo_h_active, geo_h_fp, geo_h_sync, geo_h_total;
+wire [11:0] geo_v_active, geo_v_fp, geo_v_sync, geo_v_total;
 
 // Convert OSD 3-bit (0..6) to signed adjustment
 wire signed [4:0] h_adj = (h_offset == 3'd0) ?  5'sd0 :
@@ -105,6 +117,14 @@ openbor_video_timing timing (
     .clk       (clk_vid),
     .ce_pix    (ce_pix),
     .reset     (reset),
+    .h_active_in (geo_h_active),
+    .h_fp_in     (geo_h_fp),
+    .h_sync_in   (geo_h_sync),
+    .h_total_in  (geo_h_total),
+    .v_active_in (geo_v_active),
+    .v_fp_in     (geo_v_fp),
+    .v_sync_in   (geo_v_sync),
+    .v_total_in  (geo_v_total),
     .h_adj     (h_adj),
     .v_adj     (v_adj),
     .hsync     (tim_hsync),
@@ -115,7 +135,9 @@ openbor_video_timing timing (
     .hcount    (tim_hcount),
     .vcount    (tim_vcount),
     .new_frame (tim_new_frame),
-    .new_line  (tim_new_line)
+    .new_line  (tim_new_line),
+    .h_active_cur (),
+    .v_active_cur ()
 );
 
 // -- DDR3 Pixel Reader -------------------------------------------------
@@ -144,6 +166,16 @@ openbor_video_reader #(.LEAN_SCANOUT(LEAN_SCANOUT)) reader (
     .new_frame      (tim_new_frame),
     .new_line       (tim_new_line),
     .vcount         (tim_vcount),
+
+    .tim_h_active   (geo_h_active),
+    .tim_h_fp       (geo_h_fp),
+    .tim_h_sync     (geo_h_sync),
+    .tim_h_total    (geo_h_total),
+    .tim_v_active   (geo_v_active),
+    .tim_v_fp       (geo_v_fp),
+    .tim_v_sync     (geo_v_sync),
+    .tim_v_total    (geo_v_total),
+    .tim_ce_inc     (ce_inc),
 
     .r_out          (reader_r),
     .g_out          (reader_g),

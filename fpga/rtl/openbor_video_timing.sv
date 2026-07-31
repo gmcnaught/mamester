@@ -1,17 +1,18 @@
 //============================================================================
 //
-//  OpenBOR Native Video Timing Generator
+//  MAMESTer Native Video Timing Generator (register-programmable)
 //
-//  320x240 active area @ 59.92 Hz (420x262 total)
-//  Exact Genesis H40 timing — NTSC-derived MCLK from colorburst crystal.
-//  CLK_VIDEO: 53.693 MHz (exact Genesis MCLK), variable CE_PIXEL for H_TOTAL=420.
+//  Geometry is supplied as inputs and latched at the end of each frame, so a
+//  MAME driver can be presented at its native H/V/refresh instead of a fixed
+//  320x240. Back porch is implied (total - active - front porch - sync) and is
+//  therefore not an input.
 //
-//  H: 320 active + 100 blanking = 420 total (exact Genesis H40)
-//  V: 240 active +   2 FP + 3 sync + 17 BP = 262 total (exact Genesis NTSC)
+//  Defaults (used after reset, and whenever the supplied geometry fails the
+//  sanity check) are the previous fixed mode: 320x240 active, 420x262 total —
+//  exact Genesis H40 / NTSC. With the fractional CE_PIXEL generator
+//  (mame_ce_pixel.sv) at 6.594 MHz that is 15.700 kHz H / 59.92 Hz V.
 //
-//  Refresh: 15,700 / 262 = 59.92 Hz (exact Genesis)
-//  H freq:  53,693,182 / 3420 = 15,700 Hz (exact Genesis)
-//  H active time: 320 × 8 / 53.693MHz = 47.68 µs (exact NES/SNES/Genesis)
+//  Pixel clock is CLK_VIDEO gated by ce_pix; every count below is in pixels.
 //
 //  Adapted from MiSTer_PICO-8 by MiSTer Organize
 //  Copyright (C) 2026 MiSTer Organize -- GPL-3.0
@@ -20,10 +21,20 @@
 
 module openbor_video_timing (
     input  wire        clk,        // CLK_VIDEO (53.693 MHz)
-    input  wire        ce_pix,     // pixel enable (variable rate — exact Genesis H40)
+    input  wire        ce_pix,     // pixel enable (fractional, from mame_ce_pixel)
     input  wire        reset,
 
-    // CRT position offset (signed: -3 to +3, from OSD)
+    // -- Programmable geometry (latched at frame end) --------------------
+    input  wire [11:0] h_active_in,
+    input  wire [11:0] h_fp_in,
+    input  wire [11:0] h_sync_in,
+    input  wire [11:0] h_total_in,
+    input  wire [11:0] v_active_in,
+    input  wire [11:0] v_fp_in,
+    input  wire [11:0] v_sync_in,
+    input  wire [11:0] v_total_in,
+
+    // CRT position offset (signed, from OSD)
     input  wire signed [4:0] h_adj,  // horizontal: positive = shift right
     input  wire signed [3:0] v_adj,  // vertical: positive = shift down
 
@@ -32,37 +43,54 @@ module openbor_video_timing (
     output reg         hblank,
     output reg         vblank,
     output reg         de,         // data enable = ~(hblank | vblank)
-    output reg  [9:0]  hcount,
-    output reg  [8:0]  vcount,
+    output reg  [11:0] hcount,
+    output reg  [11:0] vcount,
     output reg         new_frame,  // pulse at vblank start
-    output reg         new_line    // pulse at hblank start
+    output reg         new_line,   // pulse at hblank start
+
+    // Geometry actually in use (for the reader's line fetch)
+    output wire [11:0] h_active_cur,
+    output wire [11:0] v_active_cur
 );
 
-// -- Timing constants --------------------------------------------------
-// 320x240 active, centered for 15kHz CRT, NTSC-compatible H rate.
-// CRT-compatible blanking with balanced porches.
-localparam H_ACTIVE = 320;
-localparam H_FP     = 17;
-localparam H_SYNC   = 38;
-localparam H_BP     = 45;
-localparam H_TOTAL  = 420;   // 320+17+38+45 (exact Genesis H40)
+// -- Fallback geometry -------------------------------------------------
+localparam [11:0] DEF_H_ACTIVE = 12'd320;
+localparam [11:0] DEF_H_FP     = 12'd17;
+localparam [11:0] DEF_H_SYNC   = 12'd38;
+localparam [11:0] DEF_H_TOTAL  = 12'd420;   // 320+17+38+45 (Genesis H40)
+localparam [11:0] DEF_V_ACTIVE = 12'd240;
+localparam [11:0] DEF_V_FP     = 12'd2;
+localparam [11:0] DEF_V_SYNC   = 12'd3;
+localparam [11:0] DEF_V_TOTAL  = 12'd262;   // 240+2+3+17 (Genesis NTSC)
 
-localparam V_ACTIVE = 240;
-localparam V_FP     = 2;
-localparam V_SYNC   = 3;
-localparam V_BP     = 17;
-localparam V_TOTAL  = 262;   // 240+2+3+17 (exact Genesis NTSC)
+// -- Latched geometry --------------------------------------------------
+reg [11:0] h_active, h_fp, h_sync_w, h_total;
+reg [11:0] v_active, v_fp, v_sync_w, v_total;
 
-// Derived boundaries — adjusted by OSD H/V position offset.
-wire [9:0] h_sync_start = H_ACTIVE + H_FP + {{5{h_adj[4]}}, h_adj};
-wire [9:0] h_sync_end   = h_sync_start + H_SYNC;
-wire [8:0] v_sync_start = V_ACTIVE + V_FP + {{5{v_adj[3]}}, v_adj};
-wire [8:0] v_sync_end   = v_sync_start + V_SYNC;
+assign h_active_cur = h_active;
+assign v_active_cur = v_active;
+
+// Reject geometry that would lock the counters up (total must leave room for
+// active + front porch + sync, and the active area must be a sane size).
+wire [12:0] h_need = {1'b0, h_active_in} + {1'b0, h_fp_in} + {1'b0, h_sync_in};
+wire [12:0] v_need = {1'b0, v_active_in} + {1'b0, v_fp_in} + {1'b0, v_sync_in};
+wire params_sane = (h_active_in >= 12'd64) && (v_active_in >= 12'd64) &&
+                   ({1'b0, h_total_in} > h_need) && ({1'b0, v_total_in} > v_need);
+
+// Latch geometry at the very last pixel of the frame so a change can never
+// take effect mid-frame.
+wire frame_last_pixel = (hcount == h_total - 12'd1) && (vcount == v_total - 12'd1);
+
+// -- Derived boundaries — adjusted by OSD H/V position offset. ----------
+wire [11:0] h_sync_start = h_active + h_fp + {{7{h_adj[4]}}, h_adj};
+wire [11:0] h_sync_end   = h_sync_start + h_sync_w;
+wire [11:0] v_sync_start = v_active + v_fp + {{8{v_adj[3]}}, v_adj};
+wire [11:0] v_sync_end   = v_sync_start + v_sync_w;
 
 always @(posedge clk) begin
     if (reset) begin
-        hcount    <= 10'd0;
-        vcount    <= 9'd0;
+        hcount    <= 12'd0;
+        vcount    <= 12'd0;
         hsync     <= 1'b1;
         vsync     <= 1'b1;
         hblank    <= 1'b0;
@@ -70,74 +98,94 @@ always @(posedge clk) begin
         de        <= 1'b1;
         new_frame <= 1'b0;
         new_line  <= 1'b0;
+        h_active  <= DEF_H_ACTIVE;
+        h_fp      <= DEF_H_FP;
+        h_sync_w  <= DEF_H_SYNC;
+        h_total   <= DEF_H_TOTAL;
+        v_active  <= DEF_V_ACTIVE;
+        v_fp      <= DEF_V_FP;
+        v_sync_w  <= DEF_V_SYNC;
+        v_total   <= DEF_V_TOTAL;
     end
     else if (ce_pix) begin
         new_frame <= 1'b0;
         new_line  <= 1'b0;
 
+        // Geometry update — frame boundary only, and only if plausible.
+        if (frame_last_pixel && params_sane) begin
+            h_active <= h_active_in;
+            h_fp     <= h_fp_in;
+            h_sync_w <= h_sync_in;
+            h_total  <= h_total_in;
+            v_active <= v_active_in;
+            v_fp     <= v_fp_in;
+            v_sync_w <= v_sync_in;
+            v_total  <= v_total_in;
+        end
+
         // Horizontal counter
-        if (hcount == H_TOTAL - 1) begin
-            hcount <= 10'd0;
-            if (vcount == V_TOTAL - 1)
-                vcount <= 9'd0;
+        if (hcount >= h_total - 12'd1) begin
+            hcount <= 12'd0;
+            if (vcount >= v_total - 12'd1)
+                vcount <= 12'd0;
             else
-                vcount <= vcount + 9'd1;
+                vcount <= vcount + 12'd1;
         end
         else begin
-            hcount <= hcount + 10'd1;
+            hcount <= hcount + 12'd1;
         end
 
         // Horizontal blanking
-        if (hcount == H_ACTIVE - 1)
+        if (hcount == h_active - 12'd1)
             hblank <= 1'b1;
-        else if (hcount == H_TOTAL - 1)
+        else if (hcount >= h_total - 12'd1)
             hblank <= 1'b0;
 
         // Horizontal sync (active low)
-        if (hcount == h_sync_start - 1)
+        if (hcount == h_sync_start - 12'd1)
             hsync <= 1'b0;
-        else if (hcount == h_sync_end - 1)
+        else if (hcount == h_sync_end - 12'd1)
             hsync <= 1'b1;
 
         // Vertical blanking (transitions on line boundaries)
-        if (hcount == H_TOTAL - 1) begin
-            if (vcount == V_ACTIVE - 1)
+        if (hcount >= h_total - 12'd1) begin
+            if (vcount == v_active - 12'd1)
                 vblank <= 1'b1;
-            else if (vcount == V_TOTAL - 1)
+            else if (vcount >= v_total - 12'd1)
                 vblank <= 1'b0;
         end
 
         // Vertical sync (active low)
-        if (hcount == H_TOTAL - 1) begin
-            if (vcount == v_sync_start - 1)
+        if (hcount >= h_total - 12'd1) begin
+            if (vcount == v_sync_start - 12'd1)
                 vsync <= 1'b0;
-            else if (vcount == v_sync_end - 1)
+            else if (vcount == v_sync_end - 12'd1)
                 vsync <= 1'b1;
         end
 
         // New line pulse
-        if (hcount == H_ACTIVE - 1)
+        if (hcount == h_active - 12'd1)
             new_line <= 1'b1;
 
         // New frame pulse
-        if (hcount == H_TOTAL - 1 && vcount == V_ACTIVE - 1)
+        if (hcount >= h_total - 12'd1 && vcount == v_active - 12'd1)
             new_frame <= 1'b1;
 
-        // Data enable (combinational from next-cycle blanking state)
+        // Data enable (from next-cycle blanking state)
         begin
             reg next_hblank, next_vblank;
 
-            if (hcount == H_ACTIVE - 1)
+            if (hcount == h_active - 12'd1)
                 next_hblank = 1'b1;
-            else if (hcount == H_TOTAL - 1)
+            else if (hcount >= h_total - 12'd1)
                 next_hblank = 1'b0;
             else
                 next_hblank = hblank;
 
-            if (hcount == H_TOTAL - 1) begin
-                if (vcount == V_ACTIVE - 1)
+            if (hcount >= h_total - 12'd1) begin
+                if (vcount == v_active - 12'd1)
                     next_vblank = 1'b1;
-                else if (vcount == V_TOTAL - 1)
+                else if (vcount >= v_total - 12'd1)
                     next_vblank = 1'b0;
                 else
                     next_vblank = vblank;

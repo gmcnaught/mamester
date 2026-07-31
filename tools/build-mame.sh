@@ -18,6 +18,7 @@ IMAGE="mamester-armhf-build"
 # Stage the MiSTer present backend, make override, and SDL build script.
 mkdir -p "$SRC/src/mister"
 cp "$REPO/tools/mame-frontend/mister-backend/"*.cpp "$SRC/src/mister/"
+cp "$REPO/tools/mame-frontend/mister-backend/"*.h   "$SRC/src/mister/"
 cp "$REPO/tools/mister/Makefile.mister" "$SRC/Makefile.mister"
 cp "$REPO/tools/mister/build-sdl12.sh" "$SRC/build-sdl12.sh"
 

@@ -66,7 +66,19 @@ module openbor_video_reader #(
     input  wire        vblank,
     input  wire        new_frame,
     input  wire        new_line,
-    input  wire  [8:0] vcount,
+    input  wire [11:0] vcount,
+
+    // Geometry published to the timing generator (from the HPS timing regs).
+    // Held stable once confirmed; the timing generator latches at frame end.
+    output reg  [11:0] tim_h_active,
+    output reg  [11:0] tim_h_fp,
+    output reg  [11:0] tim_h_sync,
+    output reg  [11:0] tim_h_total,
+    output reg  [11:0] tim_v_active,
+    output reg  [11:0] tim_v_fp,
+    output reg  [11:0] tim_v_sync,
+    output reg  [11:0] tim_v_total,
+    output reg  [23:0] tim_ce_inc,
 
     // Cart loading via ioctl (from hps_io)
     input  wire        ioctl_download,
@@ -137,16 +149,48 @@ localparam [28:0] AUDIO_RING_ADDR = 29'h0741A000; // 0x3A0D0000 >> 3
 localparam [31:0] AUDIO_RING_BYTES = 32'h00010000; // 64 KiB
 localparam [31:0] AUDIO_RING_MASK  = 32'h0000FFFF;
 
+// -- Per-game timing registers (HPS writes, FPGA reads) ----------------
+// 0x3A0E0000, four qwords, past the audio ring (0x3A0D0000 + 64 KiB) so it
+// collides with nothing in the OpenBOR-inherited map:
+//
+//   +0x00  [31:0]  magic 'TIM1'  (written LAST by the HPS)
+//   +0x08  [15:0] h_active  [31:16] h_fp  [47:32] h_sync  [63:48] h_total
+//   +0x10  [15:0] v_active  [31:16] v_fp  [47:32] v_sync  [63:48] v_total
+//   +0x18  [23:0] ce_inc (CE_PIXEL phase increment, f_pix = 53.693182M*inc/2^24)
+//
+// Back porches are implied (total - active - fp - sync). h_active also sets
+// the frame stride: the HPS must pad each line to a multiple of 4 pixels.
+localparam [28:0] TIMING_ADDR  = 29'h0741C000;  // 0x3A0E0000 >> 3
+localparam [31:0] TIMING_MAGIC = 32'h54494D31;  // "TIM1" little-endian
+
+// Fallback geometry — the fixed mode that shipped in Stage 4.
+localparam [11:0] DEF_H_ACTIVE = 12'd320;
+localparam [11:0] DEF_H_FP     = 12'd17;
+localparam [11:0] DEF_H_SYNC   = 12'd38;
+localparam [11:0] DEF_H_TOTAL  = 12'd420;
+localparam [11:0] DEF_V_ACTIVE = 12'd240;
+localparam [11:0] DEF_V_FP     = 12'd2;
+localparam [11:0] DEF_V_SYNC   = 12'd3;
+localparam [11:0] DEF_V_TOTAL  = 12'd262;
+localparam [23:0] DEF_CE_INC   = 24'd2060470;   // 6.594 MHz
+
+// Widest / tallest frame the line FIFO and the 256 KB buffer allow:
+// 512 px = 128 qwords per line (FIFO is 512 deep, so two preloaded lines fit),
+// and 512*512*2 = 512 KB would not — the HPS also has to keep w*h*2 <= 256 KB.
+localparam [11:0] MAX_H_ACTIVE = 12'd512;
+localparam [11:0] MAX_V_ACTIVE = 12'd512;
+
 // Audio refill threshold: trigger a fetch when FIFO has < this qwords used.
 // FIFO is 512 entries deep; 384 leaves 128 qwords (~5.3 ms) headroom.
 localparam [9:0]  AUDIO_REFILL_THRESHOLD = 10'd384;
 
-// 320 pixels × 2 bytes / 8 bytes per qword = 80 beats per scanline
-localparam [7:0]  LINE_BURST   = 8'd80;
-// Each scanline takes 80 qword addresses
-localparam [28:0] LINE_STRIDE  = 29'd80;
+// Qwords per scanline = ceil(h_active / 4)  (RGB565: 4 pixels per 64-bit word).
+// Doubles as the DDR line stride, so the HPS must pad each line to a multiple
+// of 4 pixels. 320 px -> 80, as in the fixed Stage-4 mode.
+wire [11:0] line_words_calc = tim_h_active + 12'd3;
+wire [7:0]  line_words      = line_words_calc[9:2];
 // Display lines (no doubling — source = display)
-localparam [8:0]  V_ACTIVE     = 9'd240;
+wire [11:0] v_active_lines  = tim_v_active;
 
 localparam [19:0] TIMEOUT_MAX = 20'hF_FFFF;
 
@@ -235,14 +279,18 @@ localparam [4:0] ST_PLAN_AUDIO      = 5'd16;
 localparam [4:0] ST_READ_AUDIO_RING = 5'd17;
 localparam [4:0] ST_WAIT_AUDIO_RING = 5'd18;
 localparam [4:0] ST_WRITE_AUDIO_RD  = 5'd19;
+localparam [4:0] ST_POLL_TIMING     = 5'd20;
+localparam [4:0] ST_WAIT_TIMING     = 5'd21;
+localparam [4:0] ST_APPLY_TIMING    = 5'd22;
 
 reg  [4:0]  state;
 reg  [31:0] ctrl_word;
 reg  [29:0] prev_frame_counter;
 reg         active_buffer;
 reg  [28:0] buf_base_addr;
-reg  [8:0]  display_line;     // 0..239 (output display line, also = source line)
-reg  [6:0]  beat_count;
+reg  [28:0] line_addr;        // running source address (avoids a multiplier)
+reg  [11:0] display_line;     // output display line, also = source line
+reg  [8:0]  beat_count;
 reg         first_frame_loaded;
 reg  [4:0]  stale_vblank_count;
 reg         preloading;
@@ -291,6 +339,40 @@ wire [31:0] audio_plan_cand_b  = (audio_plan_cand_a > audio_plan_wrap) ? audio_p
 wire [31:0] audio_plan_bytes   = audio_plan_cand_b & 32'hFFFFFFF8;
 wire [7:0]  audio_plan_qwords  = audio_plan_bytes[10:3];
 
+// -- Per-game timing register fetch ------------------------------------
+// One 4-qword burst per frame. A candidate set has to be read twice
+// identically before it is published, so a read that tears against an HPS
+// update can never reach the timing generator.
+reg  [1:0]  tim_beat;
+reg  [31:0] tim_magic;
+reg  [63:0] tim_geom_h, tim_geom_v, tim_misc;
+reg  [63:0] cand_geom_h, cand_geom_v, cand_misc;
+reg         tim_have_cand;
+
+wire [11:0] rd_h_active = tim_geom_h[11:0];
+wire [11:0] rd_h_fp     = tim_geom_h[27:16];
+wire [11:0] rd_h_sync   = tim_geom_h[43:32];
+wire [11:0] rd_h_total  = tim_geom_h[59:48];
+wire [11:0] rd_v_active = tim_geom_v[11:0];
+wire [11:0] rd_v_fp     = tim_geom_v[27:16];
+wire [11:0] rd_v_sync   = tim_geom_v[43:32];
+wire [11:0] rd_v_total  = tim_geom_v[59:48];
+wire [23:0] rd_ce_inc   = tim_misc[23:0];
+
+wire [12:0] rd_h_need = {1'b0, rd_h_active} + {1'b0, rd_h_fp} + {1'b0, rd_h_sync};
+wire [12:0] rd_v_need = {1'b0, rd_v_active} + {1'b0, rd_v_fp} + {1'b0, rd_v_sync};
+
+wire tim_read_valid =
+    (tim_magic   == TIMING_MAGIC)  &&
+    (rd_h_active >= 12'd64) && (rd_h_active <= MAX_H_ACTIVE) &&
+    (rd_v_active >= 12'd64) && (rd_v_active <= MAX_V_ACTIVE) &&
+    ({1'b0, rd_h_total} > rd_h_need) && ({1'b0, rd_v_total} > rd_v_need) &&
+    (rd_ce_inc   != 24'd0);
+
+wire tim_read_matches_cand = tim_have_cand &&
+    (tim_geom_h == cand_geom_h) && (tim_geom_v == cand_geom_v) &&
+    (tim_misc   == cand_misc);
+
 // -- FIFO async clear -------------------------------------------------
 reg [3:0] fifo_aclr_cnt;
 wire fifo_aclr_ddr_active = (fifo_aclr_cnt != 4'd0);
@@ -309,8 +391,27 @@ always @(posedge ddr_clk) begin
         prev_frame_counter <= 30'd0;
         active_buffer      <= 1'b0;
         buf_base_addr      <= 29'd0;
-        display_line       <= 9'd0;
-        beat_count         <= 7'd0;
+        line_addr          <= 29'd0;
+        display_line       <= 12'd0;
+        beat_count         <= 9'd0;
+        tim_beat           <= 2'd0;
+        tim_magic          <= 32'd0;
+        tim_geom_h         <= 64'd0;
+        tim_geom_v         <= 64'd0;
+        tim_misc           <= 64'd0;
+        cand_geom_h        <= 64'd0;
+        cand_geom_v        <= 64'd0;
+        cand_misc          <= 64'd0;
+        tim_have_cand      <= 1'b0;
+        tim_h_active       <= DEF_H_ACTIVE;
+        tim_h_fp           <= DEF_H_FP;
+        tim_h_sync         <= DEF_H_SYNC;
+        tim_h_total        <= DEF_H_TOTAL;
+        tim_v_active       <= DEF_V_ACTIVE;
+        tim_v_fp           <= DEF_V_FP;
+        tim_v_sync         <= DEF_V_SYNC;
+        tim_v_total        <= DEF_V_TOTAL;
+        tim_ce_inc         <= DEF_CE_INC;
         first_frame_loaded <= 1'b0;
         frame_ready_reg    <= 1'b0;
         stale_vblank_count <= 5'd0;
@@ -353,7 +454,7 @@ always @(posedge ddr_clk) begin
         if (state == ST_WAIT_LINE && ddr_dout_ready) begin
             fifo_wr      <= 1'b1;
             fifo_wr_data <= ddr_dout;
-            beat_count   <= beat_count + 7'd1;
+            beat_count   <= beat_count + 9'd1;
             timeout_cnt  <= 20'd0;
         end
 
@@ -417,9 +518,9 @@ always @(posedge ddr_clk) begin
                 // new_frame_pending is latched so it can't be missed.
                 if (enable_ddr && new_frame_pending) begin
                     new_frame_pending <= 1'b0;  // consumed
-                    // Lean scanout: skip the joystick-writeback handshake and
-                    // poll the control word directly. No DDR writes for input.
-                    state <= LEAN_SCANOUT ? ST_POLL_CTRL : ST_WRITE_JOY0;
+                    // Re-read the per-game timing registers once per frame
+                    // (4 qwords) before the frame's own DDR traffic.
+                    state <= ST_POLL_TIMING;
                 end
                 else if (!LEAN_SCANOUT && cart_write_pending)
                     state <= ST_WRITE_CART;
@@ -502,6 +603,68 @@ always @(posedge ddr_clk) begin
                 end
             end
 
+            ST_POLL_TIMING: begin
+                if (!ddr_busy) begin
+                    ddr_addr     <= TIMING_ADDR;
+                    ddr_burstcnt <= 8'd4;
+                    ddr_rd       <= 1'b1;
+                    tim_beat     <= 2'd0;
+                    timeout_cnt  <= 20'd0;
+                    state        <= ST_WAIT_TIMING;
+                end
+            end
+
+            ST_WAIT_TIMING: begin
+                if (ddr_dout_ready) begin
+                    timeout_cnt <= 20'd0;
+                    tim_beat    <= tim_beat + 2'd1;
+                    case (tim_beat)
+                        2'd0: tim_magic  <= ddr_dout[31:0];
+                        2'd1: tim_geom_h <= ddr_dout;
+                        2'd2: tim_geom_v <= ddr_dout;
+                        2'd3: begin
+                            tim_misc <= ddr_dout;
+                            state    <= ST_APPLY_TIMING;
+                        end
+                    endcase
+                end
+                else if (timeout_cnt == TIMEOUT_MAX) begin
+                    // No timing block published (or DDR stalled) — keep the
+                    // geometry already in use and get on with the frame.
+                    state <= LEAN_SCANOUT ? ST_POLL_CTRL : ST_WRITE_JOY0;
+                end
+                else
+                    timeout_cnt <= timeout_cnt + 20'd1;
+            end
+
+            ST_APPLY_TIMING: begin
+                // tim_misc is registered now, so the decode wires are valid.
+                if (tim_read_valid) begin
+                    if (tim_read_matches_cand) begin
+                        tim_h_active <= rd_h_active;
+                        tim_h_fp     <= rd_h_fp;
+                        tim_h_sync   <= rd_h_sync;
+                        tim_h_total  <= rd_h_total;
+                        tim_v_active <= rd_v_active;
+                        tim_v_fp     <= rd_v_fp;
+                        tim_v_sync   <= rd_v_sync;
+                        tim_v_total  <= rd_v_total;
+                        tim_ce_inc   <= rd_ce_inc;
+                    end
+                    else begin
+                        // First sighting — confirm it on the next frame.
+                        cand_geom_h   <= tim_geom_h;
+                        cand_geom_v   <= tim_geom_v;
+                        cand_misc     <= tim_misc;
+                        tim_have_cand <= 1'b1;
+                    end
+                end
+                else
+                    tim_have_cand <= 1'b0;
+
+                state <= LEAN_SCANOUT ? ST_POLL_CTRL : ST_WRITE_JOY0;
+            end
+
             ST_POLL_CTRL: begin
                 if (!ddr_busy) begin
                     ddr_addr     <= CTRL_ADDR;
@@ -539,7 +702,8 @@ always @(posedge ddr_clk) begin
                     active_buffer      <= ctrl_word[0];
                     stale_vblank_count <= 5'd0;
                     buf_base_addr      <= ctrl_word[0] ? BUF1_ADDR : BUF0_ADDR;
-                    display_line       <= 9'd0;
+                    line_addr          <= ctrl_word[0] ? BUF1_ADDR : BUF0_ADDR;
+                    display_line       <= 12'd0;
                     preloading         <= 1'b1;
                     fifo_aclr_cnt      <= 4'd8;
                     state              <= ST_READ_LINE;
@@ -550,7 +714,8 @@ always @(posedge ddr_clk) begin
                         stale_vblank_count <= stale_vblank_count + 5'd1;
                     if (stale_vblank_count >= 5'd29)
                         frame_ready_reg <= 1'b0;
-                    display_line  <= 9'd0;
+                    line_addr     <= buf_base_addr;
+                    display_line  <= 12'd0;
                     preloading    <= 1'b1;
                     fifo_aclr_cnt <= 4'd8;
                     state         <= ST_READ_LINE;
@@ -562,19 +727,19 @@ always @(posedge ddr_clk) begin
             ST_READ_LINE: begin
                 if (!ddr_busy && !fifo_aclr_ddr_active) begin
                     // No vertical doubling -- source line == display line.
-                    // Each scanline is 80 qwords (LINE_STRIDE) starting from
-                    // buf_base_addr.
-                    ddr_addr     <= buf_base_addr + ({20'd0, display_line} * LINE_STRIDE);
-                    ddr_burstcnt <= LINE_BURST;
+                    // line_addr walks the buffer by line_words qwords per line
+                    // (= the frame's pitch), so no multiplier is needed.
+                    ddr_addr     <= line_addr;
+                    ddr_burstcnt <= line_words;
                     ddr_rd       <= 1'b1;
-                    beat_count   <= 7'd0;
+                    beat_count   <= 9'd0;
                     timeout_cnt  <= 20'd0;
                     state        <= ST_WAIT_LINE;
                 end
             end
 
             ST_WAIT_LINE: begin
-                if (beat_count == LINE_BURST[6:0])
+                if (beat_count == {1'b0, line_words})
                     state <= ST_LINE_DONE;
                 else if (timeout_cnt == TIMEOUT_MAX)
                     state <= ST_IDLE;
@@ -583,15 +748,16 @@ always @(posedge ddr_clk) begin
             end
 
             ST_LINE_DONE: begin
-                display_line <= display_line + 9'd1;
+                display_line <= display_line + 12'd1;
+                line_addr    <= line_addr + {21'd0, line_words};
 
-                if (display_line == V_ACTIVE - 9'd1) begin
+                if (display_line >= v_active_lines - 12'd1) begin
                     first_frame_loaded <= 1'b1;
                     frame_ready_reg    <= 1'b1;
                     preloading         <= 1'b0;
                     state              <= ST_IDLE;
                 end
-                else if (preloading && display_line < 9'd1)
+                else if (preloading && display_line < 12'd1)
                     state <= ST_READ_LINE;
                 else begin
                     preloading <= 1'b0;
@@ -600,7 +766,7 @@ always @(posedge ddr_clk) begin
             end
 
             ST_WAIT_DISPLAY: begin
-                if (display_line < V_ACTIVE && new_line_ddr && !vblank_ddr)
+                if (display_line < v_active_lines && new_line_ddr && !vblank_ddr)
                     state <= ST_READ_LINE;
             end
 
@@ -689,11 +855,13 @@ reg         fifo_rd;
 
 dcfifo #(
     .intended_device_family ("Cyclone V"),
-    .lpm_numwords           (256),
+    // 512 x 64b = two preloaded lines at the maximum 512-pixel width
+    // (128 qwords per line); 320-wide lines use 80.
+    .lpm_numwords           (512),
     .lpm_showahead          ("ON"),
     .lpm_type               ("dcfifo"),
     .lpm_width              (64),
-    .lpm_widthu             (8),
+    .lpm_widthu             (9),
     .overflow_checking      ("ON"),
     .rdsync_delaypipe       (4),
     .underflow_checking     ("ON"),

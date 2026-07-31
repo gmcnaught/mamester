@@ -23,6 +23,8 @@
 #include "minimal.h"
 #include "driver.h"
 
+#include "nv_modeline.h"
+
 #include <SDL.h>
 #include <time.h>
 #include <stdint.h>
@@ -64,13 +66,21 @@ static bool      fb_enabled = false;
 // The openbor_video_reader stale-frame watchdog blanks on a stalled counter, so
 // we bump the control word every frame (DisplayScreen is per-frame). mame4all's
 // gp2x_screen15 is already RGB565 (gp2x_video_color15 macro) — no BGR swap.
-// Stage 4 presents at the core's FIXED 320x240; the game surface is center-
-// clipped. Stage 3 will make the timing per-game programmable.
+// Stage 3 presents at the driver's NATIVE size: gp2x_set_video_mode publishes a
+// modeline to the timing registers at +0xE0000 and the frame is written at its
+// own width/height (padded to a multiple of 4 pixels per line). Frames too big
+// for a 256 KB buffer fall back to the fixed 320x240 center-clip.
 static const uintptr_t NV_BASE   = 0x3A000000u;
 static const size_t    NV_REGION = 0x00100000u;   // 1 MB
 static const size_t    NV_BUF0   = 0x00000040u;
 static const size_t    NV_BUF1   = 0x00040040u;
-static const int       NV_W = 320, NV_H = 240;
+// BUF0 runs from +0x40 to BUF1 at +0x40040, so a frame may not exceed 256 KB.
+static const size_t    NV_BUF_BYTES = 0x00040000u;
+// Widest / tallest the reader supports (line FIFO and counter widths).
+static const int       NV_MAX_W = 512, NV_MAX_H = 512;
+// Fallback mode = the fixed Stage-4 geometry.
+static const int       NV_DEF_W = 320, NV_DEF_H = 240;
+
 static int               nv_fd    = -1;
 static volatile uint8_t *nv_base  = 0;
 static volatile uint32_t*nv_ctrl  = 0;
@@ -78,8 +88,20 @@ static uint16_t         *nv_buf[2] = {0, 0};
 static uint32_t          nv_frame = 0;
 static int               nv_active = 0;
 static bool              nv_enabled = false;
+
+// Geometry currently presented: nv_view_w/h is the displayed area, nv_pitch is
+// the DDR line stride in pixels (the view width padded to a multiple of 4,
+// because the reader fetches whole 64-bit words = 4 RGB565 pixels).
+static int               nv_view_w = NV_DEF_W, nv_view_h = NV_DEF_H;
+static int               nv_pitch  = NV_DEF_W;
+
 static void nv_init(void);
+static void nv_configure(int width, int height);
 static void nv_present(void);
+
+// ---- per-game modeline ----------------------------------------------------
+// Computation and the register layout are shared with the standalone fabric
+// test writer — see nv_modeline.h.
 
 // SDL input event handlers live in src/rpi/input.cpp.
 extern void keyprocess(SDLKey inkey, SDL_bool pressed);
@@ -192,6 +214,7 @@ void gp2x_set_video_mode(struct osd_bitmap *bitmap, int bpp, int width, int heig
     fprintf(stderr, "mister_video: set_video_mode %dx%d depth=%d\n",
             width, height, bitmap->depth);
     nv_init();
+    nv_configure(width, height);
 }
 
 // ---- the present seam -----------------------------------------------------
@@ -244,35 +267,84 @@ static void nv_init(void)
     nv_ctrl = (volatile uint32_t*)(nv_base);
     nv_buf[0] = (uint16_t*)(nv_base + NV_BUF0);
     nv_buf[1] = (uint16_t*)(nv_base + NV_BUF1);
-    memset((void*)nv_buf[0], 0, (size_t)NV_W * NV_H * 2);
-    memset((void*)nv_buf[1], 0, (size_t)NV_W * NV_H * 2);
     *nv_ctrl = 0;
     nv_frame = 0; nv_active = 0; nv_enabled = true;
-    fprintf(stderr, "mister_video: native video DDR @ 0x%08lx (%dx%d RGB565)\n",
-            (unsigned long)NV_BASE, NV_W, NV_H);
+    fprintf(stderr, "mister_video: native video DDR @ 0x%08lx\n",
+            (unsigned long)NV_BASE);
 }
 
-// Write the current mame frame into the inactive DDR buffer (center-clipped to
-// 320x240) and ring the doorbell.
+// Pick the presented geometry for this driver and publish its modeline. Called
+// from gp2x_set_video_mode, before the first present.
+static void nv_configure(int width, int height)
+{
+    if (!nv_enabled) return;
+
+    int pitch = (width + 3) & ~3;
+    bool fits = (width  > 0 && width  <= NV_MAX_W &&
+                 height > 0 && height <= NV_MAX_H &&
+                 (size_t)pitch * height * 2 <= NV_BUF_BYTES);
+
+    if (fits) {
+        nv_view_w = width;
+        nv_view_h = height;
+        nv_pitch  = pitch;
+    } else {
+        // Too large for a buffer (or for the reader) — fall back to the fixed
+        // mode and center-clip, as Stage 4 did for every game.
+        nv_view_w = NV_DEF_W;
+        nv_view_h = NV_DEF_H;
+        nv_pitch  = NV_DEF_W;
+        fprintf(stderr, "mister_video: %dx%d exceeds the DDR buffer — "
+                        "falling back to %dx%d center-clip\n",
+                width, height, NV_DEF_W, NV_DEF_H);
+    }
+
+    double fps = 60.0;
+    if (Machine && Machine->drv && Machine->drv->frames_per_second > 0.0f)
+        fps = (double)Machine->drv->frames_per_second;
+
+    struct nv_modeline m;
+    nv_make_modeline(nv_pitch, nv_view_h, fps, &m);
+    nv_publish_timing(nv_base, &m);
+
+    // Clear both buffers once; the per-frame path only writes the live area,
+    // so any padding/border stays black without a memset per frame.
+    size_t frame_bytes = (size_t)nv_pitch * nv_view_h * 2;
+    memset((void*)nv_buf[0], 0, frame_bytes);
+    memset((void*)nv_buf[1], 0, frame_bytes);
+
+    fprintf(stderr,
+            "mister_video: present %dx%d (pitch %d) — %dx%d total, "
+            "%.3f MHz pix, %.2f kHz H, %.2f Hz V, ce_inc=%u\n",
+            nv_view_w, nv_view_h, nv_pitch, m.h_total, m.v_total,
+            m.pixclk / 1e6, m.h_rate / 1e3, m.refresh, m.ce_inc);
+    if (m.h_rate > 16500.0)
+        fprintf(stderr, "mister_video: WARNING H rate %.2f kHz is above 15 kHz "
+                        "CRT range (HDMI/multisync only)\n", m.h_rate / 1e3);
+}
+
+// Write the current mame frame into the inactive DDR buffer and ring the
+// doorbell. In the normal case the presented geometry IS the driver's, so this
+// is one memcpy per line with no clipping; the clip path only runs in the
+// oversized-frame fallback.
 static void nv_present(void)
 {
     if (!nv_enabled) return;
     uint16_t* dst = nv_buf[nv_active];
-    const int cw = surface_width  < NV_W ? surface_width  : NV_W;
-    const int ch = surface_height < NV_H ? surface_height : NV_H;
-    const int dx = (NV_W - cw) / 2, dy = (NV_H - ch) / 2;
+    const int cw = surface_width  < nv_view_w ? surface_width  : nv_view_w;
+    const int ch = surface_height < nv_view_h ? surface_height : nv_view_h;
+    const int dx = (nv_view_w - cw) / 2, dy = (nv_view_h - ch) / 2;
     const int sx = (surface_width  - cw) / 2, sy = (surface_height - ch) / 2;
-    memset(dst, 0, (size_t)NV_W * NV_H * 2);   // black borders
     if (gp2x_screen15) {
         for (int y = 0; y < ch; y++)
-            memcpy(dst + (size_t)(dy + y) * NV_W + dx,
+            memcpy(dst + (size_t)(dy + y) * nv_pitch + dx,
                    gp2x_screen15 + (size_t)(sy + y) * surface_width + sx,
                    (size_t)cw * 2);
     } else if (gp2x_screen8) {
         for (int y = 0; y < ch; y++) {
             const unsigned char* srow =
                 gp2x_screen8 + (size_t)(sy + y) * surface_width + sx;
-            uint16_t* drow = dst + (size_t)(dy + y) * NV_W + dx;
+            uint16_t* drow = dst + (size_t)(dy + y) * nv_pitch + dx;
             for (int x = 0; x < cw; x++) drow[x] = gp2x_palette[srow[x]];
         }
     }

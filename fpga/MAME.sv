@@ -186,44 +186,21 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign DDRAM_CLK = clk_sys;
 
-// CE_PIXEL: exact Genesis H40 timing from CLK_VIDEO (53.693 MHz).
-// Active pixels: /8 (6.712 MHz). Blanking uses variable /8,/9,/10 widths
-// so that total MCLK per line = 3420, matching Genesis exactly (H_TOTAL=420).
-// Pattern per line: 320 active @/8 + blanking @mixed = 3420 MCLK total.
-reg [3:0] ce_cnt;
-reg ce_pix_gen;
-reg [9:0] pix_in_line;
+// CE_PIXEL: fractional divider from CLK_VIDEO (53.693 MHz). The increment
+// comes from the per-game timing registers in DDR (see mame_ce_pixel.sv and
+// openbor_video_reader.sv); on reset, or with no timing block published, it
+// falls back to 6.594 MHz — the Genesis H40 average that the fixed 320x240
+// mode used, so the pre-Stage-3 behaviour is preserved.
+wire        ce_pix_gen;
+wire [23:0] nv_ce_inc;
 
-// Blanking pixel width schedule: Genesis uses 28@/10 + 4@/9 + 68@/8 = 100 blanking pixels
-// 28*10 + 4*9 + 68*8 = 280+36+544 = 860 MCLK blanking. 320*8 + 860 = 3420 total.
-wire in_active = (pix_in_line < 10'd320);
-wire in_blank_10 = (pix_in_line >= 10'd320) && (pix_in_line < 10'd348);
-wire in_blank_9  = (pix_in_line >= 10'd348) && (pix_in_line < 10'd352);
-wire [3:0] pix_width = in_active   ? 4'd7 :   // /8: count 0-7
-                        in_blank_10 ? 4'd9 :   // /10: count 0-9
-                        in_blank_9  ? 4'd8 :   // /9: count 0-8
-                                      4'd7;    // /8: remaining blanking
+mame_ce_pixel ce_pixel_gen (
+	.clk    (CLK_VIDEO),
+	.reset  (RESET),
+	.inc    (nv_ce_inc),
+	.ce_pix (ce_pix_gen)
+);
 
-always @(posedge CLK_VIDEO) begin
-	if (RESET) begin
-		ce_cnt <= 4'd0;
-		ce_pix_gen <= 1'b0;
-		pix_in_line <= 10'd0;
-	end
-	else begin
-		ce_pix_gen <= (ce_cnt == 4'd0);
-		if (ce_cnt == pix_width) begin
-			ce_cnt <= 4'd0;
-			if (pix_in_line == 10'd419)
-				pix_in_line <= 10'd0;
-			else
-				pix_in_line <= pix_in_line + 10'd1;
-		end
-		else begin
-			ce_cnt <= ce_cnt + 4'd1;
-		end
-	end
-end
 assign CE_PIXEL = ce_pix_gen;
 
 assign VGA_SL = 0;
@@ -747,6 +724,7 @@ openbor_video_top #(.LEAN_SCANOUT(1)) native_video
 	.enable         (use_nv),
 	.active         (nv_active),
 	.vsync_out      (),
+	.ce_inc         (nv_ce_inc),
 
 	// CRT position adjustment
 	.h_offset       (h_pos),
