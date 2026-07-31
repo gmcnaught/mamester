@@ -23,6 +23,10 @@
  *   test_frame_writer sweep [seconds]   cycle the arcade geometries Stage 3
  *                                       targets (256x224, 320x240, 384x224,
  *                                       400x254, tate), framed bars in each
+ *   test_frame_writer joy               live view of the four MiSTer joystick
+ *                                       words the FPGA writes — one row per
+ *                                       player, cells light as buttons go down
+ *                                       (also printed, so it works over ssh)
  *
  * Any mode takes an optional geometry argument, which publishes a modeline and
  * draws at that size (default 320x240@59.92, the core's fallback mode):
@@ -52,6 +56,15 @@
 #define NV_BUF_BYTES 0x00100000u
 #define NV_MAX_W    512
 #define NV_MAX_H    512
+
+/* Joystick words the FPGA writes each frame (openbor_video_reader). Bit map is
+ * the core's CONF_STR J1 line, same for every player:
+ *   [0] right [1] left [2] down [3] up
+ *   [4..9] Fire 1..6  [10] Start  [11] Coin  [12] Pause                     */
+#define NV_JOY0     0x00000008u
+#define NV_JOY1     0x00000018u
+#define NV_JOY2     0x00000020u
+#define NV_JOY3     0x00000028u
 
 /* Geometry in use — set by parse_geometry(). */
 static int W = 320, H = 240, PITCH = 320;
@@ -122,6 +135,38 @@ static void fill_grid(uint16_t *buf)
     buf[W - 1]                         = 0xF800;
     buf[(size_t)(H - 1) * PITCH]       = 0xF800;
     buf[(size_t)(H - 1) * PITCH + W-1] = 0xF800;
+}
+
+static void fill_rect(uint16_t *buf, int x0, int y0, int w, int h, uint16_t c)
+{
+    int y, x;
+    for (y = y0; y < y0 + h && y < H; y++)
+        for (x = x0; x < x0 + w && x < W; x++)
+            buf[(size_t)y * PITCH + x] = c;
+}
+
+/* One row per player: 4 direction cells, 6 fire cells, then Start, Coin and
+ * Pause. A cell is lit when its bit is set. */
+static void draw_pads(uint16_t *buf, const uint32_t *joy)
+{
+    static const int bits[13] = { 3, 2, 1, 0,          /* up down left right */
+                                  4, 5, 6, 7, 8, 9,    /* fire 1..6          */
+                                  10, 11, 12 };        /* start coin pause   */
+    static const uint16_t lit[13] = {
+        0x07E0, 0x07E0, 0x07E0, 0x07E0,                /* green: directions  */
+        0xFFE0, 0xFFE0, 0xFFE0, 0xFFE0, 0xFFE0, 0xFFE0,/* yellow: fire       */
+        0x07FF, 0xF800, 0xF81F                         /* cyan/red/magenta   */
+    };
+    int p, i;
+    const int cw = 20, ch = 20, gap = 3, x0 = 6, y0 = 12, rowh = 28;
+
+    memset(buf, 0, (size_t)PITCH * H * 2);
+    for (p = 0; p < 4; p++)
+        for (i = 0; i < 13; i++) {
+            int on = (joy[p] >> bits[i]) & 1;
+            int x  = x0 + i * (cw + gap) + (i >= 4 ? 6 : 0) + (i >= 10 ? 6 : 0);
+            fill_rect(buf, x, y0 + p * rowh, cw, ch, on ? lit[i] : 0x2104);
+        }
 }
 
 /* "384x224" or "256x224@60" */
@@ -205,6 +250,39 @@ int main(int argc, char **argv)
         printf("grid written, buffer 0 active — the 1-px white border must be "
                "fully visible\n");
         return 0;
+    }
+
+    if (!strcmp(mode, "joy")) {
+        uint32_t prev[4] = { 1, 1, 1, 1 };   /* force a first draw */
+        uint32_t frame = 0;
+        int active = 0;
+        volatile uint32_t *jr[4] = {
+            (volatile uint32_t *)(base + NV_JOY0),
+            (volatile uint32_t *)(base + NV_JOY1),
+            (volatile uint32_t *)(base + NV_JOY2),
+            (volatile uint32_t *)(base + NV_JOY3)
+        };
+        printf("joy: rows = P1..P4, cells = up down left right, fire 1-6, "
+               "start, coin, pause (Ctrl-C to stop)\n");
+        for (;;) {
+            uint32_t j[4];
+            int p, changed = 0;
+            for (p = 0; p < 4; p++) {
+                j[p] = *jr[p];
+                if (j[p] != prev[p]) changed = 1;
+            }
+            if (changed) {
+                for (p = 0; p < 4; p++) prev[p] = j[p];
+                printf("P1=%08x P2=%08x P3=%08x P4=%08x\n", j[0], j[1], j[2], j[3]);
+                fflush(stdout);
+            }
+            draw_pads(active ? buf1 : buf0, j);
+            __sync_synchronize();
+            frame++;
+            *ctrl = (frame << 2) | (uint32_t)active;
+            active ^= 1;
+            usleep(16000);
+        }
     }
 
     if (!strcmp(mode, "sweep")) {
