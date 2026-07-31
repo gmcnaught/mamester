@@ -640,7 +640,7 @@ always @(posedge ddr_clk) begin
                 else if (timeout_cnt == TIMEOUT_MAX) begin
                     // No timing block published (or DDR stalled) — keep the
                     // geometry already in use and get on with the frame.
-                    state <= LEAN_SCANOUT ? ST_POLL_CTRL : ST_WRITE_JOY0;
+                    state <= ST_WRITE_JOY0;
                 end
                 else
                     timeout_cnt <= timeout_cnt + 20'd1;
@@ -674,7 +674,11 @@ always @(posedge ddr_clk) begin
                 else
                     tim_have_cand <= 1'b0;
 
-                state <= LEAN_SCANOUT ? ST_POLL_CTRL : ST_WRITE_JOY0;
+                // The joystick writeback runs even in lean scanout: it is four
+                // single-qword writes per frame and it is how the emulator sees
+                // MiSTer's controllers (Stage 5). Only the cart and audio-ring
+                // handshakes stay disabled.
+                state <= ST_WRITE_JOY0;
             end
 
             ST_POLL_CTRL: begin

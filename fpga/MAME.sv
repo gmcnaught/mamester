@@ -255,12 +255,28 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // The DDR video read path (control word, BUF0/BUF1 addressing, RGB565
 // unpack, timing) is UNCHANGED.
 // -------------------------------------------------------------------------
+// Input follows the MiSTer arcade convention. Directions are fixed by the
+// framework (joy[0] right, [1] left, [2] down, [3] up, buttons from [4]) and
+// the J1 line names what Main_MiSTer offers in "Define buttons".
+//
+// A single-game core lists "Start 1P, Start 2P, Coin" and reads them from
+// either pad (Arcade-Pacman/DonkeyKong/Galaga/1942). MAMESTer runs any driver
+// with up to four players, so it follows the multi-game precedent instead —
+// NeoGeo_MiSTer, which puts Start and Coin on each player's own pad
+// (COIN1 = joystick_0[10], COIN2 = joystick_1[10]). Pause is last, as in every
+// arcade core. Per-player bit map, identical for joystick_0..3:
+//
+//   [0] right  [1] left   [2] down   [3] up
+//   [4] Fire 1 [5] Fire 2 [6] Fire 3 [7] Fire 4 [8] Fire 5 [9] Fire 6
+//   [10] Start (this player)  [11] Coin (this player)  [12] Pause
 localparam CONF_STR = {
 	"MAMESTer;;",
 	"-;",
 	"OCE,H Position (CRT),0,+1,+2,+3,-3,-2,-1;",
 	"OFH,V Position (CRT),0,+1,+2,+3,-3,-2,-1;",
 	"-;",
+	"J1,Fire 1,Fire 2,Fire 3,Fire 4,Fire 5,Fire 6,Start,Coin,Pause;",
+	"jn,A,B,X,Y,L,R,Start,Select,R2;",
 	"V,v",`BUILD_DATE
 };
 
