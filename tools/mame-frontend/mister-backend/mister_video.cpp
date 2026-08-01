@@ -108,6 +108,11 @@ static int               nv_pitch  = NV_DEF_W;
 static uint16_t         *nv_stage = 0;
 static size_t            nv_stage_bytes = 0;
 
+// MISTER_FRAME_HASH=N — checksum the published frame at frame N. Declared here
+// rather than beside nv_hash_frame() because init_SDL() reads the environment
+// long before nv_present() is first called.
+static unsigned long     nv_hash_at = 0;
+
 static void nv_init(void);
 static void nv_configure(int width, int height);
 static void nv_present(void);
@@ -193,6 +198,8 @@ int init_SDL(void)
     const char* lim = getenv("MISTER_BENCH_FRAMES");
     bench_limit = lim ? strtoul(lim, 0, 10) : 0;
     nv_joy_debug = getenv("MISTER_JOY_DEBUG") != 0;
+    const char* fh = getenv("MISTER_FRAME_HASH");
+    nv_hash_at = fh ? strtoul(fh, 0, 10) : 0;
     fb_open_if_requested();
     mister_profile_init();      // no-op unless MISTER_PROFILE is set
     return 1;
@@ -371,6 +378,36 @@ static inline void nv_convert_row(uint16_t* drow, const unsigned char* srow,
 //
 // The rule here is that nothing crosses into the uncached mapping a pixel at a
 // time. A 16bpp driver has already produced RGB565, so its rows go straight to
+// --- deterministic frame checksum ------------------------------------------
+// MISTER_FRAME_HASH=N prints a 64-bit FNV-1a of the published frame at frame N.
+//
+// Emulation is deterministic given a fixed frame count and no input, so two
+// builds that differ only in codegen MUST produce identical hashes. A mismatch
+// is a real pixel difference with an exact frame to reproduce it at. This is the
+// one test that catches wrong output which does not crash -- a crash/hang sweep
+// passes such a bug silently, and -ffast-math with NEON is exactly where
+// reassociation can move a vector coordinate by an LSB.
+//
+// Hashes the DDR buffer itself rather than the staging frame, so it covers BOTH
+// the 8bpp staged path and the 16bpp direct-to-DDR carve-out. That read comes
+// from the uncached window at roughly 89 MB/s, which is why it is one-shot: it
+// runs on a single frame and after the doorbell, so it never delays a present.
+//
+// It does NOT cover audio. Nothing here does, and fast-math is most likely to
+// change audio in a way nobody notices. Treat that as a known hole.
+static void nv_hash_frame(const uint16_t* buf, size_t px, unsigned long frame,
+                          int w, int h)
+{
+    uint64_t hash = 1469598103934665603ULL;        // FNV-1a 64 offset basis
+    for (size_t i = 0; i < px; i++) {
+        hash ^= (uint64_t)buf[i];
+        hash *= 1099511628211ULL;                  // FNV-1a 64 prime
+    }
+    fprintf(stderr, "MISTER-FRAMEHASH frame=%lu hash=%016llx w=%d h=%d\n",
+            frame, (unsigned long long)hash, w, h);
+    fflush(stderr);
+}
+
 // DDR by memcpy. A palettised one is converted into a cached staging frame
 // first and then crosses in one memcpy — converting directly into DDR cost 65%
 // of process CPU on atarisy2 (512x384), and the same tax applied to every 8bpp
@@ -418,6 +455,13 @@ static void nv_present(void)
     __sync_synchronize();
     nv_frame++;
     *nv_ctrl = (nv_frame << 2) | (uint32_t)nv_active;
+
+    // After the doorbell on purpose: the buffer just published is not reused
+    // until two frames from now, so hashing it here costs the present nothing.
+    if (nv_hash_at && nv_frame == nv_hash_at)
+        nv_hash_frame(dst, (size_t)nv_pitch * nv_view_h, nv_frame,
+                      nv_view_w, nv_view_h);
+
     nv_active ^= 1;
 }
 
