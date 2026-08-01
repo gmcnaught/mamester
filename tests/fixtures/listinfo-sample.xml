@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<mame>
+	<game name="ridleofb" sourcefile="taito_f3.c">
+		<description>Riddle of Pythagoras</description>
+		<year>1994</year>
+		<manufacturer>Taito</manufacturer>
+		<video screen="raster" orientation="vertical" width="232" height="320" aspectx="3" aspecty="4" refresh="58.970000" />
+		<driver status="good" color="good" sound="good" palettesize="8192" />
+	</game>
+	<game name="ridleofbc" sourcefile="taito_f3.c" cloneof="ridleofb" romof="ridleofb">
+		<description>Riddle of Pythagoras (clone)</description>
+		<year>1994</year>
+		<manufacturer>Taito</manufacturer>
+		<video screen="raster" orientation="vertical" width="232" height="320" aspectx="3" aspecty="4" refresh="58.970000" />
+		<driver status="good" color="good" sound="good" palettesize="8192" />
+	</game>
+	<game name="gng" sourcefile="gng.c">
+		<description>Ghosts'n Goblins</description>
+		<year>1985</year>
+		<manufacturer>Capcom</manufacturer>
+		<video screen="raster" orientation="horizontal" width="256" height="224" aspectx="4" aspecty="3" refresh="59.590000" />
+		<driver status="good" color="good" sound="good" palettesize="1024" />
+	</game>
+	<game name="wideone" sourcefile="wide.c">
+		<description>Improbably Wide Game</description>
+		<year>1992</year>
+		<manufacturer>Nobody</manufacturer>
+		<video screen="raster" orientation="horizontal" width="640" height="240" aspectx="4" aspecty="3" refresh="60.000000" />
+		<driver status="good" color="good" sound="good" palettesize="256" />
+	</game>
+	<!-- Renamed between MAME versions: mame4all calls this hardware
+	     wmsyunit.cpp, 2003-plus calls it midyunit.c. Same board, same setname.
+	     Matching on filenames reports it as a coverage win that does not
+	     exist; matching on setnames gets it right. -->
+	<game name="narc" sourcefile="midyunit.c">
+		<description>Narc (rev 7.00)</description>
+		<year>1988</year>
+		<manufacturer>Williams</manufacturer>
+		<video screen="raster" orientation="horizontal" width="399" height="254" aspectx="4" aspecty="3" refresh="53.204874" />
+		<driver status="good" color="good" sound="good" palettesize="256" />
+	</game>
+	<game name="neodrv" sourcefile="neogeo.c">
+		<description>Some Neo Geo Game</description>
+		<year>1994</year>
+		<manufacturer>SNK</manufacturer>
+		<video screen="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3" refresh="59.185606" />
+		<driver status="good" color="good" sound="good" palettesize="4096" />
+	</game>
+</mame>
