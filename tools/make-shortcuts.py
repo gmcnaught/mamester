@@ -8,8 +8,9 @@ Generate one MiSTer .mgl shortcut per MAMESTer romset, serving both entry points
     </mistergamedescription>
 
 The files live in /media/fat/_MAMESTer (a top-level _-prefixed directory becomes
-an entry in MiSTer's main menu), and games/MAMESTer/Games is symlinked to it so
-the core's own OSD picker reaches the same files:
+an entry in MiSTer's main menu), and a "Games" symlink points at it from both the
+core's home directory and the romset directory, so the core's own OSD picker
+reaches the same files wherever it happens to open:
 
   From the MAIN MENU   selecting one loads the core AND mounts the romset, so
                        games sit in the menu next to every other system's titles.
@@ -20,7 +21,10 @@ the core's own OSD picker reaches the same files:
 Why not point the picker straight at the romsets: it cannot select one.
 Main_MiSTer's browser fakes every .zip into a directory and descends into it
 (file_io.cpp ScanDirectory, suppressed only by SCANO_NOZIP, which a core cannot
-request), so a romset can be browsed but never picked.
+request), so a romset can be browsed but never picked — and that happens whatever
+the CONF_STR extension filter says. It also starts at the directory of the last
+mounted file, which after any .mgl launch is the romset directory, hence the
+second symlink.
 
 The XML path is relative to the core's home directory — device-observed:
 Main_MiSTer joins it onto games/MAMESTer before storing the result in
@@ -56,8 +60,13 @@ GAMEDIR = "/media/fat/games/mame"       # emulator + romsets
 OTHERDIR = "/media/fat/_Other"
 # A top-level _-prefixed directory becomes an entry in MiSTer's main menu.
 MGLDIR = "/media/fat/_MAMESTer"
-# The core's picker opens at HOMEDIR, so it reaches the same files through this.
-PICKER_LINK = f"{HOMEDIR}/Games"
+# The core's picker reaches the same files through these. TWO of them, because
+# MiSTer starts a mount browser at the directory of the last mounted file: after
+# any .mgl launch that is the romset directory, not the core's home. A "Games"
+# entry in both places means the game list is one keypress away wherever the
+# browser opens. (The romset directory itself can never be useful here — the
+# browser fakes every .zip into a directory, whatever the extension filter says.)
+PICKER_LINKS = (f"{HOMEDIR}/Games", f"{GAMEDIR}/roms/Games")
 
 MGL = """<mistergamedescription>
 \t<rbf>_Other/{rbf}</rbf>
@@ -133,9 +142,9 @@ def main():
     args = ap.parse_args()
 
     if args.clean:
-        ssh(args.host, f"rm -rf {shlex.quote(MGLDIR)}; "
-                       f"rm -f {shlex.quote(PICKER_LINK)}")
-        print(f"removed {MGLDIR} and {PICKER_LINK}")
+        ssh(args.host, f"rm -rf {shlex.quote(MGLDIR)}; " + "; ".join(
+            f"rm -f {shlex.quote(l)}" for l in PICKER_LINKS))
+        print(f"removed {MGLDIR} and the picker links")
         return 0
 
     if not (args.all or args.match):
@@ -187,15 +196,17 @@ def main():
     })
     n = ssh(args.host, f"ls -1 {shlex.quote(MGLDIR)}/*.mgl | wc -l").strip()
 
-    # The core's picker opens at HOMEDIR and cannot see _MAMESTer, so bridge the
-    # two with a symlink rather than a second copy of every file. Main_MiSTer's
-    # browser stat()s DT_LNK entries and shows them as directories.
-    ssh(args.host, f"test -e {shlex.quote(PICKER_LINK)} || "
-                   f"ln -s {shlex.quote(MGLDIR)} {shlex.quote(PICKER_LINK)}")
+    # Bridge the picker to the same files with symlinks rather than a second copy
+    # of every file. Main_MiSTer's browser stat()s DT_LNK entries and shows them
+    # as directories.
+    ssh(args.host, "; ".join(
+        f"test -e {shlex.quote(l)} || ln -s {shlex.quote(MGLDIR)} {shlex.quote(l)}"
+        for l in PICKER_LINKS))
 
     print(f"wrote {n} shortcuts")
     print(f"  MiSTer main menu   _MAMESTer")
-    print(f"  core 'Load Game'   Games/  (-> {MGLDIR})")
+    print(f"  core 'Load Game'   Games/  (-> {MGLDIR}, linked from both the core")
+    print(f"                     home and the romset directory the browser opens in)")
     return 0
 
 

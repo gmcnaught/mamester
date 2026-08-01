@@ -54,13 +54,21 @@ mkdir -p "$LOGDIR" "$GAMEDIR/roms" "$GAMEDIR/opts" "$GAMEDIR/samples" \
          "$GAMEDIR/cfg" "$GAMEDIR/nvram" "$GAMEDIR/hi" "$GAMEDIR/inp" \
          "$GAMEDIR/snap" 2>/dev/null
 
-# The OSD file browser opens at HOMEDIR, so the romsets have to be reachable
-# from here. deploy.py --link-roms makes this a symlink to GAMEDIR/roms; if it
-# is neither a symlink nor a real directory, create the link now so a
-# hand-installed device still finds its ROMs.
+# The .mgl shortcuts' romset paths are resolved against HOMEDIR (that is what
+# Main_MiSTer does with a mount path), so the romsets must be reachable from
+# here.
 if [ ! -e "$HOMEDIR/roms" ]; then
     ln -s "$GAMEDIR/roms" "$HOMEDIR/roms" 2>/dev/null
 fi
+
+# Keep the OSD picker one keypress from the game list. MiSTer starts a mount
+# browser at the directory of the last mounted file, which after any .mgl launch
+# is the romset directory rather than HOMEDIR — so "Games" is linked from both.
+# The romset listing itself is never selectable: the browser fakes every .zip
+# into a directory, whatever the CONF_STR extension filter says.
+for _link in "$HOMEDIR/Games" "$GAMEDIR/roms/Games"; do
+    [ -e "$_link" ] || ln -s /media/fat/_MAMESTer "$_link" 2>/dev/null
+done
 
 # Rotate the previous manager log, and cap the per-game log history so
 # /media/fat/logs/MAMESTer cannot grow without bound (one .log + one .prev per
