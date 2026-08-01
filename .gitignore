@@ -59,3 +59,7 @@ tools/mame-frontend/libretro-host/lrc/
 
 # A/B host binaries built against a non-default archive (mame2003-o2, -o3)
 tools/mame-frontend/libretro-host/mame2003-*
+
+# Host-native test binary (tests/Makefile builds it; it is macOS-native, not armhf)
+tests/nv_present_test
+tests/nv_present_test.dSYM/

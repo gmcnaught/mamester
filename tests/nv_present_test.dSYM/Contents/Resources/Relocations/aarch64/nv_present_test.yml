@@ -1,5 +1,0 @@
----
-triple:          'arm64-apple-darwin'
-binary-path:     nv_present_test
-relocations:     []
-...
