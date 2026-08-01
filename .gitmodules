@@ -1,3 +1,6 @@
 [submodule "vendor/mame4all-pi"]
 	path = vendor/mame4all-pi
 	url = https://github.com/RetroPie/mame4all-pi.git
+[submodule "vendor/mame2003-plus"]
+	path = vendor/mame2003-plus
+	url = https://github.com/libretro/mame2003-plus-libretro.git
