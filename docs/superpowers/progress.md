@@ -30,8 +30,8 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 2 RGB565 present path | ✅ | `9a9024e` | `test_frame_writer` → full-screen color bars, correct RGB order |
 | 4 mame4all present shim | ✅ | `82f00ea` | gng title @ 60 fps, 256×224 centered, palette→RGB565 correct |
 | 3 Programmable timing | ✅ | (branch) | sweep: 5 geometries raster-exact, borders intact; gng 256×224, mk 416×254@53.2 Hz, 1943 224×256 3:4, popeye 512×448; 99.5% of drivers native |
-| 5 Input | ⏳ NEXT | — | |
-| 6 Audio | ⬜ | — | |
+| 5 Input | ✅ | (branch) | P1 full map verified bit-by-bit on device; gng played with a pad (642 events, combos included) |
+| 6 Audio | ⏳ NEXT | — | |
 | 7 Launch/packaging | ⬜ | — | |
 | 8 Driver/romset triage | ⬜ | — | |
 
@@ -123,12 +123,48 @@ spyhunt publishes 480×496 3:4 then exits (Stage 8).
 strider, willow, ffight all die within ~20 s, no message) — driver-level,
 Stage 8.
 
-## Later stages (pointers)
+## Stage 5 — input (done)
 
-- **5 Input:** MiSTer joystick → mame4all. The `0x3A000000` region already exposes
-  joystick words (`+0x08` P1, `+0x18` P2, …) written by the FPGA (OpenBOR pattern);
-  `mister_video.cpp` can read them (`NativeVideoWriter_ReadJoystick` equivalent) and
-  feed mame's input, or use the sonic-mania joy-SHM bridge. OSD pause.
+**Convention.** Verified against Arcade-Pacman/DonkeyKong/Galaga/1942 and
+NeoGeo_MiSTer rather than invented: directions are framework-fixed (`joy[0]`
+right, `[1]` left, `[2]` down, `[3]` up, buttons from `[4]`) and Pause is the
+last J1 entry. Single-game cores list "Start 1P, Start 2P, Coin" and take them
+from either pad; MAMESTer runs any driver with up to four players, so it follows
+the multi-game precedent (NeoGeo) — **Start and Coin on each player's own pad**,
+so `joystick_0..3` all decode identically:
+
+```
+[0] right  [1] left  [2] down  [3] up
+[4..9] Fire 1..Fire 6   [10] Start   [11] Coin   [12] Pause
+CONF_STR: "J1,Fire 1,Fire 2,Fire 3,Fire 4,Fire 5,Fire 6,Start,Coin,Pause;"
+          "jn,A,B,X,Y,L,R,Start,Select,R2;"
+```
+
+**Path.** The reader's joystick writeback now runs in lean scanout too (four
+single-qword DDR writes per frame). On the HPS, `gp2x_joystick_read()` — which
+MAME calls every frame via `osd_poll_joysticks()`, immediately before reading
+the input ports — polls the four words and replays changed bits as MAME's own
+default bindings (`src/inptport.cpp`): P1 arrows + LCtrl/LAlt/Space/LShift/Z/X,
+P2 R/F/D/G + A/S/Q/W, P3 I/K/J/L + RCtrl/RShift/Enter, Start 1-4 = keys 1-4,
+Coin 1-4 = keys 5-8, P1 Pause = P. No vendored input code is touched, and MAME's
+TAB menu still remaps.
+
+**Verified on device** (RBF sha1 `45c197a1`): writeback proven live by poking a
+sentinel into each joystick word and watching the FPGA overwrite it within
+200 ms; then every P1 input read back correctly — directions `0x1/2/4/8` with
+diagonals, Fire 1-6 `0x10`…`0x200`, Start `0x400`, Coin `0x800`, Pause `0x1000`.
+Ghosts'n Goblins was then played with the pad (642 events, combos such as
+`0x11` right+Fire 1). `test_frame_writer joy` shows the four words live as
+one row of cells per player, and prints them, so this is re-checkable over ssh.
+
+**Gaps:** 0.37b5 has no keyboard defaults for P4 movement/buttons (Start 4 /
+Coin 4 only) and just three buttons for P3 — a full four-player setup needs
+bindings at the joystick layer (`osd_customize_inputport_defaults` plus a
+`JOYCODE` source, which means patching or replacing `src/rpi/input.cpp`).
+Analog controls (spinner/dial/trackball) and a keyboard path for MAME's service
+and test inputs are also unwired.
+
+## Later stages (pointers)
 - **6 Audio:** mame4all ALSA already works on device (mk/nbajam ran with sound in
   the bench). Validate routing; native DDR audio ring (maldita) as fallback.
 - **7 Launch/packaging:** `deploy.py` full path; `games/MAMESTer/_handler.sh` (already a
