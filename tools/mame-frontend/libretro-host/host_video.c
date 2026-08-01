@@ -14,6 +14,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "host.h"
 #include "nv_present.h"
@@ -96,6 +98,43 @@ void host_video_set_refresh(double hz)
     }
 }
 
+/* MISTER_SRC_STATS=N: at frame N, describe the frame the CORE handed over,
+ * before it reaches DDR. This is the boundary that separates "the emulator did
+ * not draw it" from "the present path lost it" -- and for RGB565 the present
+ * path is a per-row memcpy, so if a layer is missing here it was never drawn. */
+static unsigned long src_stats_at;
+static int           src_stats_read;
+
+static void host_src_stats(const void *data, unsigned w, unsigned h,
+                           size_t pitch, nv_format fmt)
+{
+    const uint8_t *p = (const uint8_t *)data;
+    unsigned x, y, nonzero = 0, distinct = 0;
+    unsigned char seen[8192];
+    memset(seen, 0, sizeof seen);
+
+    for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            uint32_t v;
+            if (fmt == NV_FMT_XRGB8888)
+                v = ((const uint32_t *)(p + (size_t)y * pitch))[x];
+            else
+                v = ((const uint16_t *)(p + (size_t)y * pitch))[x];
+            if (v) nonzero++;
+            v &= 0xFFFF;
+            if (!(seen[v >> 3] & (1u << (v & 7)))) {
+                seen[v >> 3] |= (uint8_t)(1u << (v & 7));
+                distinct++;
+            }
+        }
+    }
+    fprintf(stderr, "MISTER-SRCSTATS frame=%lu %ux%u pitch=%u fmt=%d "
+                    "nonzero=%u/%u (%.1f%%) distinct=%u\n",
+            src_stats_at, w, h, (unsigned)pitch, (int)fmt,
+            nonzero, w * h, 100.0 * nonzero / (double)(w * h), distinct);
+    fflush(stderr);
+}
+
 void host_video_refresh(const void *data, unsigned width, unsigned height,
                         size_t pitch)
 {
@@ -114,6 +153,14 @@ void host_video_refresh(const void *data, unsigned width, unsigned height,
      * width * bpp -- mame2003-plus's bypass path passes the game bitmap's own
      * rowpixels (video.c:459), which is the driver's padded stride, not the
      * visible width. Passing it through is why nv_frame takes pitch_bytes. */
+    if (!src_stats_read) {
+        const char *e = getenv("MISTER_SRC_STATS");
+        src_stats_at = e ? strtoul(e, NULL, 10) : 0;
+        src_stats_read = 1;
+    }
+    if (src_stats_at && frames_shown + 1 == src_stats_at)
+        host_src_stats(data, width, height, pitch, cur_fmt);
+
     nv_frame(data, (int)pitch, (int)width, (int)height);
     frames_shown++;
 }

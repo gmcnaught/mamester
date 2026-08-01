@@ -64,37 +64,98 @@ before Task 8.
 
 ---
 
-## Task 6 — the three format paths, verified on hardware
+## Task 6 — the three format paths
 
-The core picks its pixel format per driver, and each one takes a different route
-through `nv_present.c`. All three were checked by looking at a screenshot, not
-by trusting the counters — a frame counter advancing proves the doorbell rings,
-not that the picture is right.
+The core picks its pixel format per driver and each takes a different route
+through `nv_present.c`.
 
 | format | driver | geometry | result |
 |---|---|---|---|
-| RGB565 (straight to DDR, no staging) | `gng` | 256×224 | renders, animates |
-| RGB565, ROT90 | `galaga` | 224×288 | renders upright, 3:4 aspect |
-| XRGB8888 (6-bits-per-gun, converted) | `eprom`, `batman` | 336×240 | render, correct colour |
-| 0RGB1555 (converted) | `crospang` | 320×240 | renders, animates |
+| RGB565 (straight to DDR, no staging) | `gng`, `contra`, `pacman` | 256×224, 224×280, 224×288 | renders |
+| XRGB8888 (6-bits-per-gun, converted) | `eprom`, `batman` | 336×240 | renders |
+| 0RGB1555 (converted) | `crospang` | 320×240 | renders |
 
-Rotation is done by the **core**, not here: refusing `SET_ROTATION` sends
+Rotation is done by the **core**: refusing `SET_ROTATION` sends
 `mame2003_video_init_orientation()` down its `Mame will rotate internally`
 branch, so `frame_convert()` transposes inside the pixel loop it already runs.
-That matches mame4all, and it avoids a full cache-hostile pass per frame on
-every vertical game. `contra` (ROT90) and `galaga` both come out portrait with
-a 3:4 aspect, which is the check that this actually works.
+That matches mame4all and avoids a cache-hostile pass per frame on every
+vertical game. `contra` and `galaga` come out portrait at 3:4, which is the
+check that it works.
 
-**`klax` is stuck, and it is not the present path.** It publishes 600 frames
-with an advancing counter, but the DDR content is byte-identical at frame 300
-and frame 1200 (`MISTER_FRAME_HASH`), and it is not all-zero. Two other drivers
-on the *same* XRGB8888 path and the *same* 336×240 geometry — `eprom` and
-`batman`, both `VIDEO_NEEDS_6BITS_PER_GUN` — render correctly and do change
-between frames, which rules the converter out. Notably all three pass through
-the identical frame hash `b035f5a72c1ec783` at some point; `klax` simply never
-leaves it. This is driver-level and belongs to Task 8 triage. mame4all's own
-notes already list `klax` among the drivers that reached `set_video_mode` and
-hung, so it may be a shared 0.37b5/0.78 driver problem rather than a regression.
+**The RGB565 row above was wrong when first written, and the way it was wrong is
+the lesson.** gng was recorded as verified on the strength of a screenshot
+showing `TOP SCORE` and a ticking clock; a second shot differed, which was read
+as "it animates". It was in fact rendering *only its character layer* — no
+background tilemap, no sprites — and the only thing changing between shots was
+the clock. A frame that changes is not a frame that is correct. The cause is in
+the Task 7 section below, and it was a defect in this host, not in the core.
+
+**`klax` is stuck, and it is not the present path.** It publishes frames with an
+advancing counter, but the DDR content is byte-identical at frame 300 and 1200
+and is not all-zero. `eprom` and `batman` are the same XRGB8888 path at the same
+336×240 and both render and change. Driver-level, for Task 8 triage — mame4all's
+notes already list `klax` among the drivers that hung after `set_video_mode`.
+
+---
+
+## The missing-layers bug: a libretro contract violation in this host
+
+Symptom: gng, contra and 1942 rendered their character layer only — text on
+black — while `crospang` was perfect. mame4all rendered gng completely through
+the *same* `nv_present`, on the same device, minutes apart.
+
+Ruled out in order, each with evidence rather than reasoning:
+
+| suspect | how it was eliminated |
+|---|---|
+| ROM version / integrity | all 19 CRC-32s in `roms2003/gng.zip` match the 0.78 driver's declared checksums, **including all six GFX2 tile and six GFX3 sprite ROMs** — the exact regions not drawing |
+| `-O3` codegen | the `-O2` archive produces a byte-identical sparse screen |
+| Cyclone / DrZ80 ASM cores | `cyclone_mode=disabled` and `=default` produce identical output |
+| the present path | for RGB565 `nv_frame` is a per-row `memcpy` with no per-layer anything; it cannot drop a background for gng and keep one for pacman |
+
+Then instrumented at the boundary — `MISTER_SRC_STATS=N` describes the frame the
+**core** hands over, before DDR. gng at frame 800: **1.8% non-black, 4 distinct
+colours**. The layers were never drawn.
+
+**Root cause.** `update_variables()` (`core_options.c:977`) is:
+
+```c
+if (environ_cb(GET_VARIABLE, &var) && !string_is_empty(var.value))
+    switch (index) {
+      case OPT_BRIGHTNESS: options.brightness = atof(var.value);
+                           palette_set_global_brightness(options.brightness); break;
+      case OPT_GAMMA:      options.gamma = atof(var.value);
+                           palette_set_global_gamma(options.gamma);      break;
+```
+
+There is **no else**. This host answered `false` for every option it had not
+explicitly pinned, so those `options.*` fields were never assigned and their
+`palette_set_global_*` calls never happened — the palette was built from
+whatever the struct happened to hold. RetroArch never hits this because a
+libretro frontend is expected to own every option value and always supply one.
+
+That also explains the survivor: `crospang` is `VCT_PASS1555`, direct RGB from
+the game bitmap with **no palette lookup at all**, so a broken palette cannot
+touch it.
+
+**Fix:** capture each option's default from the core's own `SET_VARIABLES`
+payload (`"<description>; <default>|<alt>|<alt>"`, default first,
+`core_options.c:1663`, buffer freed immediately so both strings are copied) and
+serve it from `GET_VARIABLE` whenever the option is not pinned. Measured at the
+same boundary:
+
+| game | before | after |
+|---|---|---|
+| `gng` | 1.8% non-black, 4 colours | **12.2%, 12 colours** |
+| `contra` | text only | **21.2%, 31 colours** |
+| `pacman` | 2.6%, 3 colours | 4.5%, 7 colours |
+
+gng now renders its full BEST RANKING table; contra its background.
+
+**The general lesson for this host:** every remaining `return false` in
+`host_env.c` deserves the same question — does the core have an `else` for it?
+For `GET_VARIABLE` it did not, and the failure was silent and graphical rather
+than loud.
 
 ---
 

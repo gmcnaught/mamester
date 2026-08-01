@@ -32,6 +32,15 @@ static const char *host_system_dir = NULL;
 static const char *host_save_dir   = NULL;
 static int         host_debug      = 0;
 
+/* mame2003-plus_cyclone_mode selects the hand-written ARM CPU cores at RUNTIME
+ * (core_options.c: default / disabled / Cyclone / DrZ80 / Cyclone+DrZ80 /
+ * DrZ80(snd) / Cyclone+DrZ80(snd)). It is env-settable rather than pinned to a
+ * constant because on/off is a benchmark arm -- and because mame4all runs with
+ * BOTH cores disabled (0002-default-asm-cores-off.patch: Cyclone segfaults on
+ * entry for every 68000 driver, DrZ80 crashes in DrZ80Run), so leaving 2003-plus
+ * on its own default puts an untested difference inside the comparison. */
+static char host_cyclone_mode[32] = "default";
+
 /* Pinned so that every benchmark arm measures the same emulator. Keys and legal
  * values were read out of vendor/mame2003-plus/src/mame2003/core_options.c
  * (APPNAME is "mame2003-plus", mame2003.h:62) -- an unrecognised key or an
@@ -69,6 +78,57 @@ static const struct { const char *key; const char *value; } host_options[] = {
     { NULL, NULL }
 };
 
+/* Defaults captured from the core's own SET_VARIABLES, so GET_VARIABLE can
+ * answer for EVERY option rather than only the pinned ones.
+ *
+ * This is not an optimisation, it is the libretro contract, and getting it
+ * wrong corrupts the picture rather than failing loudly. update_variables()
+ * (core_options.c:977) is:
+ *
+ *     if (environ_cb(GET_VARIABLE, &var) && !string_is_empty(var.value))
+ *         switch (index) { case OPT_BRIGHTNESS: options.brightness = ...;
+ *                          palette_set_global_brightness(...); break; ... }
+ *
+ * There is NO else. Answer false and the corresponding options.* field is never
+ * assigned and its palette_set_global_* call never happens -- so brightness and
+ * gamma keep whatever the options struct held, and the palette is built wrong.
+ * Symptom: frames that are almost entirely black with a handful of colours, and
+ * wrong colours where anything does appear. RetroArch never hits this because a
+ * frontend is expected to own every option value and always supply one.
+ *
+ * SET_VARIABLES sends "<description>; <default>|<alt>|<alt>" with the default
+ * first (core_options.c:1663), and frees the buffer immediately afterwards, so
+ * both key and value are copied here. */
+#define HOST_MAX_OPTIONS 64
+static struct { char *key; char *value; } host_defaults[HOST_MAX_OPTIONS];
+static int host_defaults_count;
+
+static void host_capture_defaults(const struct retro_variable *vars)
+{
+    host_defaults_count = 0;
+    for (; vars && vars->key && host_defaults_count < HOST_MAX_OPTIONS; vars++) {
+        const char *sep, *end;
+        size_t n;
+        if (!vars->value) continue;
+        sep = strstr(vars->value, "; ");
+        if (!sep) continue;
+        sep += 2;
+        end = strchr(sep, '|');
+        n = end ? (size_t)(end - sep) : strlen(sep);
+
+        host_defaults[host_defaults_count].key = strdup(vars->key);
+        host_defaults[host_defaults_count].value = (char *)malloc(n + 1);
+        if (!host_defaults[host_defaults_count].key ||
+            !host_defaults[host_defaults_count].value)
+            break;
+        memcpy(host_defaults[host_defaults_count].value, sep, n);
+        host_defaults[host_defaults_count].value[n] = '\0';
+        host_defaults_count++;
+    }
+    fprintf(stderr, "MISTER-HOST: captured %d core-option defaults\n",
+            host_defaults_count);
+}
+
 static void host_log(enum retro_log_level level, const char *fmt, ...)
 {
     static const char *const tag[] = { "DBG", "INF", "WRN", "ERR" };
@@ -91,6 +151,14 @@ void host_env_init(const char *system_dir, const char *save_dir)
     host_system_dir = system_dir;
     host_save_dir   = save_dir;
     host_debug      = (dbg && *dbg == '1');
+
+    {
+        const char *cm = getenv("MISTER_CYCLONE_MODE");
+        if (cm && *cm) {
+            snprintf(host_cyclone_mode, sizeof host_cyclone_mode, "%s", cm);
+            fprintf(stderr, "MISTER-HOST: cyclone_mode=%s\n", host_cyclone_mode);
+        }
+    }
 }
 
 bool host_environment(unsigned cmd, void *data)
@@ -111,15 +179,26 @@ bool host_environment(unsigned cmd, void *data)
         struct retro_variable *var = (struct retro_variable *)data;
         int i;
         var->value = NULL;
+        if (strcmp(var->key, "mame2003-plus_cyclone_mode") == 0) {
+            var->value = host_cyclone_mode;
+            return true;
+        }
         for (i = 0; host_options[i].key; i++) {
             if (strcmp(var->key, host_options[i].key) == 0) {
                 var->value = host_options[i].value;
                 return true;
             }
         }
-        /* Not pinned: the core keeps its own default. Visible under
-         * MISTER_HOST_DEBUG=1 so the unpinned set can be audited. */
-        host_log(RETRO_LOG_DEBUG, "env: unpinned option %s\n", var->key);
+        /* Not pinned: serve the core's OWN default, captured from
+         * SET_VARIABLES. Returning false here would leave the matching
+         * options.* field unassigned -- see host_capture_defaults(). */
+        for (i = 0; i < host_defaults_count; i++) {
+            if (strcmp(var->key, host_defaults[i].key) == 0) {
+                var->value = host_defaults[i].value;
+                return true;
+            }
+        }
+        host_log(RETRO_LOG_WARN, "env: no value for option %s\n", var->key);
         return false;
     }
 
@@ -171,10 +250,13 @@ bool host_environment(unsigned cmd, void *data)
                  ((const struct retro_message *)data)->msg);
         return true;
 
+    case RETRO_ENVIRONMENT_SET_VARIABLES:
+        host_capture_defaults((const struct retro_variable *)data);
+        return true;
+
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
-    case RETRO_ENVIRONMENT_SET_VARIABLES:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
