@@ -557,7 +557,20 @@ arm A and arm B must not differ by compiler.
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `tools/build-mame.sh CROSS=1` builds `vendor/mame4all-pi/mame` using `arm-linux-gnueabihf-*`; Task 4 reuses the same image name `mamester-cross-armhf`
+- Produces: `tools/build-mame.sh CROSS=1` builds using `arm-linux-gnueabihf-*`; `TARGET_NAME=<name>` selects the output binary and object directory; Task 4 reuses the same image name `mamester-cross-armhf`
+
+> **The arms MUST use distinct `TARGET_NAME`s, or this task measures nothing.**
+> `make` does not rebuild when compiler flags or the compiler itself change.
+> Verified in this tree: `build-mame.sh` has no clean step; `Makefile.mister:52`
+> is `OBJ = obj_$(TARGET)_mister` with `TARGET` defaulting to `mame`, so every
+> build through the script shares one object directory (there is exactly one on
+> disk); and the pattern rules are `$(OBJ)/%.o: src/%.c` — nothing depends on
+> `Makefile.mister`. Build both arms at `TARGET=mame` and the second recompiles
+> **nothing**, relinks the first arm's objects, and reports a toolchain delta of
+> ~0%: a wrong answer indistinguishable from a real one, produced by the exact
+> failure this task exists to rule out. Distinct `TARGET_NAME` gives each arm its
+> own object directory — structural isolation, which does not have to work
+> correctly the way a guard does. Verify the artifacts anyway (Step 4b).
 
 - [ ] **Step 1: Write the container**
 
@@ -618,18 +631,37 @@ Thread `$DOCKER_PLATFORM`, `$DOCKERFILE`, `$IMAGE` and `$MAKE_ARGS` through the
 existing `docker build` and `docker run` invocations. Do not change the flags in
 `Makefile.mister` — the point is that only the toolchain differs.
 
-- [ ] **Step 3: Build and check the binary is the right kind of object**
+- [ ] **Step 3: Build both arms, each into its own object directory**
 
 ```bash
-CROSS=1 tools/build-mame.sh
-file vendor/mame4all-pi/mame
-readelf -A vendor/mame4all-pi/mame | grep -E 'Tag_CPU_name|Tag_FP_arch|Tag_ABI_VFP_args'
+TARGET_NAME=mame-qemu          tools/build-mame.sh    # qemu-emulated native gcc
+TARGET_NAME=mame-cross CROSS=1 tools/build-mame.sh    # x86_64-hosted cross gcc
+ls -d vendor/mame4all-pi/obj_mame-qemu_mister vendor/mame4all-pi/obj_mame-cross_mister
+file vendor/mame4all-pi/mame-qemu vendor/mame4all-pi/mame-cross
+readelf -A vendor/mame4all-pi/mame-cross | grep -E 'Tag_CPU_name|Tag_FP_arch|Tag_ABI_VFP_args'
 ```
 
 Expected: `ELF 32-bit LSB ... ARM, EABI5 ... dynamically linked, interpreter
 /lib/ld-linux-armhf.so.3`; `Tag_CPU_name: "Cortex-A9"`; a VFP tag; and
 `Tag_ABI_VFP_args: VFP registers` (hard float). If ABI_VFP_args is absent the build
 is soft-float and **will not run** — fix before proceeding.
+
+- [ ] **Step 4a: Prove the two arms are actually different binaries**
+
+Do not skip this. It is the artifact-level check that catches a stale-object
+collision regardless of cause, including the one route a build-time guard cannot
+cover — `sweep` found that mtimes on the Docker mount can be stale, and any
+flag-signature stamp is itself an mtime comparison on that same mount.
+
+```bash
+cmp vendor/mame4all-pi/mame-qemu vendor/mame4all-pi/mame-cross && \
+  echo "IDENTICAL — object directories collided, STOP" || echo "differ, good"
+shasum vendor/mame4all-pi/mame-qemu vendor/mame4all-pi/mame-cross
+```
+
+Compare sizes too, but never rely on them: `sweep` measured two binaries that
+were byte-identical in **size** and differed by sha1, so a size check would have
+reported "same binary".
 
 - [ ] **Step 4: Confirm it runs on the device**
 
@@ -1172,23 +1204,51 @@ silently decides what is being measured, and `frameskip` or `samplerate` moving
 between arms would invalidate the whole benchmark:
 
 ```c
-/* Pinned so that every benchmark arm measures the same emulator. Recorded
+/* Pinned so that every benchmark arm measures the same emulator. Keys and legal
+ * values verified against src/mame2003/core_options.c (APPNAME is defined
+ * "mame2003-plus" at src/mame2003/mame2003.h:62) -- NOT guessed. Recorded
  * verbatim in docs/bench-results-2003plus.md. */
 static const struct { const char *key; const char *value; } host_options[] = {
-    { "mame2003-plus_frameskip",           "0"        },
-    { "mame2003-plus_samplerate",          "44100"    },  /* matches mame4all's rate */
-    { "mame2003-plus_cpu_clock_scale",     "default"  },
-    { "mame2003-plus_skip_disclaimer",     "enabled"  },
-    { "mame2003-plus_skip_warnings",       "enabled"  },
-    { "mame2003-plus_dcs_speedhack",       "enabled"  },
-    { "mame2003-plus_sample_rate",         "44100"    },
+    { "mame2003-plus_frameskip",        "disabled" },  /* "0" is NOT a legal value */
+    { "mame2003-plus_sample_rate",      "44100"    },  /* default is 48000 -- see below */
+    { "mame2003-plus_cpu_clock_scale",  "default"  },
+    { "mame2003-plus_skip_disclaimer",  "enabled"  },
+    { "mame2003-plus_skip_warnings",    "enabled"  },
+    { "mame2003-plus_use_samples",      "disabled" },  /* default is enabled */
+    { "mame2003-plus_autosave_hiscore", "disabled" },
+    { "mame2003-plus_nvram_bootstraps", "disabled" },
     { NULL, NULL }
 };
 ```
 
-Verify these key names against `src/mame2003/mame2003_core_options.h` in the
-submodule before building — a mistyped key silently falls through to the core
-default, which is exactly the failure this table exists to prevent.
+An earlier draft of this table was written from naming convention and was wrong
+three ways, each of which fails **silently** — an unrecognised key falls through
+to the core default, so the benchmark looks correctly pinned and is not:
+
+| draft said | truth |
+|---|---|
+| `mame2003-plus_dcs_speedhack` | **does not exist** — zero matches in the source |
+| `mame2003-plus_samplerate` | the real key is `mame2003-plus_sample_rate` |
+| `frameskip` = `"0"` | not a legal value; the set is `disabled,1,2,3,4,5` |
+
+Verified defaults, for reference: `frameskip=disabled`, `sample_rate=48000`,
+`cpu_clock_scale=default`, `skip_disclaimer=disabled`, `skip_warnings=disabled`,
+`use_samples=enabled`, `autosave_hiscore=default`, `nvram_bootstraps=enabled`.
+
+Two of the pinned values are judgement calls and belong in the results document,
+not buried in a table:
+
+- **`sample_rate` = 44100, against the 48000 default.** mame4all's bench runs at
+  44100 (Stage 6: period = `sample_rate / refresh`, 735 at 44100/60). Leaving
+  2003-plus at 48000 would have the two engines doing measurably different
+  amounts of sound work, and Stage 8 measured sound at a 1.07–1.31× CPU cost —
+  large enough to swamp a real engine difference. MiSTer's only ALSA card is
+  48 kHz stereo and the `plug` layer resamples either way, so 44100 costs nothing
+  in fidelity and buys comparability.
+- **`use_samples` = disabled**, against the `enabled` default. The reference
+  collection ships 72 sample sets; loading them changes both CPU and what is
+  audible, and mame4all's bench did not use them. Enable later if the shipping
+  build wants them — do not let them vary inside the comparison.
 
 - [ ] **Step 2: Write the main loop**
 
@@ -1630,8 +1690,12 @@ rather than assumption:
 - The core converts palettised output to RGB565 internally (`VCT_PALTO565`,
   `src/mame2003/video.c`), so the common path needs no conversion in the host at all.
 
-**Unverified and worth watching.** The core-option key names in Task 5 Step 1 are
-written from the upstream naming convention, not read out of
-`mame2003_plus_core_options.h`. That file must be checked before the first build —
-a mistyped key silently falls back to the core default, which is precisely the
-failure the pinned table exists to prevent.
+**Since verified** (2026-08-01), and the check was worth running: the core-option
+table in Task 5 Step 1 was originally written from naming convention and was wrong
+three ways, including one key that does not exist at all. Now read out of
+`src/mame2003/core_options.c` with defaults recorded. See that step.
+
+**Nothing in this plan is now marked unverified.** Two claims rest on measurement
+taken during planning rather than on source inspection, and are labelled where
+they appear: the offline mame4all setname extraction's error rate (Task 1) and
+the device's idle load average (Global Constraints).
