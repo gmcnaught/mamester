@@ -143,24 +143,47 @@ wc -c /tmp/m2003p/listinfo.xml
 
 Expected: about `20971520` bytes (20 MB).
 
-The other two come off the device (read-only, no emulation, safe to run while
-another session benchmarks):
+The mame4all driver list comes off the device (read-only, no emulation, safe to run
+while another session benchmarks):
 
 ```bash
 ssh root@192.168.20.81 'cd /media/fat/games/mame && ./mame "*" -sourcefile' \
   > /tmp/m2003p/mame4all-drivers.txt
 wc -l /tmp/m2003p/mame4all-drivers.txt
-
-ssh root@192.168.20.81 'grep -rhoE "<setname>[^<]+</setname>|zip=\"[^\"]+\"" /media/fat/_Arcade \
-  | sed -e "s/<[^>]*>//g" -e "s/zip=\"//" -e "s/\"//" -e "s/\.zip$//" \
-  | tr "|" "\n" | sed "s/^ *//;s/ *$//" | grep -v "^$" | sort -u' \
-  > /tmp/m2003p/mra-setnames.txt
-wc -l /tmp/m2003p/mra-setnames.txt
 ```
 
-Expected: about `2270` driver lines and roughly `2954` MRA setnames. If the MRA
-count is far off, inspect a few `.mra` files by hand before trusting the diff —
-`zip=` can carry multiple pipe-separated names, which is why the `tr` is there.
+Expected: about `2270` lines.
+
+**The MRA setname list already exists** — the `sweep` session generated it at
+`/tmp/mame-ab/arcade-setnames.txt` (local, not on the device): 2,954 unique entries,
+every `<setname>` and every `zip=` value under `/media/fat/_Arcade`, deduped and
+sorted.
+
+```bash
+cp /tmp/mame-ab/arcade-setnames.txt /tmp/m2003p/mra-setnames.txt
+wc -l /tmp/m2003p/mra-setnames.txt
+for s in gng sf2 pacman asteroid mk klax; do
+    printf "%-10s %s\n" "$s" "$(grep -cx "$s" /tmp/m2003p/mra-setnames.txt)"
+done
+```
+
+Expected: `2954` lines, then `1` for gng/sf2/pacman/asteroid (MiSTer has cores) and
+`0` for mk/klax (the gap games Stage 8 benched). If that pattern does not hold, the
+list is wrong and every conclusion downstream of it is too.
+
+To regenerate it, two device-specific traps, both learned the hard way: MRA
+filenames under `_Arcade` contain **spaces**, so `for f in $(find ...)` word-splits
+and silently yields nothing; and the device has **BusyBox grep**, which has no
+`--include`. Use `find ... -exec grep -hoi ... {} +`.
+
+**Path-prefixed entries can be ignored — verified, not assumed.** 31 of the 2,954
+carry a prefix (28 `hbmame/`, 3 `sound/`). Basenaming them would change the setname
+set by exactly two entries, `galnamco` and `pacupacu1`, both homebrew hacks that are
+not 0.78 setnames; the other 26 hbmame names and all 3 `sound/` names
+(`carnival`, `journey`, `pulsar`) already appear unprefixed. So stripping prefixes
+is a no-op for coverage, and *not* stripping them avoids silently merging an hbmame
+hack with its mainline namesake. `parse_mra` therefore skips any line containing
+`/`, and reports how many it skipped.
 
 - [ ] **Step 2: Write the fixtures**
 
@@ -354,8 +377,28 @@ def parse_mame4all(path):
 
 
 def parse_mra(path):
+    """Setnames covered by a MiSTer MRA.
+
+    Lines carrying a path prefix (28 `hbmame/...`, 3 `sound/...` in the current
+    list) are skipped rather than basenamed. Verified no-op: basenaming would add
+    only `galnamco` and `pacupacu1`, neither a 0.78 setname, while every other
+    prefixed name already appears unprefixed. Skipping also avoids merging an
+    hbmame ROM hack with its mainline namesake.
+    """
+    covered, skipped = set(), 0
     with open(path, encoding="utf-8", errors="replace") as fh:
-        return {ln.strip() for ln in fh if ln.strip()}
+        for line in fh:
+            name = line.strip()
+            if not name:
+                continue
+            if "/" in name:
+                skipped += 1
+                continue
+            covered.add(name)
+    if skipped:
+        print(f"<!-- parse_mra: skipped {skipped} path-prefixed entries -->",
+              file=sys.stderr)
+    return covered
 
 
 def main():
