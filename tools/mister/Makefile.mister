@@ -63,8 +63,11 @@ include src/sound.mak
 include src/$(MAMEOS)/$(MAMEOS).mak
 
 # Swap the VideoCore present objects for the MiSTer backend.
+# mister_profile.o is not optional: mister_video.cpp calls mister_profile_init()
+# unconditionally (it self-disables unless MISTER_PROFILE is set), so omitting it
+# is an undefined symbol at link, not just a missing feature.
 OSOBJS := $(filter-out $(OBJ)/rpi/gles2.o $(OBJ)/rpi/minimal.o,$(OSOBJS)) \
-	$(OBJ)/mister/mister_video.o
+	$(OBJ)/mister/mister_video.o $(OBJ)/mister/mister_profile.o
 
 CDEFS = $(DEFS) $(COREDEFS) $(CPUDEFS) $(SOUNDDEFS)
 
