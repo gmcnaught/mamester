@@ -25,6 +25,7 @@
 #include "driver.h"
 
 #include "nv_modeline.h"
+#include "mister_profile.h"
 
 #include <SDL.h>
 #include <time.h>
@@ -95,6 +96,17 @@ static bool              nv_enabled = false;
 // because the reader fetches whole 64-bit words = 4 RGB565 pixels).
 static int               nv_view_w = NV_DEF_W, nv_view_h = NV_DEF_H;
 static int               nv_pitch  = NV_DEF_W;
+
+// Staging frame for palettised (8bpp) drivers. The DDR mapping is uncached, so
+// a store into it costs orders of magnitude more than a cached one: converting
+// pixel-by-pixel straight into DDR spent 65% of the whole process's CPU on
+// atarisy2 (512x384). The frame is converted here instead and then pushed
+// across with one memcpy, which tools/mister/ddr-write-bench.c measures at
+// 89 MB/s — 4.2 ms for that frame, and the same whatever the store width or
+// mapping mode, i.e. a floor set by uncached transaction latency, not by the
+// DDR3 or by codegen.
+static uint16_t         *nv_stage = 0;
+static size_t            nv_stage_bytes = 0;
 
 static void nv_init(void);
 static void nv_configure(int width, int height);
@@ -182,6 +194,7 @@ int init_SDL(void)
     bench_limit = lim ? strtoul(lim, 0, 10) : 0;
     nv_joy_debug = getenv("MISTER_JOY_DEBUG") != 0;
     fb_open_if_requested();
+    mister_profile_init();      // no-op unless MISTER_PROFILE is set
     return 1;
 }
 
@@ -197,6 +210,7 @@ void gp2x_deinit(void)
     if (nv_fd >= 0) { close(nv_fd); nv_fd = -1; }
     if (fb_mem) { munmap(fb_mem, fb_len); fb_mem = 0; }
     if (fb_fd >= 0) { close(fb_fd); fb_fd = -1; }
+    if (nv_stage) { free(nv_stage); nv_stage = 0; nv_stage_bytes = 0; }
     if (gp2x_screen8)  free(gp2x_screen8);
     if (gp2x_screen15) free(gp2x_screen15);
     gp2x_screen8 = 0; gp2x_screen15 = 0; rpi_screen = 0;
@@ -318,6 +332,15 @@ static void nv_configure(int width, int height)
     memset((void*)nv_buf[0], 0, frame_bytes);
     memset((void*)nv_buf[1], 0, frame_bytes);
 
+    // Staging frame (see nv_present). Zeroed once for the same reason as the
+    // DDR buffers: only the live area is rewritten.
+    if (nv_stage_bytes < frame_bytes) {
+        free(nv_stage);
+        nv_stage = (uint16_t*)malloc(frame_bytes);
+        nv_stage_bytes = nv_stage ? frame_bytes : 0;
+    }
+    if (nv_stage) memset(nv_stage, 0, nv_stage_bytes);
+
     fprintf(stderr,
             "mister_video: present %dx%d (pitch %d) — %dx%d total, "
             "%.3f MHz pix, %.2f kHz H, %.2f Hz V, ce_inc=%u, aspect %d:%d\n",
@@ -328,31 +351,70 @@ static void nv_configure(int width, int height)
                         "CRT range (HDMI/multisync only)\n", m.h_rate / 1e3);
 }
 
+// Convert one 8bpp row to RGB565 in cached memory. Two pixels per 32-bit store
+// when the destination is word-aligned, which it is for every non-clipped
+// frame (nv_pitch is a multiple of 4 and dx is 0).
+static inline void nv_convert_row(uint16_t* drow, const unsigned char* srow,
+                                  int cw, const uint16_t* pal)
+{
+    int x = 0;
+    if ((((uintptr_t)drow) & 3) == 0) {
+        uint32_t* d32 = (uint32_t*)drow;
+        for (; x + 1 < cw; x += 2)
+            *d32++ = (uint32_t)pal[srow[x]] | ((uint32_t)pal[srow[x + 1]] << 16);
+    }
+    for (; x < cw; x++) drow[x] = pal[srow[x]];
+}
+
 // Write the current mame frame into the inactive DDR buffer and ring the
-// doorbell. In the normal case the presented geometry IS the driver's, so this
-// is one memcpy per line with no clipping; the clip path only runs in the
-// oversized-frame fallback.
+// doorbell.
+//
+// The rule here is that nothing crosses into the uncached mapping a pixel at a
+// time. A 16bpp driver has already produced RGB565, so its rows go straight to
+// DDR by memcpy. A palettised one is converted into a cached staging frame
+// first and then crosses in one memcpy — converting directly into DDR cost 65%
+// of process CPU on atarisy2 (512x384), and the same tax applied to every 8bpp
+// driver, which is most of the 0.37b5 set. Staging the 16bpp case as well was
+// tried and reverted: without a worker thread to overlap the DDR write, the
+// extra cached copy is pure loss (mk 74.1 -> 72.3 fps).
 static void nv_present(void)
 {
     if (!nv_enabled) return;
-    uint16_t* dst = nv_buf[nv_active];
+
     const int cw = surface_width  < nv_view_w ? surface_width  : nv_view_w;
     const int ch = surface_height < nv_view_h ? surface_height : nv_view_h;
     const int dx = (nv_view_w - cw) / 2, dy = (nv_view_h - ch) / 2;
     const int sx = (surface_width  - cw) / 2, sy = (surface_height - ch) / 2;
+    uint16_t* dst = nv_buf[nv_active];
+
     if (gp2x_screen15) {
-        for (int y = 0; y < ch; y++)
-            memcpy(dst + (size_t)(dy + y) * nv_pitch + dx,
-                   gp2x_screen15 + (size_t)(sy + y) * surface_width + sx,
-                   (size_t)cw * 2);
-    } else if (gp2x_screen8) {
-        for (int y = 0; y < ch; y++) {
-            const unsigned char* srow =
-                gp2x_screen8 + (size_t)(sy + y) * surface_width + sx;
-            uint16_t* drow = dst + (size_t)(dy + y) * nv_pitch + dx;
-            for (int x = 0; x < cw; x++) drow[x] = gp2x_palette[srow[x]];
+        const uint16_t* src = gp2x_screen15 + (size_t)sy * surface_width + sx;
+        if (cw == nv_pitch && cw == surface_width) {
+            memcpy(dst + (size_t)dy * nv_pitch, src, (size_t)nv_pitch * ch * 2);
+        } else {
+            for (int y = 0; y < ch; y++)
+                memcpy(dst + (size_t)(dy + y) * nv_pitch + dx,
+                       src + (size_t)y * surface_width, (size_t)cw * 2);
         }
+    } else if (gp2x_screen8 && nv_stage) {
+        // gp2x_palette is volatile (the osd layer rewrites it); take a plain
+        // copy so the convert loop can keep entries in registers.
+        uint16_t pal[512];
+        for (int i = 0; i < 512; i++) pal[i] = gp2x_palette[i];
+
+        for (int y = 0; y < ch; y++)
+            nv_convert_row(nv_stage + (size_t)(dy + y) * nv_pitch + dx,
+                           gp2x_screen8 + (size_t)(sy + y) * surface_width + sx,
+                           cw, pal);
+
+        // Stage and DDR buffer share a layout (same pitch, same centring), so
+        // this is one memcpy even in the clipped fallback — the padding it also
+        // copies is the zeroes nv_configure put there.
+        memcpy(dst, nv_stage, (size_t)nv_pitch * nv_view_h * 2);
+    } else {
+        return;
     }
+
     __sync_synchronize();
     nv_frame++;
     *nv_ctrl = (nv_frame << 2) | (uint32_t)nv_active;

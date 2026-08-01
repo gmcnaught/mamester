@@ -48,3 +48,6 @@ tools/mister/test_frame_writer
 
 # Serena MCP index cache
 /.serena/
+
+# Local build of the DDR write microbenchmark (tools/mister/ddr-write-bench.c)
+tools/mister/ddr-write-bench

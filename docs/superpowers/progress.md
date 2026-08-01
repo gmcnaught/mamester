@@ -382,6 +382,31 @@ mcr68 (xenophob 33, archrivl 34) and atarisy2 (paperboy 42, 720 44) each came ou
 slow twice from different games. **Psikyo at 41 fps is a notable miss** — it is
 named as a gap target in CLAUDE.md.
 
+**The sweep above measured the present path, not the drivers (2026-08-01).**
+Profiling atarisy2 found 65% of process CPU in `nv_present`: the 8bpp path stored
+converted pixels one halfword at a time into the uncached `/dev/mem` window,
+where each store is its own bus transaction (24.8 MB/s = 15.1 ms per 512×384
+frame, vs 89 MB/s for a memcpy — `tools/mister/ddr-write-bench.c`). It now
+converts into a cached staging frame and crosses once with memcpy. `720`
+44.2 → 78.9 fps, `paperboy` 44.2 → 80.2, `toobin` 45.2 → 82.6, `quantum`
+55.1 → 113.2, `klax` 105.1 → 189.1; 22 games re-benched in
+`docs/bench-results.md`. Six of the eleven below-real-time families clear 60 Hz
+outright. 16bpp drivers keep writing DDR directly (staging them too cost `mk`
+2.5%); with that carve-out `mk` is 78.1. Moving the residual 4.19 ms DDR write
+to the second A9 core was built and backed out — 1.3× real time with sound is
+enough, and it is not worth a threaded DDR channel. Also: an orphaned busy-loop
+(PID 5922) was pinning one of the two A9 cores for the whole original sweep.
+**Operator decision (2026-08-01): do NOT re-baseline the 196-family sweep.** Its
+bands are a *lower* bound — every family is at least that fast, and the 8bpp ones
+(most of the set) are substantially faster — so the shippable list only grows.
+Treat the bands as conservative rather than current, and re-measure a single
+family only when its exact number matters. Verified on device: `720` renders
+correctly at 512×384 through the scaler.
+
+New tools: `MISTER_PROFILE=<hz>` (SIGPROF PC sampler in the backend) plus
+`tools/symbolize-prof.py`, since the device has no `perf` and gdb cannot unwind
+these frames; `MISTER_NO_NATIVE=1` benches the emulator with the present removed.
+
 **Next:** profile the below-real-time families (the operator deferred this);
 `mk` at 71 fps deserves attention as a marquee title. Note the earlier
 "1.6-2.1x real time" figures for mk/nbajam came from the no-core-loaded bench and

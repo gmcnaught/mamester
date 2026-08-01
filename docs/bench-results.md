@@ -84,6 +84,97 @@ Did **not** run (reached `set_video_mode` then hung, with or without sound):
 per-driver mame4all-pi/romset issue, not a speed result. Still unmeasured: Psikyo
 (s1945 wasn't in the archive under that name), Sega System 24/32, Namco System 2.
 
+## The present path was the bottleneck, not the drivers (2026-08-01)
+
+Profiling atarisy2 (`720`, flagged "below real time" at 44 fps by the Stage 8
+sweep) found **65% of process CPU inside `nv_present`**, the backend's own
+present path — not in the emulator. With the DDR present disabled
+(`MISTER_NO_NATIVE=1`) the same driver runs at **154 fps**, i.e. 2.6× real time.
+
+**Mechanism.** The 8bpp path converted palettised pixels one at a time straight
+into the `/dev/mem` window at 0x3A000000 (`drow[x] = gp2x_palette[srow[x]]`).
+That mapping is uncached, so each 16-bit store is its own bus transaction — no
+merging, no write-combining. `tools/mister/ddr-write-bench.c` measures the cost
+for one 512×384 RGB565 frame (384 KB):
+
+| target | store form | throughput | per frame |
+|---|---|---:|---:|
+| cached RAM | memcpy | 540.5 MB/s | 0.69 ms |
+| uncached DDR | memcpy | 89.5 MB/s | 4.19 ms |
+| uncached DDR | NEON 128-bit | 79.4 MB/s | 4.72 ms |
+| uncached DDR | 32-bit stores | 47.8 MB/s | 7.84 ms |
+| uncached DDR | 16-bit stores | 24.8 MB/s | **15.12 ms** |
+
+The mapping mode makes no difference (`O_SYNC` and not are within 3%), and
+hand-written NEON is *slower* than glibc memcpy: the uncached path is
+transaction-latency-bound, not instruction-bound. 89 MB/s is a floor, not a
+bandwidth ceiling — the DDR3 itself is orders of magnitude faster.
+
+**Fix.** Convert into a cached staging frame, then cross into DDR with one
+memcpy. 16bpp drivers already hold RGB565 and still go straight to DDR, since
+the extra cached copy buys nothing without a worker thread to overlap it (it
+cost `mk` 2.5%).
+
+**Effect** — 600 frames, unthrottled, **with sound**, core loaded, device quiet:
+
+| game | family | old | new | | game | family | old | new |
+|---|---|---:|---:|---|---|---|---:|---:|
+| gng | capcom | 121.4 | **193.4** | | ultraman | banpresto | 60.2 | **82.2** |
+| klax | atarisy2 | 105.1 | **189.1** | | wecleman | konami | 62.4 | **81.0** |
+| lastduel | capcom | 81.2 | **119.3** | | paperboy | atarisy2 | 44.2 | **80.2** |
+| hydra | atari 68k | 73.5 | **114.8** | | dynduke | seibu | 65.2 | **80.5** |
+| quantum | atari vector | 55.1 | **113.2** | | 720 | atarisy2 | 44.2 | **78.9** |
+| eprom | atari 68k | 72.6 | **105.6** | | cchasm | cchasm | 44.3 | **76.2** |
+| batman | atari 68k | 69.3 | **104.8** | | turbo | sega | 52.3 | **63.4** |
+| aztarac | vector | 68.3 | **97.2** | | shanghai | shanghai | 44.6 | **61.4** |
+| thunderj | atari 68k | 67.4 | **96.7** | | archrivl | mcr68 | 34.3 | **59.3** |
+| jedi | atari | 70.7 | **94.3** | | gunbird | psikyo | 42.5 | **50.4** |
+| toobin | atari 68k | 45.2 | **82.6** | | cheyenne | exidy440 | 25.7 | **28.7** |
+
+Every 8bpp driver gains 12–80%. `cischeat` (54.0 → 54.1) and `mk` (74.1 → 72.3)
+are the 16bpp cases and motivated the direct-write carve-out above; with it,
+`mk` measures **78.1** and `cischeat` 53.9. Verified on device: `720` (8bpp,
+512×384) and `mk` (16bpp, 416×254) both render correctly through the scaler.
+
+**Not done, deliberately.** The residual 4.19 ms DDR write could move to the
+second A9 core — the HPS is dual-core and the write is latency-bound, so it
+would overlap with emulation rather than contend (projected ~105 fps for
+atarisy2). Built and then backed out: 1.3× real time with sound already clears
+60 Hz, and it is not worth a threaded DDR channel plus a frame of present
+latency. The knob to reconsider it is a driver that needs more than ~1.3×.
+
+**Consequences for the Stage 8 sweep: every fps figure taken before this is a
+measurement of the present path, not of the driver.** Six of the eleven
+"below real time" families clear 60 Hz outright (atarisy2, toobin, quantum,
+cchasm, shanghai, turbo), and most of the "marginal" band moves well clear.
+`cheyenne`/`crossbow` (exidy440) is the one family that is genuinely CPU-bound.
+
+Two device notes that also invalidate earlier numbers: the sweep ran with an
+orphaned `sh -c while : ; do : ; done` (PID 5922, parent init) pinning one of the
+two A9 cores — killed 2026-08-01 01:08 — and `720` measured 42.0 fps with it
+running versus 44.2 without.
+
+**Measurement protocol on this device.** Per-cell spread is 1.5–4% across
+repeats, and cell *order* alone moved one arm by 2% — a game benched straight
+after a 190 fps run pays for the previous run's heat. Both are the same size as
+a typical codegen effect. Anything at that magnitude needs interleaved arms,
+alternating order, and repeats; two blocks measured minutes apart will
+manufacture a difference of a few percent. (Learned the hard way: a −4.7%
+"regression" from a two-block layout evaporated to +0.2% when order alternated.)
+The present-path deltas above are safe from this — they were taken back-to-back
+per game and are 12–80%, an order of magnitude above the drift.
+
+**Tooling this produced** (reusable for the remaining slow families):
+- `MISTER_PROFILE=<hz>` — SIGPROF PC sampler in the backend
+  (`mister_profile.cpp`). The device has no `perf`, and gdb cannot unwind these
+  ARM frames; this samples the PC and dumps file offsets per module.
+- `tools/symbolize-prof.py` — maps that dump back to function names through an
+  unstripped build (`tools/build-mame.sh STRIP=true all`), translating file
+  offsets to vaddrs via the ELF program headers.
+- `tools/mister/ddr-write-bench.c` — the DDR write-path ceiling above.
+- `MISTER_NO_NATIVE=1` — bench the emulator with the present path removed; the
+  gap against a normal run is the present cost.
+
 ## Caveats — read before over-reading the numbers
 
 1. **Upper bound.** Unthrottled + no sound. Sound-chip emulation (YM2151/YM2203/
