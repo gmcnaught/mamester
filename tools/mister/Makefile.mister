@@ -67,7 +67,8 @@ include src/$(MAMEOS)/$(MAMEOS).mak
 # unconditionally (it self-disables unless MISTER_PROFILE is set), so omitting it
 # is an undefined symbol at link, not just a missing feature.
 OSOBJS := $(filter-out $(OBJ)/rpi/gles2.o $(OBJ)/rpi/minimal.o,$(OSOBJS)) \
-	$(OBJ)/mister/mister_video.o $(OBJ)/mister/mister_profile.o
+	$(OBJ)/mister/mister_video.o $(OBJ)/mister/mister_profile.o \
+	$(OBJ)/mister/nv_present.o
 
 CDEFS = $(DEFS) $(COREDEFS) $(CPUDEFS) $(SOUNDDEFS)
 

@@ -74,64 +74,13 @@ static size_t    fb_len    = 0;
 static uint32_t  fb_w = 0, fb_h = 0, fb_stride = 0, fb_bpp = 0;
 static bool      fb_enabled = false;
 
-// ---- MiSTer native-video DDR present (the real core output) ---------------
-// 0x3A000000 RGB565 double-buffer. Contract from MiSTer_OpenBOR
-// native_video_writer.c, proven by tools/mister/test_frame_writer.c:
-//   +0x000 control = (frame_counter<<2)|active_buf ; +0x040 BUF0 ; +0x100040 BUF1
-// The openbor_video_reader stale-frame watchdog blanks on a stalled counter, so
-// we bump the control word every frame (DisplayScreen is per-frame). mame4all's
-// gp2x_screen15 is already RGB565 (gp2x_video_color15 macro) — no BGR swap.
-// Stage 3 presents at the driver's NATIVE size: gp2x_set_video_mode publishes a
-// modeline to the timing registers at +0x300000 and the frame is written at its
-// own width/height (padded to a multiple of 4 pixels per line). Frames wider or
-// taller than the reader supports fall back to the fixed 320x240 center-clip.
-static const uintptr_t NV_BASE   = 0x3A000000u;
-static const size_t    NV_REGION = 0x00400000u;   // 4 MB (upper 512 MB is the FPGA's)
-static const size_t    NV_BUF0   = 0x00000040u;
-static const size_t    NV_BUF1   = 0x00100040u;
-// 1 MB per buffer slot; the reader's largest frame (512x512) is half of that.
-static const size_t    NV_BUF_BYTES = 0x00100000u;
-// Widest / tallest the reader supports (line FIFO and counter widths).
-static const int       NV_MAX_W = 512, NV_MAX_H = 512;
-// Fallback mode = the fixed Stage-4 geometry.
-static const int       NV_DEF_W = 320, NV_DEF_H = 240;
+// ---- MiSTer native-video DDR present --------------------------------------
+// The DDR contract, the modeline publish, the staging frame, the format
+// converters, the frame checksum and the joystick words all live in
+// nv_present.c now, shared with tools/mame-frontend/libretro-host/. What is
+// left in this file is mame4all's gp2x_* OSD glue and nothing else.
+#include "nv_present.h"
 
-static int               nv_fd    = -1;
-static volatile uint8_t *nv_base  = 0;
-static volatile uint32_t*nv_ctrl  = 0;
-static uint16_t         *nv_buf[2] = {0, 0};
-static uint32_t          nv_frame = 0;
-static int               nv_active = 0;
-static bool              nv_enabled = false;
-
-// Geometry currently presented: nv_view_w/h is the displayed area, nv_pitch is
-// the DDR line stride in pixels (the view width padded to a multiple of 4,
-// because the reader fetches whole 64-bit words = 4 RGB565 pixels).
-static int               nv_view_w = NV_DEF_W, nv_view_h = NV_DEF_H;
-static int               nv_pitch  = NV_DEF_W;
-
-// Staging frame for palettised (8bpp) drivers. The DDR mapping is uncached, so
-// a store into it costs orders of magnitude more than a cached one: converting
-// pixel-by-pixel straight into DDR spent 65% of the whole process's CPU on
-// atarisy2 (512x384). The frame is converted here instead and then pushed
-// across with one memcpy, which tools/mister/ddr-write-bench.c measures at
-// 89 MB/s — 4.2 ms for that frame, and the same whatever the store width or
-// mapping mode, i.e. a floor set by uncached transaction latency, not by the
-// DDR3 or by codegen.
-static uint16_t         *nv_stage = 0;
-static size_t            nv_stage_bytes = 0;
-
-// MISTER_FRAME_HASH=N — checksum the published frame at frame N. Declared here
-// rather than beside nv_hash_frame() because init_SDL() reads the environment
-// long before nv_present() is first called.
-static unsigned long     nv_hash_at = 0;
-
-static void nv_init(void);
-static void nv_configure(int width, int height);
-static void nv_present(void);
-
-// MISTER_JOY_DEBUG=1 logs each MiSTer joystick word as it changes.
-static bool nv_joy_debug = false;
 
 // ---- per-game modeline ----------------------------------------------------
 // Computation and the register layout are shared with the standalone fabric
@@ -210,9 +159,6 @@ int init_SDL(void)
 
     const char* lim = getenv("MISTER_BENCH_FRAMES");
     bench_limit = lim ? strtoul(lim, 0, 10) : 0;
-    nv_joy_debug = getenv("MISTER_JOY_DEBUG") != 0;
-    const char* fh = getenv("MISTER_FRAME_HASH");
-    nv_hash_at = fh ? strtoul(fh, 0, 10) : 0;
     fb_open_if_requested();
     mister_profile_init();      // no-op unless MISTER_PROFILE is set
     return 1;
@@ -226,11 +172,9 @@ void deinit_SDL(void)
 
 void gp2x_deinit(void)
 {
-    if (nv_base) { munmap((void*)nv_base, NV_REGION); nv_base = 0; nv_enabled = false; }
-    if (nv_fd >= 0) { close(nv_fd); nv_fd = -1; }
     if (fb_mem) { munmap(fb_mem, fb_len); fb_mem = 0; }
     if (fb_fd >= 0) { close(fb_fd); fb_fd = -1; }
-    if (nv_stage) { free(nv_stage); nv_stage = 0; nv_stage_bytes = 0; }
+    nv_close();
     if (gp2x_screen8)  free(gp2x_screen8);
     if (gp2x_screen15) free(gp2x_screen15);
     gp2x_screen8 = 0; gp2x_screen15 = 0; rpi_screen = 0;
@@ -252,8 +196,16 @@ void gp2x_set_video_mode(struct osd_bitmap *bitmap, int bpp, int width, int heig
     }
     fprintf(stderr, "mister_video: set_video_mode %dx%d depth=%d\n",
             width, height, bitmap->depth);
-    nv_init();
-    nv_configure(width, height);
+    nv_open();
+    nv_set_palette(gp2x_palette, 512);
+    // mame4all rotates its own bitmap, so rotation is always 0 here. The
+    // refresh is the driver's own -- mk is 53.2 Hz, not 60.
+    {
+        double hz = (Machine && Machine->drv && Machine->drv->frames_per_second > 0.0f)
+                  ? (double)Machine->drv->frames_per_second : 60.0;
+        nv_set_mode(width, height, hz, 0,
+                    bitmap->depth == 8 ? NV_FMT_PAL8 : NV_FMT_RGB565);
+    }
 }
 
 // ---- the present seam -----------------------------------------------------
@@ -292,195 +244,15 @@ static void fb_blit16(void)
                (size_t)w * 2);
 }
 
-// Map the native-video DDR region. Fails gracefully off-device (no /dev/mem or
-// not root) so the bench mode still works. Idempotent.
-static void nv_init(void)
-{
-    if (nv_enabled || getenv("MISTER_NO_NATIVE")) return;
-    nv_fd = open("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC);
-    if (nv_fd < 0) return;
-    void* m = mmap(NULL, NV_REGION, PROT_READ | PROT_WRITE, MAP_SHARED, nv_fd,
-                   (off_t)NV_BASE);
-    if (m == MAP_FAILED) { close(nv_fd); nv_fd = -1; return; }
-    nv_base = (volatile uint8_t*)m;
-    nv_ctrl = (volatile uint32_t*)(nv_base);
-    nv_buf[0] = (uint16_t*)(nv_base + NV_BUF0);
-    nv_buf[1] = (uint16_t*)(nv_base + NV_BUF1);
-    *nv_ctrl = 0;
-    nv_frame = 0; nv_active = 0; nv_enabled = true;
-    fprintf(stderr, "mister_video: native video DDR @ 0x%08lx\n",
-            (unsigned long)NV_BASE);
-}
-
-// Pick the presented geometry for this driver and publish its modeline. Called
-// from gp2x_set_video_mode, before the first present.
-static void nv_configure(int width, int height)
-{
-    if (!nv_enabled) return;
-
-    int pitch = (width + 3) & ~3;
-    bool fits = (width  > 0 && width  <= NV_MAX_W &&
-                 height > 0 && height <= NV_MAX_H &&
-                 (size_t)pitch * height * 2 <= NV_BUF_BYTES);
-
-    if (fits) {
-        nv_view_w = width;
-        nv_view_h = height;
-        nv_pitch  = pitch;
-    } else {
-        // Too large for a buffer (or for the reader) — fall back to the fixed
-        // mode and center-clip, as Stage 4 did for every game.
-        nv_view_w = NV_DEF_W;
-        nv_view_h = NV_DEF_H;
-        nv_pitch  = NV_DEF_W;
-        fprintf(stderr, "mister_video: %dx%d exceeds the DDR buffer — "
-                        "falling back to %dx%d center-clip\n",
-                width, height, NV_DEF_W, NV_DEF_H);
-    }
-
-    double fps = 60.0;
-    if (Machine && Machine->drv && Machine->drv->frames_per_second > 0.0f)
-        fps = (double)Machine->drv->frames_per_second;
-
-    struct nv_modeline m;
-    nv_make_modeline(nv_pitch, nv_view_h, fps, &m);
-    nv_publish_timing(nv_base, &m);
-
-    // Clear both buffers once; the per-frame path only writes the live area,
-    // so any padding/border stays black without a memset per frame.
-    size_t frame_bytes = (size_t)nv_pitch * nv_view_h * 2;
-    memset((void*)nv_buf[0], 0, frame_bytes);
-    memset((void*)nv_buf[1], 0, frame_bytes);
-
-    // Staging frame (see nv_present). Zeroed once for the same reason as the
-    // DDR buffers: only the live area is rewritten.
-    if (nv_stage_bytes < frame_bytes) {
-        free(nv_stage);
-        nv_stage = (uint16_t*)malloc(frame_bytes);
-        nv_stage_bytes = nv_stage ? frame_bytes : 0;
-    }
-    if (nv_stage) memset(nv_stage, 0, nv_stage_bytes);
-
-    fprintf(stderr,
-            "mister_video: present %dx%d (pitch %d) — %dx%d total, "
-            "%.3f MHz pix, %.2f kHz H, %.2f Hz V, ce_inc=%u, aspect %d:%d\n",
-            nv_view_w, nv_view_h, nv_pitch, m.h_total, m.v_total,
-            m.pixclk / 1e6, m.h_rate / 1e3, m.refresh, m.ce_inc, m.arx, m.ary);
-    if (m.h_rate > 16500.0)
-        fprintf(stderr, "mister_video: WARNING H rate %.2f kHz is above 15 kHz "
-                        "CRT range (HDMI/multisync only)\n", m.h_rate / 1e3);
-}
-
-// Convert one 8bpp row to RGB565 in cached memory. Two pixels per 32-bit store
-// when the destination is word-aligned, which it is for every non-clipped
-// frame (nv_pitch is a multiple of 4 and dx is 0).
-static inline void nv_convert_row(uint16_t* drow, const unsigned char* srow,
-                                  int cw, const uint16_t* pal)
-{
-    int x = 0;
-    if ((((uintptr_t)drow) & 3) == 0) {
-        uint32_t* d32 = (uint32_t*)drow;
-        for (; x + 1 < cw; x += 2)
-            *d32++ = (uint32_t)pal[srow[x]] | ((uint32_t)pal[srow[x + 1]] << 16);
-    }
-    for (; x < cw; x++) drow[x] = pal[srow[x]];
-}
-
-// Write the current mame frame into the inactive DDR buffer and ring the
-// doorbell.
-//
-// The rule here is that nothing crosses into the uncached mapping a pixel at a
-// time. A 16bpp driver has already produced RGB565, so its rows go straight to
-// --- deterministic frame checksum ------------------------------------------
-// MISTER_FRAME_HASH=N prints a 64-bit FNV-1a of the published frame at frame N.
-//
-// Emulation is deterministic given a fixed frame count and no input, so two
-// builds that differ only in codegen MUST produce identical hashes. A mismatch
-// is a real pixel difference with an exact frame to reproduce it at. This is the
-// one test that catches wrong output which does not crash -- a crash/hang sweep
-// passes such a bug silently, and -ffast-math with NEON is exactly where
-// reassociation can move a vector coordinate by an LSB.
-//
-// Hashes the DDR buffer itself rather than the staging frame, so it covers BOTH
-// the 8bpp staged path and the 16bpp direct-to-DDR carve-out. That read comes
-// from the uncached window at roughly 89 MB/s, which is why it is one-shot: it
-// runs on a single frame and after the doorbell, so it never delays a present.
-//
-// It does NOT cover audio. Nothing here does, and fast-math is most likely to
-// change audio in a way nobody notices. Treat that as a known hole.
-static void nv_hash_frame(const uint16_t* buf, size_t px, unsigned long frame,
-                          int w, int h)
-{
-    uint64_t hash = 1469598103934665603ULL;        // FNV-1a 64 offset basis
-    for (size_t i = 0; i < px; i++) {
-        hash ^= (uint64_t)buf[i];
-        hash *= 1099511628211ULL;                  // FNV-1a 64 prime
-    }
-    fprintf(stderr, "MISTER-FRAMEHASH frame=%lu hash=%016llx w=%d h=%d\n",
-            frame, (unsigned long long)hash, w, h);
-    fflush(stderr);
-}
-
-// DDR by memcpy. A palettised one is converted into a cached staging frame
-// first and then crosses in one memcpy — converting directly into DDR cost 65%
-// of process CPU on atarisy2 (512x384), and the same tax applied to every 8bpp
-// driver, which is most of the 0.37b5 set. Staging the 16bpp case as well was
-// tried and reverted: without a worker thread to overlap the DDR write, the
-// extra cached copy is pure loss (mk 74.1 -> 72.3 fps).
-static void nv_present(void)
-{
-    if (!nv_enabled) return;
-
-    const int cw = surface_width  < nv_view_w ? surface_width  : nv_view_w;
-    const int ch = surface_height < nv_view_h ? surface_height : nv_view_h;
-    const int dx = (nv_view_w - cw) / 2, dy = (nv_view_h - ch) / 2;
-    const int sx = (surface_width  - cw) / 2, sy = (surface_height - ch) / 2;
-    uint16_t* dst = nv_buf[nv_active];
-
-    if (gp2x_screen15) {
-        const uint16_t* src = gp2x_screen15 + (size_t)sy * surface_width + sx;
-        if (cw == nv_pitch && cw == surface_width) {
-            memcpy(dst + (size_t)dy * nv_pitch, src, (size_t)nv_pitch * ch * 2);
-        } else {
-            for (int y = 0; y < ch; y++)
-                memcpy(dst + (size_t)(dy + y) * nv_pitch + dx,
-                       src + (size_t)y * surface_width, (size_t)cw * 2);
-        }
-    } else if (gp2x_screen8 && nv_stage) {
-        // gp2x_palette is volatile (the osd layer rewrites it); take a plain
-        // copy so the convert loop can keep entries in registers.
-        uint16_t pal[512];
-        for (int i = 0; i < 512; i++) pal[i] = gp2x_palette[i];
-
-        for (int y = 0; y < ch; y++)
-            nv_convert_row(nv_stage + (size_t)(dy + y) * nv_pitch + dx,
-                           gp2x_screen8 + (size_t)(sy + y) * surface_width + sx,
-                           cw, pal);
-
-        // Stage and DDR buffer share a layout (same pitch, same centring), so
-        // this is one memcpy even in the clipped fallback — the padding it also
-        // copies is the zeroes nv_configure put there.
-        memcpy(dst, nv_stage, (size_t)nv_pitch * nv_view_h * 2);
-    } else {
-        return;
-    }
-
-    __sync_synchronize();
-    nv_frame++;
-    *nv_ctrl = (nv_frame << 2) | (uint32_t)nv_active;
-
-    // After the doorbell on purpose: the buffer just published is not reused
-    // until two frames from now, so hashing it here costs the present nothing.
-    if (nv_hash_at && nv_frame == nv_hash_at)
-        nv_hash_frame(dst, (size_t)nv_pitch * nv_view_h, nv_frame,
-                      nv_view_w, nv_view_h);
-
-    nv_active ^= 1;
-}
-
 void DisplayScreen(void)
 {
-    nv_present();
+    // The source is whichever surface gp2x_set_video_mode allocated; its stride
+    // is surface_width, and nv_frame() centre-clips if the driver is larger than
+    // the presented geometry.
+    if (gp2x_screen15)
+        nv_frame(gp2x_screen15, surface_width * 2, surface_width, surface_height);
+    else if (gp2x_screen8)
+        nv_frame(gp2x_screen8, surface_width, surface_width, surface_height);
     fb_blit16();
     bench_tick();
 }
@@ -515,8 +287,6 @@ void gles2_palette_changed(void) {}
 // P4 movement or buttons (only Start 4 / Coin 4), and only three buttons for
 // P3, so a full four-player setup needs bindings at the joystick layer — see
 // the ledger.
-static const size_t NV_JOY_OFF[4] = { 0x08, 0x18, 0x20, 0x28 };
-
 enum {
     NV_BIT_RIGHT = 0, NV_BIT_LEFT = 1, NV_BIT_DOWN = 2, NV_BIT_UP = 3,
     NV_BIT_FIRE1 = 4, NV_BIT_START = 10, NV_BIT_COIN = 11, NV_BIT_PAUSE = 12
@@ -560,16 +330,13 @@ static void nv_key_edge(uint32_t changed, uint32_t state, int bit, SDLKey k)
 // before it reads the input ports.
 static void nv_poll_pads(void)
 {
-    if (!nv_enabled) return;
+    if (!nv_is_enabled()) return;
 
     for (int p = 0; p < 4; p++) {
-        uint32_t w = *(volatile uint32_t*)(nv_base + NV_JOY_OFF[p]);
+        uint32_t w = nv_pads(p);
         uint32_t changed = w ^ nv_joy_prev[p];
         if (!changed) continue;
         nv_joy_prev[p] = w;
-
-        if (nv_joy_debug)
-            fprintf(stderr, "mister_video: pad%d = 0x%08x\n", p + 1, w);
 
         for (int i = 0; i < 4; i++)
             nv_key_edge(changed, w, i, nv_pad[p].dir[i]);
