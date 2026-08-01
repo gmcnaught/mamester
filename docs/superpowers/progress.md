@@ -35,7 +35,7 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 3 Programmable timing | ✅ | (branch) | sweep: 5 geometries raster-exact, borders intact; gng 256×224, mk 416×254@53.2 Hz, 1943 224×256 3:4, popeye 512×448; 99.5% of drivers native |
 | 5 Input | ✅ | (branch) | P1 full map verified bit-by-bit on device; gng played with a pad (642 events, combos included) |
 | 6 Audio | ✅ | (branch) | gng/1943/mk run with sound, no flags; ALSA RUNNING, /dev/MrAudio held by mame; user-confirmed audible |
-| 7 Launch/packaging | ✅ | (branch) | Master_Daemon → handler → manager; OSD mount slot; MGL shortcuts launch Contra/Galaga; per-game opts verified; 23 host tests |
+| 7 Launch/packaging | ✅ | (branch) | Master_Daemon → handler → manager; `.mgl` shortcuts launch Contra/Galaga from the menu and resolve as picker selections; per-game opts verified; 31 host tests |
 | 8 Driver/romset triage | ⏳ NEXT | — | |
 
 ## How to resume / environment
@@ -222,8 +222,8 @@ ignores SIGTERM, so use `timeout -s KILL` and `killall -9`.
 
 ## Stage 7 — launch and packaging (done)
 
-**How a game starts.** `SC0,ZIP,Load Game` in the CONF_STR gives the core a
-mount slot, so MiSTer's OSD file browser can pick a romset. It is a *mount*, not
+**How a game starts.** `SC0,MGLZIP,Load Game` in the CONF_STR gives the core a
+mount slot, so MiSTer's OSD file browser can pick something. It is a *mount*, not
 an `F` download slot: nothing streams over SPI, and the core ignores the mount
 entirely (`hps_io` already had `img_mounted`/`img_size` wired and `sd_rd`/`sd_wr`
 tied off). Main_MiSTer writes the picked path to `/media/fat/config/MAMESTer.s0`;
@@ -277,21 +277,30 @@ here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
    `-playback`/`-record`/`-romdir` the same way). Removed in
    `tools/mister/patches/0003-no-dos-slash-options.patch`. Relative paths worked,
    which is what made this look like a symlink or a path-length problem at first.
-2. *An MGL pick could be filed as stale.* The manager decides "is this pick new?"
+2. *An `.mgl`'s XML path was resolved against the cwd.* `mgl_romset` tried the
+   bare relative path first, which happened to hit because the manager's cwd is
+   the home directory — so `-rompath` came out relative and was right only
+   because MAME then `chdir()`s to a directory with the same `roms/` layout. It
+   now resolves home-relative (what Main_MiSTer itself does) and takes a path
+   as-written only when absolute.
+
+3. *An MGL pick could be filed as stale.* The manager decides "is this pick new?"
    by mtime, and an MGL mounts its file on a delay measured from core load
    (`delay="2"`) while the handler sleeps 2 s for the FPGA — so the pick can land
    before the manager starts. The baseline is now `/tmp/CORENAME`'s mtime, which
    Main_MiSTer stamps at core load: a `.s0` newer than that belongs to this
    session and is acted on; anything older is a leftover and ignored.
 
-**Verified on device** (RBF `MAMESTer_20260801`): daemon spawns the handler on
-core load; a `.s0` write launches gng at 60.0 fps; MGL shortcuts launch Contra
-and Galaga (including the pick-before-manager-start path); switching picks kills
-the running game and starts the new one; per-game opts reach MAME.
-`tests/game_manager_test.sh` covers the selection and lifecycle logic on the host
-(23 cases). **Not yet exercised: picking a game from the OSD browser by hand** —
-every device test drove the same `.s0`/mount mechanism through MGL or a direct
-write, which is what the browser writes, but the menu entry itself is unverified.
+**Verified on device**: daemon spawns the handler on core load; a `.s0` write
+launches gng at 60.0 fps; `.mgl` shortcuts launch Contra and Galaga from MiSTer's
+main menu (user-confirmed), including the pick-before-manager-start path;
+selecting an `.mgl` *as* the mount resolves and launches with an absolute
+`-rompath`; switching picks kills the running game and starts the new one;
+per-game opts reach MAME. `tests/game_manager_test.sh` covers selection and
+lifecycle on the host (31 cases). **Still unconfirmed by hand: choosing an entry
+in the core's own "Load Game" browser.** The `.s0` content that produces has been
+tested by writing it directly, but the browser listing an `.mgl` under `Games/`
+needs the RBF carrying `SC0,MGLZIP` in front of a human.
 
 **Ledger note:** `_MAMESTer/*.mgl` and `games/mame/opts/*.opt` are device-side
 user data. The repo ships `games/mame/opts/README.md` documenting the flags.
