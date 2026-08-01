@@ -1,0 +1,26 @@
+# Real cross-compile container for the MiSTer ARM builds (x86_64-hosted).
+#
+# The alternative, tools/mister/Dockerfile.mame-build, is armhf running under
+# qemu emulation. That is fine for mame4all's 1131 translation units and painful
+# for mame2003-plus's 2097, where an emulated build is an afternoon per iteration
+# and the work iterates.
+#
+# Debian multiarch supplies the armhf runtime -dev packages that mame4all links
+# (SDL 1.2, ALSA, glib) alongside an x86_64-hosted arm-linux-gnueabihf toolchain.
+# Same Debian release as the qemu image (bullseye) so the two containers carry
+# the same gcc major version and the toolchain comparison is about hosting rather
+# than about a compiler generation.
+FROM debian:bullseye
+
+RUN dpkg --add-architecture armhf \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        crossbuild-essential-armhf \
+        make \
+        ca-certificates \
+        libsdl1.2-dev:armhf \
+        libasound2-dev:armhf \
+        libglib2.0-dev:armhf \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src

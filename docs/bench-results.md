@@ -211,3 +211,55 @@ Remaining (refines *which* games ship, not the architecture):
 - **Measure the other gap families** (Psikyo, Sega System 24/32, Namco System 2)
   once their 0.37b5 ROMs are on hand.
 - **Confirm under throttle** (real 54–60 Hz play, not just the unthrottled ceiling).
+
+## Toolchain: qemu-emulated vs host-native cross (2026-08-01)
+
+Does the build container's toolchain affect throughput? It matters because
+`docs/superpowers/plans/2026-08-01-mame2003-plus-engine.md` compares two
+emulators, and a compiler difference inside that comparison would be a confound
+no amount of interleaving removes. It also bears on the Cortex-A9 flag work,
+whose arms were both built in the qemu container.
+
+**Answer: no. +0.27% mean, and the two toolchains produce bit-identical output.**
+
+| game | qemu-built | cross-built | delta |
+|---|---:|---:|---:|
+| gng | 188.12 (±0.8%) | 189.35 (±2.2%) | +0.66% |
+| contra | 145.03 (±3.8%) | 145.67 (±0.6%) | +0.44% |
+| galaga | 259.37 (±1.6%) | 260.09 (±1.6%) | +0.28% |
+| klax | 184.22 (±1.9%) | 183.68 (±2.0%) | −0.29% |
+
+Every delta is inside the per-cell spread, and the spread itself (0.6–3.8%)
+matches the 1.5–4% this device has always shown. 600 frames, core loaded, sound
+on, unthrottled, three repetitions, arms interleaved with order alternating per
+repetition. Device verified quiet first.
+
+Stronger than the timing: **`MISTER_FRAME_HASH` reports identical frames from
+both arms** — aztarac 300/301, gng 1500, klax 300 all match bit-for-bit, and
+aztarac 300 ≠ 301 confirms those frames actually animate rather than the check
+passing on a static screen. Those same four hashes also match values recorded
+earlier from a third, separately built binary, so three independent builds agree.
+
+**Scope — what this does not say.** Both containers carry **gcc 10.2.1** (both
+Debian bullseye), so this measures *hosting*, not compiler generation: qemu-
+emulated armhf gcc against a host-native `arm-linux-gnueabihf` gcc of the same
+version. A different gcc *version* is untested and could differ. The honest
+statement is that how the compiler is hosted does not matter; which compiler it
+is remains a live variable.
+
+**Practical result: the cross container is ~3× faster** — 9m10s against roughly
+30 minutes for the same build — with no measurable cost. Worth it on its own for
+mame4all, and load-bearing for mame2003-plus at 2,097 translation units.
+
+**Two traps this exposed**, both now guarded in `tools/build-mame.sh`:
+
+1. `make` does not rebuild on a flag or compiler change. There is no clean step,
+   `OBJ = obj_$(TARGET)_mister`, and the pattern rules depend only on their
+   source. Both arms at one `TARGET` would have relinked the same objects and
+   reported a ~0% delta — the correct-looking answer, arrived at without
+   measuring anything. Each arm now gets its own `TARGET_NAME` and object
+   directory, and the binaries are `cmp`-checked before benching.
+2. `TARGET` cannot simply be renamed: `Makefile.mister` uses it for the object
+   directory, the output binary *and* `include src/$(TARGET).mak`, the driver
+   set. `TARGET=mame-cross` fails on a missing `src/mame-cross.mak`. The script
+   overrides `OBJ` and `EMULATOR` instead.
