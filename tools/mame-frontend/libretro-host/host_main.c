@@ -1,11 +1,17 @@
 /* host_main.c -- argv, libretro lifecycle, and the benchmark counter.
  *
- *   mame2003 <setname> [-rompath DIR] [-frames N] [-nopresent] [-nothrottle]
+ *   mame2003 <setname> [-rompath DIR] [-frames N]
+ *                     [-nopresent] [-nothrottle] [-throttle] [-nosound]
  *
- * Video goes out through the MiSTer DDR present path (host_video.c). Input and
- * audio output are still stubs -- Task 7. The sound CHIPS are emulated either
- * way; only the ALSA write is absent, worth 1-3%. Turning sound off would
- * measure a different emulator.
+ * Video goes out through the MiSTer DDR present path (host_video.c), pads come
+ * back from the FPGA reader (host_input.c), audio goes to MiSTer's ALSA chain
+ * (host_audio.c) and the loop is paced at the driver's native rate
+ * (host_throttle.c).
+ *
+ * -frames means benchmark, and a benchmark is UNPACED by default -- pacing it
+ * would measure the throttle. -throttle overrides that when the point is to
+ * check a played run holds its rate. -nosound silences the OUTPUT only; the
+ * sound chips stay emulated, because that CPU cost is part of what is measured.
  *
  * -nopresent sets MISTER_NO_NATIVE, which makes nv_open() a no-op present. The
  * gap between a run with and without it is the present cost; a -nopresent
@@ -24,32 +30,6 @@
 #include "host.h"
 #include "nv_present.h"
 
-static unsigned long audio_frames = 0;   /* stereo sample pairs */
-
-/* --- audio and input stubs (Task 7) -------------------------------------- */
-
-size_t host_audio_batch(const int16_t *data, size_t frames)
-{
-    (void)data;
-    audio_frames += frames;
-    return frames;
-}
-
-void host_audio_sample(int16_t left, int16_t right)
-{
-    (void)left; (void)right;
-    audio_frames++;
-}
-
-void host_input_poll(void) { }
-
-int16_t host_input_state(unsigned port, unsigned device, unsigned index,
-                         unsigned id)
-{
-    (void)port; (void)device; (void)index; (void)id;
-    return 0;
-}
-
 /* --- helpers ------------------------------------------------------------- */
 
 /* armhf: `long` is 32 bits, so a nanosecond accumulator in a long overflows
@@ -64,12 +44,15 @@ static int64_t now_ns(void)
 static void usage(const char *argv0)
 {
     fprintf(stderr,
-        "usage: %s <setname> [-rompath DIR] [-frames N] [-nopresent] [-nothrottle]\n"
+        "usage: %s <setname> [-rompath DIR] [-frames N]\n"
+        "                    [-nopresent] [-nothrottle] [-throttle] [-nosound]\n"
         "  -rompath DIR   where <setname>.zip lives (default: roms2003)\n"
         "  -frames N      stop after N emulated frames (default: MISTER_BENCH_FRAMES,\n"
-        "                 else run forever)\n"
-        "  -nopresent     accepted; this build has no present path to disable\n"
-        "  -nothrottle    accepted; this build never throttles\n",
+        "                 else run forever). Implies unthrottled.\n"
+        "  -nopresent     bypass the DDR present (sets MISTER_NO_NATIVE)\n"
+        "  -nothrottle    run flat out even without -frames\n"
+        "  -throttle      pace even WITH -frames, to measure a played run\n"
+        "  -nosound       no ALSA output; the sound chips are still emulated\n",
         argv0);
 }
 
@@ -86,6 +69,7 @@ int main(int argc, char **argv)
     int64_t t0, t1;
     double secs, fps;
     int i;
+    int no_audio = 0, no_throttle = 0, force_throttle = 0, throttle = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-rompath") == 0 && i + 1 < argc) {
@@ -97,7 +81,17 @@ int main(int argc, char **argv)
              * flag keeps the knob identical for both engines. */
             setenv("MISTER_NO_NATIVE", "1", 1);
         } else if (strcmp(argv[i], "-nothrottle") == 0) {
-            /* accepted for harness compatibility; this build never throttles */
+            no_throttle = 1;
+        } else if (strcmp(argv[i], "-throttle") == 0) {
+            /* Pace even with -frames. Without this there is no way to measure
+             * a throttled run at all: -frames means benchmark, and a benchmark
+             * is unpaced by default. */
+            force_throttle = 1;
+        } else if (strcmp(argv[i], "-nosound") == 0) {
+            /* Silences the OUTPUT only. The sound chips stay emulated, because
+             * that CPU cost is part of what is being measured -- disabling
+             * them would benchmark a different emulator. */
+            no_audio = 1;
         } else if (argv[i][0] == '-') {
             fprintf(stderr, "MISTER-HOST: unknown option %s\n", argv[i]);
             usage(argv[0]);
@@ -178,11 +172,33 @@ int main(int argc, char **argv)
             av.geometry.base_width, av.geometry.base_height,
             av.timing.fps, av.timing.sample_rate,
             nv_is_enabled() ? "DDR" : "off");
+
+    /* All four ports, unconditionally: the core only runs its control setup on
+     * the LAST port it is told about (mame2003.c:757 run_update), so telling it
+     * about fewer ports than the driver supports leaves the rest undescribed.
+     * nv_pads() serves four words regardless. */
+    for (i = 0; i < 4; i++)
+        retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
+
+    /* A frame limit means benchmark, and a benchmark must not be paced -- the
+     * whole point is the ceiling. -nothrottle forces it off for an unlimited
+     * run too. Decided BEFORE the audio open, because it also decides whether
+     * the ALSA writes block, and a blocking write would pace an unthrottled
+     * benchmark to the audio clock. */
+    throttle = force_throttle || (!frame_limit && !no_throttle);
+
+    if (!no_audio && host_audio_open((unsigned)av.timing.sample_rate,
+                                     av.timing.fps, !throttle) < 0)
+        fprintf(stderr, "MISTER-HOST: continuing without audio output "
+                        "(the sound chips are still emulated)\n");
+    if (throttle) host_throttle_start(av.timing.fps);
     fflush(stderr);
 
     t0 = now_ns();
-    for (f = 0; !frame_limit || f < frame_limit; f++)
+    for (f = 0; !frame_limit || f < frame_limit; f++) {
         retro_run();
+        if (throttle) host_throttle_wait();
+    }
     t1 = now_ns();
 
     secs = (double)(t1 - t0) / 1e9;
@@ -194,13 +210,16 @@ int main(int argc, char **argv)
     printf("MISTER-BENCH fps=%.1f\n", fps);
     fprintf(stderr,
             "MISTER-HOST: %lu frames in %.2fs, %lu presented, %lu duped, "
-            "%lu published, %lu audio frames (%.0f Hz effective)\n",
+            "%lu published, %lu audio frames, %lu underruns, %lu dropped, "
+            "%lu late\n",
             f, secs, host_video_shown(), host_video_duped(), nv_frame_count(),
-            audio_frames, secs > 0.0 ? (double)audio_frames / secs : 0.0);
+            host_audio_frames(), host_audio_underruns(), host_audio_dropped(),
+            host_throttle_late());
     fflush(stdout);
 
     retro_unload_game();
     retro_deinit();
+    host_audio_close();
     nv_close();
     return 0;
 }

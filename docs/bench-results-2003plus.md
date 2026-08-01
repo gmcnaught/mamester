@@ -98,6 +98,39 @@ hung, so it may be a shared 0.37b5/0.78 driver problem rather than a regression.
 
 ---
 
+## Task 7 — input, audio and throttle
+
+**A blocking ALSA write silently turns the benchmark into a measurement of
+ALSA.** `snd_pcm_writei` stalls once the buffer is full, which paces the
+emulation loop to the audio clock. Caught by the numbers not making sense:
+
+| `galaga`, 600 frames | fps | note |
+|---|---:|---|
+| unthrottled, **blocking** write | 60.7 | measuring ALSA, not the emulator |
+| unthrottled, **non-blocking** write | **136.1** | 327 periods dropped, as intended |
+| `-throttle` (a played run) | **60.6** | native 60.6061; 0 underruns, 0 dropped, 3 late |
+| `-nosound` | 149.0 | ALSA output costs 8.7% |
+
+So the mode is chosen by what is being measured: non-blocking when
+benchmarking, where the figure must be the emulator's ceiling and a dropped
+period is irrelevant; blocking when playing, where the audio clock is the
+better master anyway because it absorbs the drift between `CLOCK_MONOTONIC` and
+the sound card that a video-clock throttle eventually turns into an underrun.
+
+For Task 8 this means **the audio-output cost is now inside the numbers** —
+Task 5's figures had no ALSA write at all. `galaga` went 191.3 (no present, no
+audio) → 149.0 (present, no audio output) → 136.1 (present + audio). Present is
+22%, audio output a further 9%.
+
+Verified on the device: the FPGA overwrites a `0xDEADBEEF` sentinel written into
+the pad word at `0x3A000008` within a second, and all four words read 0 at rest;
+ALSA reaches `state: RUNNING` with `/dev/MrAudio` held by `mame2003` and a
+1706-frame prefill. **Still needing a human at the device: whether it is
+actually audible, and whether every button does what it should.** No automated
+check substitutes for either.
+
+---
+
 ## `-O2` vs `-O3` — the NEON arm
 
 Upstream builds 2003-plus at `-O2`; mame4all builds at `-O3` (`Makefile.mister:42`).

@@ -62,11 +62,30 @@ void          host_video_set_refresh(double hz);
 unsigned long host_video_shown(void);   /* frames presented                   */
 unsigned long host_video_duped(void);   /* NULL frames re-published as dupes  */
 
-/* --- audio and input callbacks (host_main.c) ----------------------------- */
-size_t  host_audio_batch(const int16_t *data, size_t frames);
-void    host_audio_sample(int16_t left, int16_t right);
+/* --- audio (host_audio.c) ------------------------------------------------- */
+
+/* Open MiSTer's ALSA chain for this driver's rate and refresh. Returns 0, or
+ * negative after reporting why; a failure is not fatal -- the run continues
+ * silently, which is what a benchmark wants anyway.
+ *
+ * `nonblock` decides what the clock is; see the comment in host_audio.c. Pass 1
+ * for an unthrottled benchmark, 0 for a played run. */
+int           host_audio_open(unsigned rate, double fps, int nonblock);
+void          host_audio_close(void);
+size_t        host_audio_batch(const int16_t *data, size_t frames);
+void          host_audio_sample(int16_t left, int16_t right);
+unsigned long host_audio_underruns(void);
+unsigned long host_audio_dropped(void);   /* periods dropped, non-blocking only */
+unsigned long host_audio_frames(void);
+
+/* --- input (host_input.c) ------------------------------------------------- */
 void    host_input_poll(void);
 int16_t host_input_state(unsigned port, unsigned device, unsigned index,
                          unsigned id);
+
+/* --- throttle (host_throttle.c) ------------------------------------------ */
+void          host_throttle_start(double fps);
+void          host_throttle_wait(void);
+unsigned long host_throttle_late(void);   /* frames that overran their period */
 
 #endif /* MAMESTER_LIBRETRO_HOST_H */
