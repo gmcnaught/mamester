@@ -64,6 +64,213 @@ before Task 8.
 
 ---
 
+## Task 6 — the three format paths
+
+The core picks its pixel format per driver and each takes a different route
+through `nv_present.c`.
+
+| format | driver | geometry | result |
+|---|---|---|---|
+| RGB565 (straight to DDR, no staging) | `gng`, `contra`, `pacman` | 256×224, 224×280, 224×288 | renders |
+| XRGB8888 (6-bits-per-gun, converted) | `eprom`, `batman` | 336×240 | renders |
+| 0RGB1555 (converted) | `crospang` | 320×240 | renders |
+
+**Nothing is rotated in software.** `SET_ROTATION` is accepted, so the core
+hands over an unrotated bitmap and vertical games present sideways —
+deliberately, and temporarily. Rotation belongs in ascal, with a
+`[mamester_vertical]` MiSTer.ini section in the shape of `arcade_vertical`;
+until that exists, vertical games are meant to be looked at sideways.
+
+Three consequences, all wanted:
+
+| | |
+|---|---|
+| `frame_convert()` stops transposing | every ROT90 driver drops a cache-hostile pass per frame — `galaga` 159.5 → 169.9 fps |
+| `video_flip_x/y` and `video_swap_xy` all end up 0 | re-enables the core's **zero-copy bypass** for depth 15/32 (`video.c:240` requires exactly that). `crospang` now reports pitch=1088 for a 320-wide frame — 544 px of the game bitmap's own padded stride, not `width*2` — which also exercises the `pitch != width*bpp` path `nv_frame` exists to handle |
+| vertical games present landscape | line count drops to ~262 and H rate to ~15.7 kHz, **syncable on a 15 kHz CRT** |
+
+| game | portrait (before) | landscape (now) | H rate |
+|---|---|---|---:|
+| `galaga` | 224×288 | 288×224 | 18.42 → **15.70 kHz** |
+| `contra` | 224×280 | 280×224 | 17.76 → **15.72 kHz** |
+
+The core calls `SET_ROTATION` **twice** — a probe first, then the real 0..3.
+Both must be accepted or it falls back to rotating internally.
+
+**The RGB565 row above was wrong when first written, and the way it was wrong is
+the lesson.** gng was recorded as verified on the strength of a screenshot
+showing `TOP SCORE` and a ticking clock; a second shot differed, which was read
+as "it animates". It was in fact rendering *only its character layer* — no
+background tilemap, no sprites — and the only thing changing between shots was
+the clock. A frame that changes is not a frame that is correct. The cause is in
+the Task 7 section below, and it was a defect in this host, not in the core.
+
+**`klax` is stuck, and it is not the present path.** It publishes frames with an
+advancing counter, but the DDR content is byte-identical at frame 300 and 1200
+and is not all-zero. `eprom` and `batman` are the same XRGB8888 path at the same
+336×240 and both render and change. Driver-level, for Task 8 triage — mame4all's
+notes already list `klax` among the drivers that hung after `set_video_mode`.
+
+---
+
+## The missing-layers bug: a libretro contract violation in this host
+
+Symptom: gng, contra and 1942 rendered their character layer only — text on
+black — while `crospang` was perfect. mame4all rendered gng completely through
+the *same* `nv_present`, on the same device, minutes apart.
+
+Ruled out in order, each with evidence rather than reasoning:
+
+| suspect | how it was eliminated |
+|---|---|
+| ROM version / integrity | all 19 CRC-32s in `roms2003/gng.zip` match the 0.78 driver's declared checksums, **including all six GFX2 tile and six GFX3 sprite ROMs** — the exact regions not drawing |
+| `-O3` codegen | the `-O2` archive produces a byte-identical sparse screen |
+| Cyclone / DrZ80 ASM cores | `cyclone_mode=disabled` and `=default` produce identical output |
+| the present path | for RGB565 `nv_frame` is a per-row `memcpy` with no per-layer anything; it cannot drop a background for gng and keep one for pacman |
+
+Then instrumented at the boundary — `MISTER_SRC_STATS=N` describes the frame the
+**core** hands over, before DDR. gng at frame 800: **1.8% non-black, 4 distinct
+colours**. The layers were never drawn.
+
+**Root cause.** `update_variables()` (`core_options.c:977`) is:
+
+```c
+if (environ_cb(GET_VARIABLE, &var) && !string_is_empty(var.value))
+    switch (index) {
+      case OPT_BRIGHTNESS: options.brightness = atof(var.value);
+                           palette_set_global_brightness(options.brightness); break;
+      case OPT_GAMMA:      options.gamma = atof(var.value);
+                           palette_set_global_gamma(options.gamma);      break;
+```
+
+There is **no else**. This host answered `false` for every option it had not
+explicitly pinned, so those `options.*` fields were never assigned and their
+`palette_set_global_*` calls never happened — the palette was built from
+whatever the struct happened to hold. RetroArch never hits this because a
+libretro frontend is expected to own every option value and always supply one.
+
+That also explains the survivor: `crospang` is `VCT_PASS1555`, direct RGB from
+the game bitmap with **no palette lookup at all**, so a broken palette cannot
+touch it.
+
+**Fix:** capture each option's default from the core's own `SET_VARIABLES`
+payload (`"<description>; <default>|<alt>|<alt>"`, default first,
+`core_options.c:1663`, buffer freed immediately so both strings are copied) and
+serve it from `GET_VARIABLE` whenever the option is not pinned. Measured at the
+same boundary:
+
+| game | before | after |
+|---|---|---|
+| `gng` | 1.8% non-black, 4 colours | **12.2%, 12 colours** |
+| `contra` | text only | **21.2%, 31 colours** |
+| `pacman` | 2.6%, 3 colours | 4.5%, 7 colours |
+
+gng now renders its full BEST RANKING table; contra its background.
+
+**Every fps figure in this document that predates this fix was measured with
+the unpinned core options in an undefined state, and none of them should be
+treated as a baseline.** Post-fix spot checks, present on, `-nosound`, 600
+frames: `gng` 146.7 against 146.2 before (noise), but `galaga` 159.5 against
+149.0, about 7%. Those are single non-interleaved samples so no delta is being
+claimed, but 7% is outside the 1.5–4% floor and cannot be waved away — the
+options now take their real defaults, so the emulator's workload may genuinely
+differ. Task 8 re-measures everything interleaved anyway; the point here is that
+the Task 5 early-answer table is a *direction*, not a baseline.
+
+**The general lesson for this host:** every remaining `return false` in
+`host_env.c` deserves the same question — does the core have an `else` for it?
+For `GET_VARIABLE` it did not, and the failure was silent and graphical rather
+than loud.
+
+---
+
+## The ASM CPU cores: validated, and they ship on
+
+mame4all runs with **both** Cyclone and DrZ80 disabled — Cyclone segfaulted on
+entry for every 68000 driver and DrZ80 crashed in `DrZ80Run`
+(`0002-default-asm-cores-off.patch`). Those are *different vintages of the same
+cores*, and **that verdict does not transfer**: 2003-plus's copies work here.
+
+`cyclone_mode=default` is not "on". It is mode 6, a **per-driver curated
+whitelist** (`frontend_list.h`, 2,286 entries, `check_list()` at
+`mame2003.c:1647`). Anything not listed gets 0 — no ASM cores at all — and some
+drivers are explicitly listed as 0, e.g. `eprom`. So `default` is upstream's own
+tested per-game configuration rather than a blanket switch.
+
+Frame hashes on this device are **deterministic** — gng at frame 600 gives
+`9041c29fdee5eb43` on repeated runs — which makes a bit-identical correctness
+test possible.
+
+**DrZ80: bit-identical, and faster.** Same frame hash with the ASM core swapped
+in, across four games and five replaced Z80s. 600 frames, `-nosound`:
+
+| game | Z80s replaced | hash off vs on | fps off → on |
+|---|---:|---|---|
+| `gng` | 1 | identical | 145.5 → 146.9 |
+| `galaga` | 3 | identical | 155.7 → **166.0** (+6.6%) |
+| `pacman` | 1 | identical | 181.0 → **198.1** (+9.4%) |
+| `1942` | 1 (sound only) | identical | 165.4 → 164.4 |
+
+**Cyclone: +22%, renders correctly, not bit-identical.** `batman` 70.7 → **86.6
+fps**, hash `e11149905e1f5fdf` → `5413cfa52bc1e6f1`. Cyclone's 68000 cycle timing
+is approximate, so a differing hash at frame 600 is expected and the
+bit-identical test simply cannot validate it. Checked by eye instead: the Atari
+Games logo renders with full gradient shading and correct colour either way.
+
+`contra` shows no replacement despite being whitelisted as 3 — it is 6809-based
+with a 6809 sound CPU, so there is no Z80 or 68000 to replace. Correct
+behaviour, and a useful reminder that a whitelist entry is permission, not
+effect.
+
+**Decision: ship with `cyclone_mode=default`**, which is what the host already
+sends. `MISTER_CYCLONE_MODE` overrides it for benchmarking.
+
+---
+
+## Task 7 — input, audio and throttle
+
+**A blocking ALSA write silently turns the benchmark into a measurement of
+ALSA.** `snd_pcm_writei` stalls once the buffer is full, which paces the
+emulation loop to the audio clock. Caught by the numbers not making sense:
+
+| `galaga`, 600 frames | fps | note |
+|---|---:|---|
+| unthrottled, **blocking** write | 60.7 | measuring ALSA, not the emulator |
+| unthrottled, **non-blocking** write | **136.1** | 327 periods dropped, as intended |
+| `-throttle` (a played run) | **60.6** | native 60.6061; 0 underruns, 0 dropped, 3 late |
+| `-nosound` | 149.0 | ALSA output costs 8.7% |
+
+So the mode is chosen by what is being measured: non-blocking when
+benchmarking, where the figure must be the emulator's ceiling and a dropped
+period is irrelevant; blocking when playing, where the audio clock is the
+better master anyway because it absorbs the drift between `CLOCK_MONOTONIC` and
+the sound card that a video-clock throttle eventually turns into an underrun.
+
+For Task 8 this means **the audio-output cost is now inside the numbers** —
+Task 5's figures had no ALSA write at all. `galaga` went 191.3 (no present, no
+audio) → 149.0 (present, no audio output) → 136.1 (present + audio). Present is
+22%, audio output a further 9%.
+
+**Exactly one clock, too.** A first 3-minute run held 60.57 fps with 0
+underruns and 0 dropped while the timer called **8117 of 10800 frames "late"** —
+both cannot be faults. In a throttled run the blocking ALSA write already paces
+the loop, so the timer found the deadline passed almost every frame and was
+really reporting the sound card running 0.07% slower than the nominal
+60.6061 Hz. The timer now only takes over when there is no audio to pace
+against. After the fix, 1200 throttled frames: 0 late with audio, 5 late
+(0.4%) with `-nosound`, 60.6 fps either way.
+
+Verified on the device: the FPGA overwrites a `0xDEADBEEF` sentinel written into
+the pad word at `0x3A000008` within a second, and all four words read 0 at rest;
+ALSA reaches `state: RUNNING` with `/dev/MrAudio` held by `mame2003` and a
+1706-frame prefill. **Still needing a human at the device: whether it is
+actually audible, and whether every button does what it should.** No automated
+check substitutes for either.
+
+**Operator-confirmed 2026-08-01: audio is audible and the controls work.**
+
+---
+
 ## `-O2` vs `-O3` — the NEON arm
 
 Upstream builds 2003-plus at `-O2`; mame4all builds at `-O3` (`Makefile.mister:42`).
