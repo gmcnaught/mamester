@@ -15,8 +15,12 @@ The three pieces:
                .github/workflows/build-rbf.yml. Fetch the newest with
                `gh run download <id> -n mame-rbf -D _Other`. The
                lexicographically-last name wins (the dates sort chronologically).
-  2. EMULATOR  vendor/mame4all-pi/mame — the armhf mame4all build carrying our
-               present/input/audio backend. Produced by tools/build-mame.sh.
+  2. EMULATORS both engines, since the per-driver choice is made at launch:
+               tools/mame-frontend/libretro-host/mame2003 — MAME 2003-Plus, the
+               PRIMARY engine (make -C tools/mame-frontend/libretro-host CROSS=1),
+               and vendor/mame4all-pi/mame — mame4all-pi, the fallback for
+               drivers 2003-Plus cannot run acceptably (tools/build-mame.sh).
+               Both carry the same present/input/audio backend (nv_present.c).
   3. HARNESS   games/MAMESTer/ — _handler.sh (Master_Daemon entry point),
                game_manager.sh + game_lib.sh (OSD game selection).
 
@@ -264,13 +268,34 @@ def main():
              keep_existing=keep and not args.force_cfg)
 
     if do_bin:
-        print("\nemulator")
-        mame = REPO / "vendor" / "mame4all-pi" / "mame"
-        if not mame.is_file():
-            print("  ERROR: vendor/mame4all-pi/mame is missing — build it with "
-                  "tools/build-mame.sh")
+        print("\nemulators")
+        # Two engines, and MAME 2003-Plus is the primary one: a driver ships on
+        # it wherever it reaches an acceptable frame rate, with mame4all-pi
+        # underneath for the rest. Both are pushed, because the per-driver
+        # choice is made at launch time (games/MAMESTer/game_manager.sh), not
+        # at deploy time.
+        engines = [
+            (REPO / "tools" / "mame-frontend" / "libretro-host" / "mame2003",
+             f"{GAMEDIR}/mame2003", "MAME 2003-Plus (primary)",
+             "make -C tools/mame-frontend/libretro-host CROSS=1"),
+            (REPO / "vendor" / "mame4all-pi" / "mame",
+             f"{GAMEDIR}/mame", "mame4all-pi (fallback)",
+             "tools/build-mame.sh"),
+        ]
+        missing = [(p, why, how) for p, _, why, how in engines if not p.is_file()]
+        if len(missing) == len(engines):
+            for p, why, how in missing:
+                print(f"  ERROR: {p.relative_to(REPO)} is missing ({why}) — "
+                      f"build it with {how}")
             return 1
-        push(dev, mame, f"{GAMEDIR}/mame", executable=True)
+        for path, remote, why, how in engines:
+            if path.is_file():
+                push(dev, path, remote, executable=True)
+            else:
+                # One engine present is a usable device; a driver that needed
+                # the absent one simply will not launch. Loud, not fatal.
+                print(f"  WARNING: {path.relative_to(REPO)} missing ({why}) — "
+                      f"not deployed; build with {how}")
 
     if do_rbf:
         print("\ncore")
