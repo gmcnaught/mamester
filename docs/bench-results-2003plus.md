@@ -122,6 +122,15 @@ Task 5's figures had no ALSA write at all. `galaga` went 191.3 (no present, no
 audio) → 149.0 (present, no audio output) → 136.1 (present + audio). Present is
 22%, audio output a further 9%.
 
+**Exactly one clock, too.** A first 3-minute run held 60.57 fps with 0
+underruns and 0 dropped while the timer called **8117 of 10800 frames "late"** —
+both cannot be faults. In a throttled run the blocking ALSA write already paces
+the loop, so the timer found the deadline passed almost every frame and was
+really reporting the sound card running 0.07% slower than the nominal
+60.6061 Hz. The timer now only takes over when there is no audio to pace
+against. After the fix, 1200 throttled frames: 0 late with audio, 5 late
+(0.4%) with `-nosound`, 60.6 fps either way.
+
 Verified on the device: the FPGA overwrites a `0xDEADBEEF` sentinel written into
 the pad word at `0x3A000008` within a second, and all four words read 0 at rest;
 ALSA reaches `state: RUNNING` with `/dev/MrAudio` held by `mame2003` and a

@@ -70,6 +70,7 @@ int main(int argc, char **argv)
     double secs, fps;
     int i;
     int no_audio = 0, no_throttle = 0, force_throttle = 0, throttle = 0;
+    int audio_ok = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-rompath") == 0 && i + 1 < argc) {
@@ -187,10 +188,23 @@ int main(int argc, char **argv)
      * benchmark to the audio clock. */
     throttle = force_throttle || (!frame_limit && !no_throttle);
 
-    if (!no_audio && host_audio_open((unsigned)av.timing.sample_rate,
-                                     av.timing.fps, !throttle) < 0)
+    audio_ok = !no_audio && host_audio_open((unsigned)av.timing.sample_rate,
+                                            av.timing.fps, !throttle) == 0;
+    if (!no_audio && !audio_ok)
         fprintf(stderr, "MISTER-HOST: continuing without audio output "
                         "(the sound chips are still emulated)\n");
+
+    /* EXACTLY ONE CLOCK. In a throttled run the ALSA write is blocking, so
+     * audio already paces the loop; running the timer as well means two clocks
+     * fighting over the same loop. Measured: galaga throttled for 10800 frames
+     * held 60.57 fps with 0 underruns and 0 dropped, yet the timer called 8117
+     * of those frames "late" -- it was reporting the sound card running 0.07%
+     * slower than the nominal 60.6061 Hz, not a fault. The timer only takes
+     * over when there is no audio to pace against. */
+    if (throttle && audio_ok) {
+        throttle = 0;
+        fprintf(stderr, "MISTER-HOST: paced by the audio clock\n");
+    }
     if (throttle) host_throttle_start(av.timing.fps);
     fflush(stderr);
 
