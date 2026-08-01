@@ -7,8 +7,12 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 
 ## Current state
 
-- `main` @ `94dd4ce`; Stage 3 on branch `stage3-programmable-timing`.
-  Stages 1, 2, 3, 4 complete and **hardware-verified on `.81`**.
+- Stages 1–7 complete and **hardware-verified on `.81`**; Stage 7 on branch
+  `stage7-launch`. Stage 8 (driver triage) is next.
+- **A game launches from the MiSTer menu or from inside the core**: pick an
+  `_MAMESTer/*.mgl` shortcut, or load the core and pick the same file from the
+  OSD ("Load Game" → `Games/`). Video at the driver's native geometry, pad input
+  and sound all work.
 - **Games present at their native geometry**: gng at 256×224, mk at 416×254
   @53.2 Hz — no center-clip, correct colors.
 - Fabric = MiSTer_OpenBOR rebranded (RGB565 `0x3A000000` reader + `sys_top` scaler).
@@ -32,8 +36,8 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 3 Programmable timing | ✅ | (branch) | sweep: 5 geometries raster-exact, borders intact; gng 256×224, mk 416×254@53.2 Hz, 1943 224×256 3:4, popeye 512×448; 99.5% of drivers native |
 | 5 Input | ✅ | (branch) | P1 full map verified bit-by-bit on device; gng played with a pad (642 events, combos included) |
 | 6 Audio | ✅ | (branch) | gng/1943/mk run with sound, no flags; ALSA RUNNING, /dev/MrAudio held by mame; user-confirmed audible |
-| 7 Launch/packaging | ⏳ NEXT | — | |
-| 8 Driver/romset triage | ⬜ | — | |
+| 7 Launch/packaging | ✅ | (branch) | Master_Daemon → handler → manager; `.mgl` shortcuts launch Contra/Galaga from the menu and resolve as picker selections; per-game opts verified; 31 host tests |
+| 8 Driver/romset triage | ⏳ NEXT | — | |
 
 ## How to resume / environment
 
@@ -45,9 +49,12 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 - **Build the RBF:** push `fpga/**` → GitHub Actions `Build MAME RBF` (ubuntu +
   `raetro/quartus:17.0`) → `gh run download <id> -n mame-rbf -D _Other`. (Windows
   self-hosted runner to be added later; Linux is the path today.)
-- **Deploy:** `mame` → `/media/fat/games/mame/mame`; `MAMESTer_*.rbf` → `/media/fat/_Other/`.
-  ROMs (0.37b5, archive.org Ghostware set) live in `/media/fat/games/mame/*.zip`;
-  the modern MiSTer set there verifyroms-OK for many titles.
+- **Deploy:** `./deploy.py` (sha1-verified). `mame` + `mame.cfg` + `roms/` +
+  `opts/` → `/media/fat/games/mame/`; the launch harness →
+  `/media/fat/games/MAMESTer/`; `MAMESTer_*.rbf` → `/media/fat/_Other/`.
+  ROMs (0.37b5, archive.org Ghostware set) live in
+  `/media/fat/games/mame/roms/*.zip`; the modern MiSTer set there verifyroms-OK
+  for many titles. `./deploy.py --harness-only` for a scripts-only iteration.
 - **Fabric test without emulator:** `tools/mister/test_frame_writer.c` (writes a
   pattern to `0x3A000000`; run in `animate` mode so the watchdog doesn't blank).
 - **Present contract (`0x3A000000`):** ctrl `= (frame_counter<<2)|active_buf`;
@@ -214,11 +221,95 @@ list in Stage 8 has to be judged with sound on.
 `gdb -batch -ex run -ex bt --args ./mame <game>` on the device. Also: mame
 ignores SIGTERM, so use `timeout -s KILL` and `killall -9`.
 
+## Stage 7 — launch and packaging (done)
+
+**How a game starts.** `SC0,MGLZIP,Load Game` in the CONF_STR gives the core a
+mount slot, so MiSTer's OSD file browser can pick something. It is a *mount*, not
+an `F` download slot: nothing streams over SPI, and the core ignores the mount
+entirely (`hps_io` already had `img_mounted`/`img_size` wired and `sd_rd`/`sd_wr`
+tied off). Main_MiSTer writes the picked path to `/media/fat/config/MAMESTer.s0`;
+`game_manager.sh` turns that into a MAME setname. Same mechanism as
+solarus-mister's `SC0,SOL,Load Quest`.
+
+Chain: core load -> Master_Daemon sees `/tmp/CORENAME` change -> runs
+`games/MAMESTer/_handler.sh` -> execs `game_manager.sh`, which idles until a pick
+appears, then launches / switches / stops MAME. `exec` preserves the PID so the
+daemon's `kill_child` reaches the manager and its TERM trap stops MAME.
+
+**Two directories, not interchangeable:**
+- `/media/fat/games/MAMESTer` (HOMEDIR) — name MUST equal the CONF_STR setname:
+  that is how the daemon finds `_handler.sh` and where the OSD browser opens.
+  Holds the harness plus a `roms` symlink to the romsets.
+- `/media/fat/games/mame` (GAMEDIR) — the `mame` binary, `mame.cfg`, `roms/`,
+  `opts/`, and the `cfg/nvram/hi/inp/snap` state. MAME `chdir()`s to its own
+  binary's directory at startup (`src/rpi/rpi.cpp`, `realpath(argv[0])`), so this
+  is the cwd every relative path in `mame.cfg` resolves against.
+
+**Per-game launch flags** live in `games/mame/opts/<setname>.opt` (one flag per
+line, `#` comments), falling back to `default.opt`. Verified on device: with
+`-norotate` in `1943.opt`, 1943 publishes 256x224 @ 15.72 kHz 4:3 instead of
+224x256 3:4.
+
+**`deploy.py`** is the real thing now (it used to refuse): sha1-verified scp of
+the harness, the emulator and the RBF, plus directory creation, the roms
+symlink, and warnings when Master_Daemon is not running or no romsets are
+visible. `--harness-only` for fast iteration, `--load` to load the core.
+
+**Choosing a game — `.mgl` shortcuts serve both entry points.** The core's OSD
+picker CANNOT select a romset: Main_MiSTer's browser fakes every `.zip` into a
+directory and descends into it (`file_io.cpp` ScanDirectory, suppressed only by
+`SCANO_NOZIP`, which a core cannot request). So `tools/make-shortcuts.py` writes
+one `.mgl` per romset into `/media/fat/_MAMESTer` and symlinks
+`games/MAMESTer/Games` to it:
+- from MiSTer's **main menu**, selecting one loads the core and mounts the
+  romset (`.s0` gets the zip path);
+- from the core's **"Load Game"** picker, selecting the same file mounts the
+  `.mgl` itself and `game_lib.sh` reads the romset out of its XML.
+
+A "Games" symlink to `_MAMESTer` sits in BOTH the core home and the romset
+directory, because MiSTer starts a mount browser at the directory of the last
+mounted file — after any `.mgl` launch that is the romset directory, not the
+core home. The romset listing is never selectable there: the browser fakes every
+`.zip` into a directory whatever the CONF_STR extension filter says, so dropping
+`ZIP` from `SC0` would not hide them either.
+
+Titles come from `mame -listfull`. Space cost: exFAT allocates 128 KB per file
+here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
+
+**Two bugs found and fixed:**
+
+1. *Absolute paths on MAME's command line were silently corrupted.*
+   `fronthlp.cpp:342` carried the MS-DOS "`/option` means `-option`" convention
+   and rewrote argv **in place**, so `-rompath /media/fat/games/mame` became
+   `-rompath -media/fat/games/mame` and every ROM came back NOT FOUND (it breaks
+   `-playback`/`-record`/`-romdir` the same way). Removed in
+   `tools/mister/patches/0003-no-dos-slash-options.patch`. Relative paths worked,
+   which is what made this look like a symlink or a path-length problem at first.
+2. *An `.mgl`'s XML path was resolved against the cwd.* `mgl_romset` tried the
+   bare relative path first, which happened to hit because the manager's cwd is
+   the home directory — so `-rompath` came out relative and was right only
+   because MAME then `chdir()`s to a directory with the same `roms/` layout. It
+   now resolves home-relative (what Main_MiSTer itself does) and takes a path
+   as-written only when absolute.
+
+3. *An MGL pick could be filed as stale.* The manager decides "is this pick new?"
+   by mtime, and an MGL mounts its file on a delay measured from core load
+   (`delay="2"`) while the handler sleeps 2 s for the FPGA — so the pick can land
+   before the manager starts. The baseline is now `/tmp/CORENAME`'s mtime, which
+   Main_MiSTer stamps at core load: a `.s0` newer than that belongs to this
+   session and is acted on; anything older is a leftover and ignored.
+
+**Verified on device**, both entry points user-confirmed: loading a game from
+MiSTer's main menu (`_MAMESTer`) and from the core's own "Load Game" picker
+(`Games/`). Also: the daemon spawns the handler on core load; a `.s0` write
+launches gng at 60.0 fps; the pick-before-manager-start path works; switching
+picks kills the running game and starts the new one; per-game opts reach MAME.
+`tests/game_manager_test.sh` covers selection and lifecycle on the host (31 cases).
+
+**Ledger note:** `_MAMESTer/*.mgl` and `games/mame/opts/*.opt` are device-side
+user data. The repo ships `games/mame/opts/README.md` documenting the flags.
+
 ## Later stages (pointers)
-- **6 Audio:** mame4all ALSA already works on device (mk/nbajam ran with sound in
-  the bench). Validate routing; native DDR audio ring (maldita) as fallback.
-- **7 Launch/packaging:** `deploy.py` full path; `games/MAMESTer/_handler.sh` (already a
-  template) launched by Master_Daemon; per-game selection.
 - **8 Driver/romset triage:** ~40% of drivers fail (dkong/rtype ROM-load;
   sf2/mk2/tmnt/… post-init hang) — establish the shippable list. See
   `docs/bench-results.md`.

@@ -1,0 +1,27 @@
+diff --git a/src/rpi/fronthlp.cpp b/src/rpi/fronthlp.cpp
+index bbce87f..72fa7fa 100644
+--- a/src/rpi/fronthlp.cpp
++++ b/src/rpi/fronthlp.cpp
+@@ -338,8 +338,20 @@ int frontend_help (int argc, char **argv)
+ 	int help = 1;    /* by default is TRUE */
+ 	char gamename[9];
+ 
+-	/* covert '/' in '-' */
+-	for (i = 1;i < argc;i++) if (argv[i][0] == '/') argv[i][0] = '-';
++	/* MiSTer: the MS-DOS "/option means -option" convention is REMOVED.
++	 *
++	 * The original line was
++	 *     for (i = 1;i < argc;i++) if (argv[i][0] == '/') argv[i][0] = '-';
++	 * which rewrites argv IN PLACE, so every absolute path on the command line
++	 * is corrupted before anything reads it: `-rompath /media/fat/games/mame`
++	 * becomes `-rompath -media/fat/games/mame`, config.cpp get_string() hands
++	 * that to fileio, and every ROM comes back NOT FOUND. It breaks -playback,
++	 * -record and -romdir the same way.
++	 *
++	 * Nothing on Linux passes DOS-style switches, and the launch harness
++	 * (games/MAMESTer/game_manager.sh) passes -rompath as the absolute
++	 * directory of the romset picked in the OSD, so the conversion has to go.
++	 */
+ 
+ 	/* by default display the help unless */
+ 	/* a game or an utility are specified */

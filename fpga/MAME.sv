@@ -247,13 +247,32 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 //     setname "MAMESTer" the daemon does NOT auto-launch the OpenBOR ARM engine
 //     — so the hybrid engine that busy-polls DDR (audio ring read-ptr / input
 //     handshake) never starts.
-//   * No "SC0,PAK" mount slot. The mount/disk (img_mounted / sd_lba / sd_rd
-//     / sd_wr) handshake that MiSTer Main services for a mounted image is
-//     gone, so Main has nothing to keep servicing for this core.
-//   * No "J1"/"jn" joystick map — this core takes no input; gmloader owns it.
 //
 // The DDR video read path (control word, BUF0/BUF1 addressing, RGB565
 // unpack, timing) is UNCHANGED.
+// -------------------------------------------------------------------------
+// Game selection (Stage 7). "SC0,MGLZIP,Load Game" is a mount slot, not a
+// download: Main_MiSTer's OSD file browser writes the picked path to
+// /media/fat/config/MAMESTer.s0 and pulses img_mounted; nothing is streamed
+// over SPI (an F-slot would push the whole romset zip through ioctl). The
+// core ignores the mount entirely — sd_rd/sd_wr are tied off, so Main has no
+// sector traffic to service. The path in .s0 is what games/MAMESTer/
+// game_manager.sh turns into a MAME setname. Same mechanism as
+// solarus-mister's "SC0,SOL,Load Quest".
+//
+// TWO extensions, and MGL is the one the picker uses. The browser fakes every
+// .zip into a DIRECTORY and descends into it (file_io.cpp ScanDirectory: "Fake
+// that zip-file is a directory", suppressed only by SCANO_NOZIP, which a core
+// cannot ask for), so a romset zip can be browsed but never selected —
+// device-reported. The selectable entry is therefore the same .mgl shortcut
+// file that MiSTer's main menu uses (tools/make-shortcuts.py): from the menu it
+// loads this core and mounts the romset, and from this picker it is mounted
+// as-is, whereupon game_manager.sh reads the romset path out of its XML. One
+// set of files, both entry points.
+//
+// ZIP stays listed because the menu path mounts the romset itself, and so that
+// descending into a romset and picking any member still resolves (game_lib.sh
+// cuts the stored path at ".zip").
 // -------------------------------------------------------------------------
 // Input follows the MiSTer arcade convention. Directions are fixed by the
 // framework (joy[0] right, [1] left, [2] down, [3] up, buttons from [4]) and
@@ -271,6 +290,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 //   [10] Start (this player)  [11] Coin (this player)  [12] Pause
 localparam CONF_STR = {
 	"MAMESTer;;",
+	"SC0,MGLZIP,Load Game;",
 	"-;",
 	"OCE,H Position (CRT),0,+1,+2,+3,-3,-2,-1;",
 	"OFH,V Position (CRT),0,+1,+2,+3,-3,-2,-1;",

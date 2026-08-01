@@ -11,10 +11,11 @@ a DDR framebuffer into MiSTer's stock scaler/shader pipeline. When reasoning abo
 symptom, first decide which side it lives on: the **emulator** (CPU/driver
 correctness, speed) or the **present path** (DDR scanout, timing, scaler).
 
-**Current stage: a real game runs on the MAME core (Stages 1/2/4 done). Stage 3
-(programmable timing) is next.** **Read [`docs/superpowers/progress.md`](docs/superpowers/progress.md)
+**Current stage: Stages 1–7 done — games launch from the MiSTer menu with native
+timing, pad input and sound. Stage 8 (driver/romset triage) is next.**
+**Read [`docs/superpowers/progress.md`](docs/superpowers/progress.md)
 first when resuming** — it is the durable execution ledger (what's done, how to
-build/deploy/verify, and the detailed Stage-3 plan). The plan is
+build/deploy/verify, and what each stage actually proved). The plan is
 [`docs/superpowers/plans/2026-07-31-mame4all-mister-v1.md`](docs/superpowers/plans/2026-07-31-mame4all-mister-v1.md);
 the feasibility study is [`docs/feasibility.md`](docs/feasibility.md). Do not invent
 implementation detail that contradicts these without saying so.
@@ -31,11 +32,12 @@ Verified: links (~10 MB, `ld-linux-armhf.so.3`), runs under qemu (prints the MAM
 banner). Driver set includes the gap targets (Midway T/Y-unit, Atari System 1/2,
 Psikyo, Kaneko, Seta, Namco System 2).
 
-To bench on hardware: scp `mame` to `/media/fat/games/mame/mame`, put a
-0.37b5-romset game zip in `.../roms/`, and run headless — e.g.
+To bench on hardware: `./deploy.py --no-rbf` puts `mame` at
+`/media/fat/games/mame/mame` with romsets in `.../roms/`, then run headless — e.g.
 `SDL_VIDEODRIVER=dummy MISTER_BENCH_FRAMES=1800 ./mame <game> -nothrottle` — reading
 the `MISTER-BENCH fps=` line. `-nothrottle` runs the emulation flat-out so the fps
-number is the A9's actual ceiling for that driver.
+number is the A9's actual ceiling for that driver. Bench figures without
+`-nosound` are what ships; sound costs ~5× the CPU.
 
 ## Settled architecture (from the feasibility study)
 
@@ -81,19 +83,33 @@ harness comes from these, so consult them before hand-rolling:
   double-buffer reader + stale-frame watchdog + standard-pipeline feed), the native
   audio ring, and the `deploy.py` + `_handler.sh` + Master_Daemon launch harness.
 
-## Next steps (in order)
+## Launch path (Stage 7)
 
-1. **Empirical CPU validation FIRST (no RTL yet).** The bench binary is built (see
-   "Bench build"). Deploy it to the real DE10-Nano HPS and measure sustained fps on
-   target drivers (Midway T-unit, Psikyo/NMK shmup, Sega System 24). This decides
-   which games actually ship. The present path is not the risk. (Needs user-supplied
-   0.37b5 ROMs; none are committed.)
-2. Bring up the present path from `sonic-mania`'s `test-frame-writer.c` against a
-   reader that feeds the standard pipeline (adapt `maldita`/`solarus`).
-3. Write the MAME-bitmap→DDR-writer shim (replace mame4all's `update_screen`/
-   `gp2x_video` present call) + register-programmable timing driven by per-game
-   geometry.
-4. Input (SDL→evdev or keep SDL) + ALSA audio + `_handler.sh` launch + `deploy.py`.
+Two device directories, and they are not interchangeable:
+- `/media/fat/games/MAMESTer` — name must equal the CONF_STR setname, because
+  that is how Master_Daemon finds `_handler.sh` and where the OSD file browser
+  opens. Holds the launch harness (`_handler.sh`, `game_manager.sh`,
+  `game_lib.sh`) plus a `roms` symlink.
+- `/media/fat/games/mame` — the emulator and its data (`mame`, `mame.cfg`,
+  `roms/`, `opts/<setname>.opt`, `cfg/nvram/hi/inp/snap`). MAME `chdir()`s to its
+  own binary's directory at startup, so this is its cwd.
+
+A game starts when Main_MiSTer writes the pick to
+`/media/fat/config/MAMESTer.s0` (the `SC0,MGLZIP,Load Game` mount slot); the
+manager resolves it to a setname and launches MAME. `tools/make-shortcuts.py`
+writes one `.mgl` per romset into `/media/fat/_MAMESTer`, which serves both entry
+points: MiSTer's main menu loads the core and mounts the romset, and the core's
+own "Load Game" picker reaches the same files through the
+`games/MAMESTer/Games` symlink. A romset zip can never be picked directly — the
+browser fakes every `.zip` into a directory and descends into it. Host-side
+tests: `sh tests/game_manager_test.sh`.
+
+## Next steps
+
+**Stage 8 — driver/romset triage.** ~40% of drivers fail (dkong/rtype ROM-load;
+sf2/mk2/tmnt post-init hang; CPS1 exits silently after `set_video_mode`;
+popeye/spyhunt stall). Establish the shippable list, and judge it with sound on
+(~5× the CPU of the no-sound bench numbers in `docs/bench-results.md`).
 
 ## Device (MiSTer @ `192.168.20.81`, SSH-key/passwordless)
 
