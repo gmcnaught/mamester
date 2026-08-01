@@ -2,18 +2,17 @@
  *
  *   mame2003 <setname> [-rompath DIR] [-frames N] [-nopresent] [-nothrottle]
  *
- * This build deliberately has no present, no input and no audio output: it is
- * the emulator and nothing else, so the fps it reports is 0.78's raw cost on
- * this silicon. Compare it only against mame4all run the same way
- * (MISTER_NO_NATIVE=1), never against the Stage 8 bands, which were measured
- * with a core loaded and the DDR present live.
+ * Video goes out through the MiSTer DDR present path (host_video.c). Input and
+ * audio output are still stubs -- Task 7. The sound CHIPS are emulated either
+ * way; only the ALSA write is absent, worth 1-3%. Turning sound off would
+ * measure a different emulator.
  *
- * The sound CHIPS are still emulated -- only the ALSA write is missing, worth
- * 1-3%. Turning sound off would measure a different emulator.
+ * -nopresent sets MISTER_NO_NATIVE, which makes nv_open() a no-op present. The
+ * gap between a run with and without it is the present cost; a -nopresent
+ * figure is comparable to mame4all run the same way and to nothing else.
  *
- * The video/audio/input stubs below are replaced in Tasks 6 and 7; the fps line
- * format (`MISTER-BENCH fps=%.1f`) matches mame4all's so that gap-triage.sh's
- * parser works unchanged for both engines.
+ * The fps line format (`MISTER-BENCH fps=%.1f`) matches mame4all's so that
+ * gap-triage.sh's parser works unchanged for both engines.
  */
 
 #include <errno.h>
@@ -23,51 +22,9 @@
 #include <time.h>
 
 #include "host.h"
+#include "nv_present.h"
 
-/* --- state the video hooks record, for the startup summary --------------- */
-static unsigned      cur_fmt        = RETRO_PIXEL_FORMAT_0RGB1555; /* libretro's
-                                      * documented default when a core never
-                                      * calls SET_PIXEL_FORMAT */
-static unsigned      cur_rotation   = 0;
-static unsigned      cur_width      = 0;
-static unsigned      cur_height     = 0;
-static unsigned long frames_shown   = 0;   /* video_cb calls with a bitmap   */
-static unsigned long frames_duped   = 0;   /* video_cb calls with NULL       */
-static unsigned long audio_frames   = 0;   /* stereo sample pairs            */
-
-static const char *fmt_name(unsigned f)
-{
-    switch (f) {
-    case RETRO_PIXEL_FORMAT_0RGB1555: return "0RGB1555";
-    case RETRO_PIXEL_FORMAT_XRGB8888: return "XRGB8888";
-    case RETRO_PIXEL_FORMAT_RGB565:   return "RGB565";
-    default:                          return "unknown";
-    }
-}
-
-/* --- video stubs (Task 6 replaces these with host_video.c) --------------- */
-
-void host_set_pixel_format(unsigned fmt) { cur_fmt = fmt; }
-void host_set_rotation(unsigned rot)     { cur_rotation = rot; }
-
-void host_geometry_changed(const struct retro_game_geometry *geom)
-{
-    cur_width  = geom->base_width;
-    cur_height = geom->base_height;
-}
-
-void host_video_refresh(const void *data, unsigned width, unsigned height,
-                        size_t pitch)
-{
-    (void)pitch;
-    /* A NULL frame means "repeat the last one". It is counted separately
-     * because Task 6 must still ring the DDR doorbell for it -- the reader's
-     * stale-frame watchdog blanks the screen if the counter stops advancing. */
-    if (!data) { frames_duped++; return; }
-    cur_width  = width;
-    cur_height = height;
-    frames_shown++;
-}
+static unsigned long audio_frames = 0;   /* stereo sample pairs */
 
 /* --- audio and input stubs (Task 7) -------------------------------------- */
 
@@ -135,9 +92,12 @@ int main(int argc, char **argv)
             rompath = argv[++i];
         } else if (strcmp(argv[i], "-frames") == 0 && i + 1 < argc) {
             frame_limit = strtoul(argv[++i], NULL, 10);
-        } else if (strcmp(argv[i], "-nopresent") == 0 ||
-                   strcmp(argv[i], "-nothrottle") == 0) {
-            /* accepted for harness compatibility; see usage() */
+        } else if (strcmp(argv[i], "-nopresent") == 0) {
+            /* nv_open() reads this; setting the variable rather than passing a
+             * flag keeps the knob identical for both engines. */
+            setenv("MISTER_NO_NATIVE", "1", 1);
+        } else if (strcmp(argv[i], "-nothrottle") == 0) {
+            /* accepted for harness compatibility; this build never throttles */
         } else if (argv[i][0] == '-') {
             fprintf(stderr, "MISTER-HOST: unknown option %s\n", argv[i]);
             usage(argv[0]);
@@ -180,6 +140,14 @@ int main(int argc, char **argv)
      * scratch directory keeps its own nvram. */
     host_env_init(".", ".");
 
+    /* Before retro_init: the core calls SET_PIXEL_FORMAT and can present its
+     * first frame from inside retro_load_game, so the DDR mapping has to be
+     * live by then. nv_open() fails gracefully off-device and honours
+     * MISTER_NO_NATIVE, so this is safe everywhere. */
+    if (!nv_open())
+        fprintf(stderr, "MISTER-HOST: present disabled "
+                        "(MISTER_NO_NATIVE, or /dev/mem unavailable)\n");
+
     retro_set_environment(host_environment);
     retro_set_video_refresh(host_video_refresh);
     retro_set_audio_sample_batch(host_audio_batch);
@@ -202,11 +170,14 @@ int main(int argc, char **argv)
     }
 
     retro_get_system_av_info(&av);
-    fprintf(stderr, "MISTER-HOST: %ux%u @ %.4f Hz, %.0f Hz audio, %s, rot=%u\n",
+    /* The driver's native rate -- mk is 53.2, not 60 -- which the modeline
+     * needs. It is not knowable before the game loads, so the first frame
+     * after this publishes the timing. */
+    host_video_set_refresh(av.timing.fps);
+    fprintf(stderr, "MISTER-HOST: %ux%u @ %.4f Hz, %.0f Hz audio, present=%s\n",
             av.geometry.base_width, av.geometry.base_height,
             av.timing.fps, av.timing.sample_rate,
-            fmt_name(cur_fmt), cur_rotation);
-    fprintf(stderr, "MISTER-HOST: present=stub (Task 5 build: emulator only)\n");
+            nv_is_enabled() ? "DDR" : "off");
     fflush(stderr);
 
     t0 = now_ns();
@@ -223,12 +194,13 @@ int main(int argc, char **argv)
     printf("MISTER-BENCH fps=%.1f\n", fps);
     fprintf(stderr,
             "MISTER-HOST: %lu frames in %.2fs, %lu presented, %lu duped, "
-            "%lu audio frames (%.0f Hz effective)\n",
-            f, secs, frames_shown, frames_duped, audio_frames,
-            secs > 0.0 ? (double)audio_frames / secs : 0.0);
+            "%lu published, %lu audio frames (%.0f Hz effective)\n",
+            f, secs, host_video_shown(), host_video_duped(), nv_frame_count(),
+            audio_frames, secs > 0.0 ? (double)audio_frames / secs : 0.0);
     fflush(stdout);
 
     retro_unload_game();
     retro_deinit();
+    nv_close();
     return 0;
 }

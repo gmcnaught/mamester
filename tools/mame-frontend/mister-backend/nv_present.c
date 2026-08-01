@@ -51,6 +51,8 @@ static volatile uint32_t  *nv_ctrl    = 0;
 static uint16_t           *nv_buf[2]  = { 0, 0 };
 static unsigned long       nv_frames  = 0;
 static int                 nv_active  = 0;
+static int                 nv_last_pub = 0;  /* buffer index of the last publish,
+                                              * for nv_frame_repeat()           */
 static int                 nv_enabled = 0;
 
 /* Presented geometry. nv_pitch is the DDR line stride in pixels: the view width
@@ -307,6 +309,7 @@ void nv_frame(const void *src, int pitch_bytes, int src_w, int src_h)
     __sync_synchronize();
     nv_frames++;
     *nv_ctrl = ((uint32_t)nv_frames << 2) | (uint32_t)nv_active;
+    nv_last_pub = nv_active;
 
     /* After the doorbell on purpose: the buffer just published is not reused
      * until two frames from now, so hashing it here costs the present nothing. */
@@ -318,6 +321,17 @@ void nv_frame(const void *src, int pitch_bytes, int src_w, int src_h)
     }
 
     nv_active ^= 1;
+}
+
+void nv_frame_repeat(void)
+{
+    if (!nv_enabled) return;
+
+    /* No barrier and no pixel traffic: the buffer's contents were already
+     * published and fenced by the nv_frame() that filled it. Only the counter
+     * moves, which is all the watchdog is watching. */
+    nv_frames++;
+    *nv_ctrl = ((uint32_t)nv_frames << 2) | (uint32_t)nv_last_pub;
 }
 
 uint32_t nv_pads(int player)

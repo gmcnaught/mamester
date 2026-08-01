@@ -70,6 +70,15 @@ void nv_set_palette(const volatile uint16_t *pal565, int entries);
  * presented geometry means centre-clip. */
 void nv_frame(const void *src, int pitch_bytes, int src_w, int src_h);
 
+/* Re-publish the frame already in DDR under the next counter value, without
+ * touching a pixel. libretro cores are permitted to hand back a NULL frame
+ * meaning "show the previous one again" (mame2003-plus does it for every
+ * frameskipped frame, video.c:470), and the reader's stale-frame watchdog
+ * blanks the screen if the counter stops advancing -- so a duplicate must be
+ * published rather than skipped. mame4all never calls this: it has no
+ * equivalent notion. */
+void nv_frame_repeat(void);
+
 /* Joystick word for player 0..3, as written back by the FPGA reader:
  * [0]right [1]left [2]down [3]up [4..9]fire1..6 [10]start [11]coin [12]pause */
 uint32_t nv_pads(int player);

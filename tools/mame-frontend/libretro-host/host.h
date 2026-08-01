@@ -39,7 +39,10 @@ bool host_environment(unsigned cmd, void *data);
  * mame2003-plus picks this per driver in mame2003_video_init_conversion(). */
 void host_set_pixel_format(unsigned fmt);
 
-/* RETRO_ENVIRONMENT_SET_ROTATION: 0..3 meaning 0/90/180/270 counter-clockwise. */
+/* RETRO_ENVIRONMENT_SET_ROTATION: 0..3 meaning 0/90/180/270 counter-clockwise.
+ * host_env.c REFUSES this call, which makes the core rotate its own bitmap; see
+ * the comment there. This hook therefore only ever fires if that refusal is
+ * lost, and says so loudly. */
 void host_set_rotation(unsigned rot);
 
 /* RETRO_ENVIRONMENT_SET_GEOMETRY. Note the argument type: this core never sends
@@ -48,9 +51,18 @@ void host_set_rotation(unsigned rot);
  * here and stays whatever retro_get_system_av_info() reported. */
 void host_geometry_changed(const struct retro_game_geometry *geom);
 
-/* --- retro_set_* callbacks (host_main.c) --------------------------------- */
+/* --- video (host_video.c) ------------------------------------------------- */
 void    host_video_refresh(const void *data, unsigned width, unsigned height,
                            size_t pitch);
+
+/* The driver's native rate, from retro_get_system_av_info(). It is not known
+ * until the game is loaded, so the modeline is re-published on the next frame
+ * after this is set. */
+void          host_video_set_refresh(double hz);
+unsigned long host_video_shown(void);   /* frames presented                   */
+unsigned long host_video_duped(void);   /* NULL frames re-published as dupes  */
+
+/* --- audio and input callbacks (host_main.c) ----------------------------- */
 size_t  host_audio_batch(const int16_t *data, size_t frames);
 void    host_audio_sample(int16_t left, int16_t right);
 void    host_input_poll(void);

@@ -64,6 +64,40 @@ before Task 8.
 
 ---
 
+## Task 6 — the three format paths, verified on hardware
+
+The core picks its pixel format per driver, and each one takes a different route
+through `nv_present.c`. All three were checked by looking at a screenshot, not
+by trusting the counters — a frame counter advancing proves the doorbell rings,
+not that the picture is right.
+
+| format | driver | geometry | result |
+|---|---|---|---|
+| RGB565 (straight to DDR, no staging) | `gng` | 256×224 | renders, animates |
+| RGB565, ROT90 | `galaga` | 224×288 | renders upright, 3:4 aspect |
+| XRGB8888 (6-bits-per-gun, converted) | `eprom`, `batman` | 336×240 | render, correct colour |
+| 0RGB1555 (converted) | `crospang` | 320×240 | renders, animates |
+
+Rotation is done by the **core**, not here: refusing `SET_ROTATION` sends
+`mame2003_video_init_orientation()` down its `Mame will rotate internally`
+branch, so `frame_convert()` transposes inside the pixel loop it already runs.
+That matches mame4all, and it avoids a full cache-hostile pass per frame on
+every vertical game. `contra` (ROT90) and `galaga` both come out portrait with
+a 3:4 aspect, which is the check that this actually works.
+
+**`klax` is stuck, and it is not the present path.** It publishes 600 frames
+with an advancing counter, but the DDR content is byte-identical at frame 300
+and frame 1200 (`MISTER_FRAME_HASH`), and it is not all-zero. Two other drivers
+on the *same* XRGB8888 path and the *same* 336×240 geometry — `eprom` and
+`batman`, both `VIDEO_NEEDS_6BITS_PER_GUN` — render correctly and do change
+between frames, which rules the converter out. Notably all three pass through
+the identical frame hash `b035f5a72c1ec783` at some point; `klax` simply never
+leaves it. This is driver-level and belongs to Task 8 triage. mame4all's own
+notes already list `klax` among the drivers that reached `set_video_mode` and
+hung, so it may be a shared 0.37b5/0.78 driver problem rather than a regression.
+
+---
+
 ## `-O2` vs `-O3` — the NEON arm
 
 Upstream builds 2003-plus at `-O2`; mame4all builds at `-O3` (`Makefile.mister:42`).

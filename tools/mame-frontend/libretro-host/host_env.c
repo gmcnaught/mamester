@@ -141,9 +141,24 @@ bool host_environment(unsigned cmd, void *data)
         host_set_pixel_format(*(const enum retro_pixel_format *)data);
         return true;
 
+    /* REFUSED ON PURPOSE, and this is the single most consequential answer in
+     * this file after the log interface.
+     *
+     * mame2003_video_init_orientation() (src/mame2003/video.c:127) tests this
+     * call. Accept it and the core hands over an UNROTATED bitmap, expecting
+     * the frontend to rotate -- which the DDR reader cannot do, so every
+     * vertical game would come out sideways. Refuse it and the core takes the
+     * `Mame will rotate internally` branch: video_swap_xy is set and
+     * frame_convert() transposes inside the pixel loop it is already running.
+     * That is also exactly what mame4all does (nv_present.h: "mame4all rotates
+     * its own bitmap and passes 0"), so both engines present pre-rotated
+     * frames and the comparison stays honest.
+     *
+     * The alternative -- transpose in host_video.c -- would add a full
+     * cache-hostile pass over every frame of every vertical game to redo work
+     * the emulator is already positioned to do for free. */
     case RETRO_ENVIRONMENT_SET_ROTATION:
-        host_set_rotation(*(const unsigned *)data);
-        return true;
+        return false;
 
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
         host_geometry_changed((const struct retro_game_geometry *)data);

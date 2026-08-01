@@ -12,9 +12,9 @@
 # archive it links is ARM.
 #
 # Flags mirror the archive's (tools/build-m2003p.sh) except for -O: the archive
-# is built at upstream's -O2 default. Compiling the host at -O2 keeps the two
-# consistent -- this file is a few hundred lines of glue and its -O level is not
-# measurable either way.
+# defaults to -O3 there. This is a few hundred lines of glue plus nv_present.c,
+# so its own -O level is not measurable either way; -O2 keeps compile time down
+# on the file that gets edited most.
 
 REPO    := $(abspath $(CURDIR)/../../..)
 CORE    := $(REPO)/vendor/mame2003-plus
@@ -112,7 +112,7 @@ LRC_CFLAGS   := $(CFLAGS) -fsigned-char -Wno-unused-parameter
 
 LRC_OBJ := $(addprefix lrc/,$(notdir $(LRC_SRC:.c=.o)))
 
-OBJS := host_main.o host_env.o nv_present.o
+OBJS := host_main.o host_env.o host_video.o nv_present.o
 
 .PHONY: all clean
 all: $(BIN)
