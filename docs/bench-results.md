@@ -21,6 +21,11 @@ below by a sound factor for a realistic figure; it stays large either way.
 
 "×RT" = fps ÷ 60 ≈ real-time headroom multiple.
 
+**Update (Stage 6):** these are no-sound numbers. With sound enabled the same
+unthrottled bench gives contra 94 fps (was 472) and galaga 128 (was 729) — sound
+costs roughly 5x the CPU, so divide the headroom below by about five for a
+playable configuration. Both still clear real time (1.6x and 2.1x).
+
 ## Results (unthrottled, no sound)
 
 | Game | Hardware | fps | ×RT |

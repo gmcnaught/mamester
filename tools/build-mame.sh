@@ -15,6 +15,22 @@ IMAGE="mamester-armhf-build"
 
 [ -f "$SRC/Makefile" ] || { echo "submodule missing — run: git submodule update --init"; exit 1; }
 
+# Apply the vendored-source patches (idempotent: skip any already applied).
+# These are edits to mame4all's own files, which cannot live in src/mister/
+# the way our replacement backends do.
+for p in "$REPO"/tools/mister/patches/*.patch; do
+    [ -e "$p" ] || continue
+    if git -C "$SRC" apply --check "$p" 2>/dev/null; then
+        git -C "$SRC" apply "$p"
+        echo "# applied $(basename "$p")"
+    elif git -C "$SRC" apply --reverse --check "$p" 2>/dev/null; then
+        echo "# already applied: $(basename "$p")"
+    else
+        echo "# WARNING: cannot apply $(basename "$p") -- vendored source drifted" >&2
+        exit 1
+    fi
+done
+
 # Stage the MiSTer present backend, make override, and SDL build script.
 mkdir -p "$SRC/src/mister"
 cp "$REPO/tools/mame-frontend/mister-backend/"*.cpp "$SRC/src/mister/"

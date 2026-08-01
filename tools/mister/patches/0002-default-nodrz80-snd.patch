@@ -1,0 +1,28 @@
+diff --git a/src/rpi/rpi.cpp b/src/rpi/rpi.cpp
+index ffa0080..34009b0 100644
+--- a/src/rpi/rpi.cpp
++++ b/src/rpi/rpi.cpp
+@@ -105,7 +105,13 @@ int main (int argc, char **argv)
+     char gamenameselection[32];
+     int use_cyclone=1;
+     int use_drz80_save=0;
+-   	int use_drz80_snd_save=1;
++   	// MiSTer: default the DrZ80 assembly core OFF for sound CPUs. It segfaults
++   	// in DrZ80Run on this ARMv7 target for drivers that are not on the
++   	// fe_drivers ASM-core blacklist (gng and 1943 both crash within seconds of
++   	// sound starting), and measurement says it buys nothing here: contra
++   	// 94.39 -> 94.57 fps and galaga 128.20 -> 129.04 fps with it disabled.
++   	// Pass -drz80_snd to opt back in.
++   	int use_drz80_snd_save=0;
+     int use_drz80;
+    	int use_drz80_snd;
+     extern int video_scale;
+@@ -144,6 +150,8 @@ int main (int argc, char **argv)
+ 			use_drz80_save=1;
+ 		if (strcasecmp(argv[i],"-nodrz80_snd") == 0)
+ 			use_drz80_snd_save=0;
++		if (strcasecmp(argv[i],"-drz80_snd") == 0)
++			use_drz80_snd_save=1;
+ 		if (strcasecmp(argv[i],"-scale") == 0)
+ 			video_scale=1;
+ 		if (strcasecmp(argv[i],"-border") == 0)

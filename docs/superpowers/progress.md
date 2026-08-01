@@ -31,8 +31,8 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 4 mame4all present shim | ✅ | `82f00ea` | gng title @ 60 fps, 256×224 centered, palette→RGB565 correct |
 | 3 Programmable timing | ✅ | (branch) | sweep: 5 geometries raster-exact, borders intact; gng 256×224, mk 416×254@53.2 Hz, 1943 224×256 3:4, popeye 512×448; 99.5% of drivers native |
 | 5 Input | ✅ | (branch) | P1 full map verified bit-by-bit on device; gng played with a pad (642 events, combos included) |
-| 6 Audio | ⏳ NEXT | — | |
-| 7 Launch/packaging | ⬜ | — | |
+| 6 Audio | ✅ | (branch) | gng/1943/mk run with sound, no flags; ALSA RUNNING, /dev/MrAudio held by mame; user-confirmed audible |
+| 7 Launch/packaging | ⏳ NEXT | — | |
 | 8 Driver/romset triage | ⬜ | — | |
 
 ## How to resume / environment
@@ -163,6 +163,56 @@ bindings at the joystick layer (`osd_customize_inputport_defaults` plus a
 `JOYCODE` source, which means patching or replacing `src/rpi/input.cpp`).
 Analog controls (spinner/dial/trackball) and a keyboard path for MAME's service
 and test inputs are also unwired.
+
+## Stage 6 — audio (done)
+
+**Path.** MiSTer already routes Linux audio to the core's output, so no RTL was
+needed: `/etc/asound.conf` sends the default PCM through `plug -> rate ->
+file(/dev/MrAudio) -> hw:0`, the `MiSTer-audio-spi` driver copies it into a
+512 KB DMA ring and hands the FPGA the pointers over SPI, and `sys/alsa.sv`
+(instantiated by `sys_top.v` unless `MISTER_DISABLE_ALSA` is set — we do not
+set it) DMA-reads the ring and mixes into `audio_out`. The only ALSA card is
+`Dummy`, a custom `model_MiSTer` build that is 48 kHz stereo only; the `plug`
+layer converts mame4all's mono 44100. Reference for the full stack:
+`kimchiman52/3s-mister-arm`, `docs/archive/research-audio-latency.md`.
+
+**Two bugs had to be fixed, only one of them audio:**
+
+1. `snd_pcm_set_params`' latency-derived buffer is rejected by that chain for
+   many (rate, refresh) pairs, including the common 44100 at 60 Hz — the error
+   is "Unable to get period size". Which values fail is scattered and
+   rate-dependent (48000 also rejects 69639/73126/92879 us). The *same*
+   configuration requested explicitly through `hw_params` is accepted, so the
+   patch asks for it that way: one period per emulated frame
+   (`sample_rate / refresh`, e.g. 735 at 44100/60) and four of them. The period
+   must equal MAME's samples-per-frame, because `alsa_init` feeds
+   `period_size_frames` back into `samples_per_frame`; an unrelated period
+   (512) makes the mixer crash. When init failed, `alsa_init()` returned NULL
+   and `alsa_write()` dereferenced it — that was the original segfault, and
+   `TRY_ALSA` now reports which call failed instead of silently jumping.
+2. With sound working, `gng` and `1943` still segfaulted — in `DrZ80Run`, per
+   the on-device gdb backtrace (`DrZ80Run -> drz80_execute -> cpu_run`), the
+   hand-written ARM Z80 core, which only executes when a sound Z80 runs. It is
+   driver-specific (galaga and contra are fine) and those drivers are not on
+   mame4all's `fe_drivers` ASM-core blacklist. Disabling the DrZ80 core for
+   sound CPUs costs nothing measurable — contra 94.39 -> 94.57 fps, galaga
+   128.20 -> 129.04 — so the MiSTer build defaults it off, with `-drz80_snd`
+   to opt back in.
+
+**Vendored patches.** `tools/mister/patches/*.patch`, applied idempotently by
+`build-mame.sh` (it skips already-applied ones and aborts if the vendored
+source has drifted). This is for edits to mame4all's own files; whole-file
+replacements still go in `src/mister/`.
+
+**Sound costs about 5x the CPU.** Unthrottled with sound: contra 94 fps
+(was 472 without), galaga 128 (was 729). Still 1.6-2.1x real time, but the
+figures in `docs/bench-results.md` are no-sound upper bounds and the shippable
+list in Stage 8 has to be judged with sound on.
+
+**Handy:** the MiSTer has `/usr/bin/gdb`. Build an unstripped binary with
+`make -f Makefile.mister STRIP=true` (the Makefile now uses `STRIP ?=`) and run
+`gdb -batch -ex run -ex bt --args ./mame <game>` on the device. Also: mame
+ignores SIGTERM, so use `timeout -s KILL` and `killall -9`.
 
 ## Later stages (pointers)
 - **6 Audio:** mame4all ALSA already works on device (mk/nbajam ran with sound in

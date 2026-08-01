@@ -23,7 +23,7 @@ CC  = gcc
 CPP = g++
 AS  = as
 LD  = gcc
-STRIP = strip
+STRIP ?= strip
 EMULATOR = $(TARGET)$(EXE)
 
 # -DMISTER selects the MiSTer backend; VideoCore defines/paths are gone.
