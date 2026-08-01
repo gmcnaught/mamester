@@ -17,6 +17,14 @@
  * gap between a run with and without it is the present cost; a -nopresent
  * figure is comparable to mame4all run the same way and to nothing else.
  *
+ * MISTER_THREADED_PRESENT=1 moves that cost to the second A9 core
+ * (host_present.c). Off by default, and off means host_video.c calls nv_present
+ * directly with nothing in between; the exit line's `present-dropped` count is
+ * how much of the threaded arm's speed came from not presenting at all.
+ *
+ * MISTER_LOOP_TRACE=N prints a flushed heartbeat every N frames, for localising
+ * a hang that only reproduces on the device.
+ *
  * The fps line format (`MISTER-BENCH fps=%.1f`) matches mame4all's so that
  * gap-triage.sh's parser works unchanged for both engines.
  */
@@ -62,6 +70,7 @@ int main(int argc, char **argv)
     const char *rompath = "roms2003";
     const char *env_frames;
     unsigned long frame_limit = 0;
+    unsigned long trace_every = 0;
     char rom_path[1024];
     struct retro_system_info sysinfo;
     struct retro_system_av_info av;
@@ -113,6 +122,14 @@ int main(int argc, char **argv)
     if (!frame_limit && (env_frames = getenv("MISTER_BENCH_FRAMES")) != NULL)
         frame_limit = strtoul(env_frames, NULL, 10);
 
+    /* MISTER_LOOP_TRACE=N: a flushed heartbeat every N frames. A run that hangs
+     * inside the loop only does it on the device, so the log has to be able to
+     * say where it stopped: the last MISTER-TRACE line names the frame the loop
+     * did not get past, and the counters beside it say whether that frame had
+     * already reached the present. One compare per frame when unset. */
+    if ((env_frames = getenv("MISTER_LOOP_TRACE")) != NULL)
+        trace_every = strtoul(env_frames, NULL, 10);
+
     snprintf(rom_path, sizeof rom_path, "%s/%s.zip", rompath, setname);
 
     /* The core derives the setname from the path basename minus extension and
@@ -142,6 +159,11 @@ int main(int argc, char **argv)
     if (!nv_open())
         fprintf(stderr, "MISTER-HOST: present disabled "
                         "(MISTER_NO_NATIVE, or /dev/mem unavailable)\n");
+
+    /* MISTER_THREADED_PRESENT=1 moves the DDR write to the idle second A9 core.
+     * Off by default, and it must be started here: the core is allowed to
+     * present its first frame from inside retro_load_game(). */
+    host_present_init();
 
     retro_set_environment(host_environment);
     retro_set_video_refresh(host_video_refresh);
@@ -210,10 +232,29 @@ int main(int argc, char **argv)
 
     t0 = now_ns();
     for (f = 0; !frame_limit || f < frame_limit; f++) {
+        if (trace_every && f % trace_every == 0) {
+            /* nv_frame_count() is the worker's counter when threading is on, so
+             * this read is unsynchronised. It is a diagnostic line: a stale
+             * value costs nothing, and taking the present mutex here would put
+             * the emulation thread behind the worker, which is the one thing
+             * the design refuses to do. */
+            fprintf(stderr, "MISTER-TRACE frame=%lu presented=%lu duped=%lu "
+                            "published=%lu audio=%lu\n",
+                    f, host_video_shown(), host_video_duped(),
+                    nv_frame_count(), host_audio_frames());
+            fflush(stderr);
+        }
         retro_run();
         if (throttle) host_throttle_wait();
     }
     t1 = now_ns();
+
+    /* AFTER the clock stops. The figure wanted is the rate the emulator ran at,
+     * and with a threaded present the worker is allowed to still be finishing
+     * the last frame or two -- charging that tail to the loop would report the
+     * present's rate instead. Draining here also makes nv_frame_count() below a
+     * settled number rather than a read racing the worker. */
+    host_present_drain();
 
     secs = (double)(t1 - t0) / 1e9;
     fps  = secs > 0.0 ? (double)f / secs : 0.0;
@@ -224,15 +265,17 @@ int main(int argc, char **argv)
     printf("MISTER-BENCH fps=%.1f\n", fps);
     fprintf(stderr,
             "MISTER-HOST: %lu frames in %.2fs, %lu presented, %lu duped, "
-            "%lu published, %lu audio frames, %lu underruns, %lu dropped, "
-            "%lu late\n",
+            "%lu published, %lu present-dropped, %lu audio frames, "
+            "%lu underruns, %lu dropped, %lu late\n",
             f, secs, host_video_shown(), host_video_duped(), nv_frame_count(),
-            host_audio_frames(), host_audio_underruns(), host_audio_dropped(),
-            host_throttle_late());
+            host_present_drops(), host_audio_frames(), host_audio_underruns(),
+            host_audio_dropped(), host_throttle_late());
     fflush(stdout);
 
     retro_unload_game();
     retro_deinit();
+    /* Before nv_close(): the worker dereferences the /dev/mem mapping. */
+    host_present_stop();
     host_audio_close();
     nv_close();
     return 0;
