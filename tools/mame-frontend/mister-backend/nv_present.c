@@ -313,7 +313,11 @@ void nv_frame(const void *src, int pitch_bytes, int src_w, int src_h)
 
     /* After the doorbell on purpose: the buffer just published is not reused
      * until two frames from now, so hashing it here costs the present nothing. */
-    if (nv_hash_at && nv_frames == nv_hash_at) {
+    /* Hashed at N and again at 2N so ONE run can tell a driver that is running
+     * from a driver that is merely advancing its frame counter. klax publishes
+     * 600 frames at full speed with byte-identical DDR content -- an fps figure
+     * alone calls that a pass. */
+    if (nv_hash_at && (nv_frames == nv_hash_at || nv_frames == nv_hash_at * 2)) {
         uint64_t h = nv_hash_pixels(dst, (size_t)nv_pitch * nv_view_h);
         fprintf(stderr, "MISTER-FRAMEHASH frame=%lu hash=%016llx w=%d h=%d\n",
                 nv_frames, (unsigned long long)h, nv_view_w, nv_view_h);

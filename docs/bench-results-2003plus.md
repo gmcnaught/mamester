@@ -105,11 +105,13 @@ background tilemap, no sprites — and the only thing changing between shots was
 the clock. A frame that changes is not a frame that is correct. The cause is in
 the Task 7 section below, and it was a defect in this host, not in the core.
 
-**`klax` is stuck, and it is not the present path.** It publishes frames with an
-advancing counter, but the DDR content is byte-identical at frame 300 and 1200
-and is not all-zero. `eprom` and `batman` are the same XRGB8888 path at the same
-336×240 and both render and change. Driver-level, for Task 8 triage — mame4all's
-notes already list `klax` among the drivers that hung after `set_video_mode`.
+**`klax` was the same palette bug, not a stuck driver.** It was recorded here as
+driver-level after publishing 600 frames with byte-identical DDR content at
+frames 300 and 1200. With `GET_VARIABLE` fixed it renders its full high-score
+table and hashes differently at 300 and 600. Two other drivers on the same
+XRGB8888 path rendering correctly was read as exonerating the palette; it did
+not, because `crospang` — the one that always worked — is the direct-RGB path
+that never touches a palette at all.
 
 ---
 
