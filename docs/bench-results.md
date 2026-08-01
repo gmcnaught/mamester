@@ -175,6 +175,33 @@ per game and are 12–80%, an order of magnitude above the drift.
 - `MISTER_NO_NATIVE=1` — bench the emulator with the present path removed; the
   gap against a normal run is the present cost.
 
+## The 196-family sweep is not in this file, and should not be trusted yet
+
+If you came here looking for a per-driver table from the Stage 8 sweep: there
+isn't one, anywhere. Commit `bbad545` is titled "full 196-family sweep results"
+but its whole diff is 30 lines added to `docs/superpowers/progress.md` — three
+buckets (`≥100` / `60–100` / `BELOW 60`) naming about 37 games. The other ~150
+drivers' numbers were never written down.
+
+That is not the loss it looks like, because **those numbers are twice invalid**:
+
+1. An orphaned busy-loop (PID 5922) pinned one of the two A9 cores for the
+   entire original sweep — recorded at `progress.md:398`.
+2. The present-path fix below then superseded them. Only 22 games were
+   re-benched; every other 8bpp family still carries a pre-fix figure that is
+   understated by 12–80%. `paperboy` reads 42 in that bucketed list and is
+   actually **80.2**.
+
+**Deferred by decision (2026-08-01):** rather than re-sweep mame4all now, the
+sweep waits until mame2003-plus is benchable (plan Tasks 6–7), so that one pass
+over the device measures **both engines under identical conditions**. Two sweeps
+run days apart would reintroduce exactly the between-block drift the protocol at
+the top of this file exists to prevent — and the whole point of the second
+engine is a comparison, which a stale arm cannot support.
+
+Partially recoverable raw data still on the device, if it is ever wanted:
+`/tmp/sweep-a9.txt`, `/tmp/sweep-list.txt`, `/tmp/sweep3.log`.
+
 ## Caveats — read before over-reading the numbers
 
 1. **Upper bound.** Unthrottled + no sound. Sound-chip emulation (YM2151/YM2203/
