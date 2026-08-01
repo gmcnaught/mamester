@@ -3,14 +3,33 @@
 #
 #   tools/build-mame.sh                 # full build -> vendor/mame4all-pi/mame
 #   tools/build-mame.sh <make-target>   # e.g. a single object, for a fast check
+#   tools/build-mame.sh ARCHFLAGS= OPTFLAGS= LDEXTRA= all
+#                                       # baseline codegen (see Makefile.mister)
 #
 # Stages the MiSTer backend + Makefile.mister into the submodule tree, then runs
 # make inside the armhf container (qemu). Requires the image from
 # `docker build -f tools/mister/Dockerfile.mame-build -t mamester-armhf-build`.
+#
+# NOT CONCURRENCY-SAFE ON ONE TREE. The staging step below copies
+# tools/mame-frontend/mister-backend/*.cpp over $SRC/src/mister/ on EVERY
+# invocation, and the Makefile derives OBJ = obj_$(TARGET)_mister, which does not
+# vary with build flags. So two builds sharing one $SRC will (a) rewrite each
+# other's backend sources underneath a live compile and (b) interleave writes into
+# one object directory, silently producing a binary whose objects were built with
+# mixed flags. Both happened during the Cortex-A9 flag work: a concurrent build
+# swapped mister_video.cpp mid-compile, and left one baseline-codegen object
+# (Thumb/VFPv3-D16) in an otherwise ARM/NEON tree, which linked without complaint.
+#
+# To run a second build concurrently, point it at its own copy of the tree:
+#   cp -a vendor/mame4all-pi /tmp/mame-baseline
+#   MAME_SRC=/tmp/mame-baseline tools/build-mame.sh ARCHFLAGS= OPTFLAGS= LDEXTRA= all
+# To check a tree for mixed codegen, read .ARM.attributes (Tag_FP_arch) and the
+# $a/$t mapping symbols in .symtab of every obj_mame_mister/**/*.o -- any $t>0 in
+# an ARM-mode (-marm) build is a contaminated object.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$REPO/vendor/mame4all-pi"
+SRC="${MAME_SRC:-$REPO/vendor/mame4all-pi}"
 IMAGE="mamester-armhf-build"
 
 [ -f "$SRC/Makefile" ] || { echo "submodule missing — run: git submodule update --init"; exit 1; }

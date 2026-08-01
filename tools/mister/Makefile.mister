@@ -35,14 +35,47 @@ DEFS = -DGP2X -DLSB_FIRST -DALIGN_INTS -DALIGN_SHORTS -DINLINE="static __inline"
 # prefix so they match the archive we link.
 SDL_PREFIX = work/sdl12-prefix
 
+# --- Target CPU: Cyclone V HPS, dual Cortex-A9 MPCore -------------------------
+# /proc/cpuinfo on the device (192.168.20.81) reports:
+#   CPU part 0xc09 (Cortex-A9), Features: half thumb fastmult vfp edsp thumbee
+#                                         neon vfpv3 tls vfpd32
+# Without these flags the build silently falls back to Debian bullseye's armhf
+# baseline (generic armv7-a, -mfpu=vfpv3-d16, -mthumb), which was confirmed by
+# decoding .ARM.attributes on the built objects: every MAME .o carried
+# Tag_FP_arch=4 (VFPv3-D16), NO Tag_Advanced_SIMD_arch, Tag_CPU_name="7-A".
+# That left half the FP register file and all of NEON unused, and scheduled for
+# a generic v7 rather than the A9 pipeline. build-sdl12.sh already built libSDL
+# with -mcpu=cortex-a9 -mfpu=neon; this brings MAME itself in line.
+#
+# -marm: DrZ80 and Cyclone (src/cpu/{z80_drz80,m68000_cyclone}/*.s, enabled by
+# rpi.mak's -DHAS_DRZ80=1 -DHAS_CYCLONE=1) are hand-written ARM-mode assembly.
+# Compiling the C as Thumb-2 put an interworking transition on every call in and
+# out of the hottest interpreter core. ARM mode also restores full predication,
+# which suits the CPU cores' branch-dense dispatch loops. Costs ~20-30% text size.
+#
+# Override to A/B a variant without editing this file, e.g. Thumb-2 vs ARM:
+#   make -f Makefile.mister ARCHFLAGS="-mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard"
+# Clearing all three vars reproduces the old Debian-default build exactly, which
+# is how to A/B these flags against the same source tree:
+#   make -f Makefile.mister ARCHFLAGS= OPTFLAGS= LDEXTRA=
+ARCHFLAGS ?= -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard -marm
+
+# -fno-pie/-no-pie: Debian's gcc defaults to PIE, and the built ELF was indeed
+# "LSB pie executable". MAME4ALL hammers file-scope state (CPU contexts, memory
+# maps), so PIC'd global access costs a reserved register plus GOT indirection
+# on every touch. This is a standalone app, so drop it.
+OPTFLAGS ?= -fomit-frame-pointer -fno-pie
+LDEXTRA  ?= -no-pie
+
 CFLAGS += -fsigned-char \
 	-Isrc -Isrc/$(MAMEOS) -Isrc/zlib \
 	-I$(SDL_PREFIX)/include/SDL \
 	-I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include \
+	$(ARCHFLAGS) $(OPTFLAGS) \
 	-O3 -ffast-math -fno-builtin -fsingle-precision-constant \
 	-Wall -Wno-sign-compare -Wunused -Wpointer-arith -Wno-narrowing
 
-LDFLAGS = $(CFLAGS)
+LDFLAGS = $(CFLAGS) $(LDEXTRA)
 
 # No -lbcm_host -lbrcmGLESv2 -lbrcmEGL and no -L/opt/vc/lib. SDL is the static
 # archive (pulled by input.o/gp2x_frontend.o/mister_video.o, which precede it in
@@ -68,23 +101,68 @@ OSOBJS := $(filter-out $(OBJ)/rpi/gles2.o $(OBJ)/rpi/minimal.o,$(OSOBJS)) \
 
 CDEFS = $(DEFS) $(COREDEFS) $(CPUDEFS) $(SOUNDDEFS)
 
+# A flag change must force a full rebuild. Nothing in the pattern rules below
+# depends on the flags, and OBJ = obj_$(TARGET)_mister does not vary with them,
+# so without this every object stays newer than its source and a changed flag
+# silently relinks the PREVIOUS configuration's objects -- a build that looks
+# successful and is byte-identical to the one before it. That applies directly
+# to the `ARCHFLAGS= OPTFLAGS= LDEXTRA=` baseline documented above: without this
+# stamp, reproducing the A/B that way yields a null result.
+#
+# Sign what the compiler and linker actually receive, not the knobs feeding
+# them: CFLAGS/CDEFS/LDFLAGS subsume ARCHFLAGS, OPTFLAGS, LDEXTRA, DEFS and the
+# -O3/-ffast-math block, plus COREDEFS/CPUDEFS/SOUNDDEFS -- so toggling a CPU or
+# sound core (HAS_CYCLONE, HAS_DRZ80, ...) also rebuilds. Those come from
+# src/rules.mak and src/sound.mak, NOT from DEFS, which is a fixed list.
+#
+# Placement is load-bearing: := expands immediately, and CDEFS does not exist
+# until the line above while CFLAGS can still be appended by the includes, so
+# this must stay after that line or it silently signs a partial value.
+# Keyed to values rather than this file's mtime, so editing a comment here does
+# not cost a ~15 minute rebuild in the qemu container.
+# $(CC)/$(CPP)/$(LD) catch a toolchain swap (e.g. arm-linux-gnueabihf-gcc);
+# CCVER catches a same-named compiler CHANGING underneath us, which a container
+# base-image bump does without anyone deciding to -- $(CC) stays the string 'gcc'.
+# Note this Makefile calls the C++ compiler CPP, not CXX; $(CXX) here is empty.
+# -dumpfullversion, not -dumpversion: gcc >= 7 reports only the major from the
+# latter, so 10.2.1 -> 10.3.0 would not change the signature. Falls back for
+# older compilers that lack the flag.
+CCVER    := $(shell $(CC) -dumpmachine 2>/dev/null)/$(shell $(CC) -dumpfullversion 2>/dev/null || $(CC) -dumpversion 2>/dev/null)
+FLAGSIG  := $(CC)|$(CPP)|$(LD)|$(CCVER)|$(CFLAGS)|$(CDEFS)|$(LDFLAGS)
+FLAGFILE := $(OBJ)/.buildflags
+# Only write the stamp for real build goals. printflagsig is meant to be run on
+# the HOST to inspect coverage, but $(shell) expands on every parse -- and the
+# host has its own gcc (macOS /usr/bin/gcc reports arm64-apple-darwin/21.0.0),
+# so CCVER is non-empty but different, the signature differs, the stamp gets
+# rewritten, and the next container build does a full ~15 min rebuild. Testing
+# CCVER for emptiness does NOT prevent this; the goal filter does.
+$(if $(filter printflagsig,$(MAKECMDGOALS)),,\
+  $(shell mkdir -p $(OBJ) 2>/dev/null; \
+          [ "$$(cat $(FLAGFILE) 2>/dev/null)" = '$(FLAGSIG)' ] || printf '%s' '$(FLAGSIG)' > $(FLAGFILE)))
+
+# Print the signature. Run it INSIDE the build container -- on the host it
+# reports the host compiler and so does not reflect what the build will use.
+# It deliberately does not update the stamp (see the goal filter above).
+printflagsig:
+	@printf '%s\n' '$(FLAGSIG)'
+
 $(EMULATOR): $(COREOBJS) $(OSOBJS) $(DRVOBJS)
 	$(LD) $(LDFLAGS) $(COREOBJS) $(OSOBJS) $(LIBS) $(DRVOBJS) -o $@
 	$(STRIP) $(EMULATOR)
 
-$(OBJ)/%.o: src/%.c
+$(OBJ)/%.o: src/%.c $(FLAGFILE)
 	@echo Compiling $<...
 	$(CC) $(CDEFS) $(CFLAGS) -c $< -o $@
 
-$(OBJ)/%.o: src/%.cpp
+$(OBJ)/%.o: src/%.cpp $(FLAGFILE)
 	@echo Compiling $<...
 	$(CPP) $(CDEFS) $(CFLAGS) -fno-rtti -c $< -o $@
 
-$(OBJ)/%.o: src/%.s
+$(OBJ)/%.o: src/%.s $(FLAGFILE)
 	@echo Compiling $<...
 	$(CPP) $(CDEFS) $(CFLAGS) -c $< -o $@
 
-$(OBJ)/%.o: src/%.S
+$(OBJ)/%.o: src/%.S $(FLAGFILE)
 	@echo Compiling $<...
 	$(CPP) $(CDEFS) $(CFLAGS) -c $< -o $@
 
