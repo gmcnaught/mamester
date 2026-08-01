@@ -6,7 +6,7 @@ never appears in the MRA list).
 
 - 2003-plus game entries: **5005**, parents: **2840**
 - 2003-plus hardware families: **727**
-- mame4all setnames: **2301** (the matching basis)
+- mame4all setnames: **2270** (the matching basis)
 - MiSTer MRA setnames: **2923**
 - families already covered by a MiSTer core: **224**
 
@@ -15,16 +15,16 @@ get renamed between MAME versions — mame4all's `wmsyunit.cpp` is 2003-plus's
 `midyunit.c`, the same Midway hardware Stage 8 benched `mk` and `nbajam` on —
 so filename matching reports renamed families as coverage wins that do not exist.
 
-## New: 290 families, 813 parent romsets
+## New: 297 families, 816 parent romsets
 
 Families 2003-plus has that mame4all does not, that no MiSTer core covers, and
 that `docs/feasibility.md` §5 does not rule out. **This is the coverage win**, net
 of the two excluded categories below.
 
-Of those 813 parents, **113** are mahjong titles by description — numerically large, niche value, and
+Of those 816 parents, **113** are mahjong titles by description — numerically large, niche value, and
 many are adult titles. Tagged per title rather than per family, because the
 families are mixed (`seta2.c` holds both Super Real Mahjong and Mobile Suit
-Gundam EX Revue). Net of mahjong: **700 parents**.
+Gundam EX Revue). Net of mahjong: **703 parents**.
 
 | family | parents | example |
 |---|---:|---|
@@ -42,7 +42,6 @@ Gundam EX Revue). Net of mahjong: **700 parents**.
 | `homedata.c` | 14 | Mahjong Hourouki Part 1 - Seisyun Hen (Japan) |
 | `itech8.c` | 14 | Wheel Of Fortune |
 | `nbmj8991.c` | 14 | Mahjong Panic Stadium (Japan) |
-| `kaneko16.c` | 13 | The Berlin Wall (set 1) |
 | `system24.c` | 13 | Hot Rod (turbo 3 player) |
 | `dynax.c` | 12 | Hana no Mai (Japan) |
 | `ms32.c` | 11 | Hayaoshi Quiz Ouza Ketteisen |
@@ -57,12 +56,13 @@ Gundam EX Revue). Net of mahjong: **700 parents**.
 | `djmain.c` | 7 | beatmania (ver JA-B) |
 | `fromance.c` | 7 | Rettou Juudan Nekkyoku Janshi - Higashi Nippon Hen (Japan) |
 | `esd16.c` | 6 | Multi Champ (World, ver. 2.5) |
+| `gaelco2.c` | 6 | Alligator Hunt |
 | `mystwarr.c` | 6 | Gaiapolis (Japan ver JAF) |
 | `dreamwld.c` | 5 | Baryon - Future Assault |
+| `equites.c` | 5 | Equites |
 | `freekick.c` | 5 | Gigas (bootleg) |
 | `harddriv.c` | 5 | Hard Drivin' (cockpit, rev 7) |
 | `liberate.c` | 5 | Pro Soccer |
-| `n8080.c` | 5 | Space Fever (New Ver) |
 | `ojankohs.c` | 5 | Ojanko Club (Japan) |
 | `psikyo4.c` | 5 | Taisen Hot Gimmick (Japan) |
 | `simpl156.c` | 5 | Joe and Mac Returns (World, Version 1.1) |
@@ -74,7 +74,7 @@ Gundam EX Revue). Net of mahjong: **700 parents**.
 | `paradise.c` | 4 | Paradise |
 | `rmhaihai.c` | 4 | Real Mahjong Haihai (Japan) |
 
-…and 245 more families (340 parents).
+…and 252 more families (350 parents).
 
 ## Excluded — false gaps: 4 families, 152 parents
 
@@ -89,13 +89,14 @@ MAME is strictly worse for them (`feasibility.md` §5).
 | `vsnes.c` | 36 | Vs. System — runs on the NES core |
 | `nss.c` | 12 | Nintendo Super System — runs on the SNES core |
 
-## Excluded — too heavy: 6 families, 49 parents
+## Excluded — too heavy: 7 families, 76 parents
 
 PS1-class and polygon 3D. `feasibility.md` §5: "Do not count these as
 unlocked." Listed so the exclusion is explicit and arguable rather than silent.
 
 | family | parents | why excluded |
 |---|---:|---|
+| `zn.c` | 27 | Sony ZN (PS1 arcade) |
 | `namcos12.c` | 11 | PS1-class 3D (Tekken 3) |
 | `namcos22.c` | 11 | polygon 3D (Alpine Racer) |
 | `namcos11.c` | 9 | PS1-class 3D (Tekken) |
@@ -103,20 +104,20 @@ unlocked." Listed so the exclusion is explicit and arguable rather than silent.
 | `namcos21.c` | 5 | polygon 3D (Winning Run) |
 | `cojag.c` | 4 | Atari Cojag (Jaguar hardware) |
 
-## Already reachable: 198 families, 543 parents
+## Already reachable: 190 families, 513 parents
 
 Uncovered by MiSTer but present in mame4all today — not a coverage win,
 but where three years of driver fixes could matter.
 
 | family | parents | example |
 |---|---:|---|
-| `zn.c` | 27 | Battle Arena Toshinden 2 (USA 951124) |
 | `namcos2.c` | 26 | Final Lap (Rev E) |
 | `balsente.c` | 24 | Sente Diagnostic Cartridge |
 | `nmk16.c` | 20 | Task Force Harrier |
 | `leland.c` | 17 | Cerberus |
 | `cinemat.c` | 14 | Space Wars |
 | `taito_b.c` | 14 | Master of Weapon (World) |
+| `kaneko16.c` | 13 | The Berlin Wall (set 1) |
 | `taito_l.c` | 13 | Raimais (Japan) |
 | `exidy440.c` | 10 | Crossbow (version 2.0) |
 | `midyunit.c` | 8 | Narc (rev 7.00) |
@@ -124,16 +125,15 @@ but where three years of driver fixes could matter.
 | `marineb.c` | 7 | Marine Boy |
 | `mcr68.c` | 7 | Zwackery |
 | `docastle.c` | 6 | Mr. Do's Castle (set 1) |
-| `gaelco2.c` | 6 | Alligator Hunt |
 | `segar.c` | 6 | Astro Blaster (version 3) |
 | `suna8.c` | 6 | Rough Ranger (v2.0) |
 | `aerofgt.c` | 5 | Spinal Breakers (World) |
 | `atarisy2.c` | 5 | Paperboy (rev 3) |
 | `ataxx.c` | 5 | Ataxx (set 1) |
 | `cischeat.c` | 5 | Big Run (11th Rallye version) |
-| `equites.c` | 5 | Equites |
 | `fastfred.c` | 5 | Fly-Boy |
 | `geebee.c` | 5 | Gee Bee |
+| `n8080.c` | 5 | Space Fever (New Ver) |
 | `psikyo.c` | 5 | Samurai Aces (World) |
 | `sega.c` | 5 | Space Fury (revision C) |
 | `skychut.c` | 5 | Andromeda (Japan[Q]) |
@@ -145,7 +145,6 @@ but where three years of driver fixes could matter.
 | `locomotn.c` | 4 | Jungler |
 | `midtunit.c` | 4 | Mortal Kombat (rev 5.0 T-Unit 03-19-93) |
 | `wiz.c` | 4 | Stinger |
-| `aburner.c` | 3 | Line of Fire |
 | `argus.c` | 3 | Argus |
 | `astinvad.c` | 3 | Astro Invader |
 | `atarifb.c` | 3 | Atari Football (revision 2) |
@@ -155,8 +154,10 @@ but where three years of driver fixes could matter.
 | `lastduel.c` | 3 | Last Duel (US set 1) |
 | `lazercmd.c` | 3 | Lazer Command |
 | `marvins.c` | 3 | Marvin's Maze |
+| `meadows.c` | 3 | Dead Eye |
+| `punchout.c` | 3 | Punch-Out!! |
 
-…and 153 more families.
+…and 145 more families.
 
 ## Geometry risk: 170 sets wider than 512 px
 
@@ -171,10 +172,16 @@ FIFO tops out at 512 pixels.
 curl -sL -o listinfo.xml \
   'https://archive.org/download/mame-2003-plus-reference-set/mame2003-plus%20%5B2021-03-20%5D.xml'
 
-# mame4all setnames, offline from the vendored source (no device needed):
-grep -hoE '^GAMEX?\( *[0-9?]+, *[a-zA-Z0-9_]+' \
-  vendor/mame4all-pi/src/drivers/*.cpp | sed -E 's/.*, *//' | sort -u \
-  > mame4all-setnames.txt
+# mame4all setnames -- AUTHORITATIVE, from the built binary on the device:
+ssh root@192.168.20.81 'cd /media/fat/games/mame && ./mame "*" -sourcefile' \
+  > mame4all-sourcefile.txt     # then --mame4all-kind sourcefile
+
+# An offline grep of GAME(/GAMEX( macros over vendor/mame4all-pi/src/
+# drivers/*.cpp is tempting but WRONG: measured against the real build it
+# missed 123 setnames and invented 154 (drivers declared in source but not
+# compiled in, plus macro forms the regex does not match). It moved the
+# headline by under 1%, so it is a usable fallback when no device is
+# available -- but say so if you use it.
 
 # MRA setnames: every <setname> and zip= under /media/fat/_Arcade.
 # Two device traps: MRA filenames contain SPACES (so `for f in $(find …)`
