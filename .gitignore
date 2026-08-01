@@ -42,3 +42,6 @@ compile_commands.json
 *.fst
 *.vvp
 tools/mister/test_frame_writer
+
+# Claude Code worktrees
+/.claude/worktrees/
