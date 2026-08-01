@@ -42,7 +42,7 @@ FATROOT="${FATROOT:-/media/fat}"
 POLL_SEC="${POLL_SEC:-1}"
 
 # shellcheck disable=SC1090  # dynamic path (env-overridable); defined in game_lib.sh
-. "$GAME_LIB"   # provides resolve_rom, rom_setname, game_opts
+. "$GAME_LIB"   # provides resolve_rom, rom_setname, rom_path, game_opts
 
 file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
 
@@ -53,15 +53,22 @@ launch_game() {     # $1 = rom zip path; echoes the child pid
         return 0
     fi
 
-    _set=$(rom_setname "$1")
-    _rompath=$(dirname "$1")
-    _opts=$(game_opts "$GAMEDIR" "$_set")
+    _set=$(rom_setname "$1" "$HOMEDIR")
+    _rompath=$(rom_path "$1" "$HOMEDIR")
+    if [ -z "$_set" ] || [ -z "$_rompath" ]; then
+        # An .mgl whose romset is missing, most likely.
+        # stderr, not stdout: this function's stdout is captured as the pid.
+        echo "MAMESTer manager: '$1' does not point at a readable romset — ignoring" >&2
+        return 1
+    fi
+    _opts=$(game_opts "$GAMEDIR" "$_set" \
+            | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     _log="$LOGDIR/$_set.log"
 
     mv -f "$_log" "$_log.prev" 2>/dev/null
     {
         echo "MAMESTer: launching '$_set'"
-        echo "  rom     $1"
+        echo "  pick    $1"
         echo "  rompath $_rompath"
         echo "  opts    ${_opts:-(none)}"
     } > "$_log"
@@ -146,7 +153,7 @@ while :; do
 
     sel=$(resolve_rom "$S0_FILE" "$FATROOT" "$HOMEDIR")
     if [ -z "$sel" ]; then
-        echo "MAMESTer manager: pick did not resolve to a readable .zip — ignoring"
+        echo "MAMESTer manager: pick did not resolve to a readable .mgl or .zip — ignoring"
         continue
     fi
 
@@ -157,6 +164,10 @@ while :; do
 
     kill_game "$game_pid"
     game_pid=$(launch_game "$sel")
+    if [ -z "$game_pid" ]; then
+        loaded=""                      # nothing started; stay idle for the next pick
+        continue
+    fi
     loaded="$sel"
-    echo "MAMESTer manager: started $(rom_setname "$sel") (pid $game_pid)"
+    echo "MAMESTer manager: started $(rom_setname "$sel" "$HOMEDIR") (pid $game_pid)"
 done

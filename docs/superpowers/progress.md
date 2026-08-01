@@ -254,10 +254,19 @@ the harness, the emulator and the RBF, plus directory creation, the roms
 symlink, and warnings when Master_Daemon is not running or no romsets are
 visible. `--harness-only` for fast iteration, `--load` to load the core.
 
-**`tools/make-mgl.py`** writes MiSTer `.mgl` shortcuts into `/media/fat/_MAMESTer`,
-so games appear in MiSTer's own main menu instead of only in the core's picker.
-Titles come from `mame -listfull`. Note the space cost: exFAT allocates 128 KB
-per file here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
+**Choosing a game — `.mgl` shortcuts serve both entry points.** The core's OSD
+picker CANNOT select a romset: Main_MiSTer's browser fakes every `.zip` into a
+directory and descends into it (`file_io.cpp` ScanDirectory, suppressed only by
+`SCANO_NOZIP`, which a core cannot request). So `tools/make-shortcuts.py` writes
+one `.mgl` per romset into `/media/fat/_MAMESTer` and symlinks
+`games/MAMESTer/Games` to it:
+- from MiSTer's **main menu**, selecting one loads the core and mounts the
+  romset (`.s0` gets the zip path);
+- from the core's **"Load Game"** picker, selecting the same file mounts the
+  `.mgl` itself and `game_lib.sh` reads the romset out of its XML.
+
+Titles come from `mame -listfull`. Space cost: exFAT allocates 128 KB per file
+here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
 
 **Two bugs found and fixed:**
 

@@ -67,10 +67,48 @@ is "empty .s0 resolves to nothing" "" "$(resolve_rom "$S0" "$FAT" "$HOME_DIR")"
 
 is "missing .s0 resolves to nothing" "" "$(resolve_rom "$TMP/absent.s0" "$FAT" "$HOME_DIR")"
 
+# An .mgl is what the OSD picker can select (a romset zip cannot be — the
+# browser descends into it). The romset it names is read out of the XML, with
+# the path resolved against the core's home directory, exactly as Main_MiSTer
+# does when the same file is chosen from MiSTer's main menu.
+mkdir -p "$HOME_DIR/Games"
+cat > "$HOME_DIR/Games/Ghosts'n Goblins.mgl" <<EOF
+<mistergamedescription>
+	<rbf>_Other/MAMESTer_20260801</rbf>
+	<file delay="2" type="s" index="0" path="roms/gng.zip"/>
+</mistergamedescription>
+EOF
+cat > "$HOME_DIR/Games/Missing.mgl" <<EOF
+<mistergamedescription>
+	<file delay="2" type="s" index="0" path="roms/nosuch.zip"/>
+</mistergamedescription>
+EOF
+MGL="$HOME_DIR/Games/Ghosts'n Goblins.mgl"
+
+echo "mgl_romset"
+is "romset from the XML, home-relative" "$HOME_DIR/roms/gng.zip" \
+   "$(mgl_romset "$MGL" "$HOME_DIR")"
+is "mgl naming a romset that is not there" "" \
+   "$(mgl_romset "$HOME_DIR/Games/Missing.mgl" "$HOME_DIR")"
+
+echo "resolve_rom, mgl picks"
+printf 'games/MAMESTer/Games/Ghosts%sn Goblins.mgl' "'" > "$S0"
+is "mgl pick resolves" "$MGL" "$(resolve_rom "$S0" "$FAT" "$HOME_DIR")"
+# A .mgl under a directory whose name contains ".zip" must still cut at ".mgl".
+printf 'games/MAMESTer/Games/Ghosts%sn Goblins.mglGames/x.zip' "'" > "$S0"
+is "mgl wins over a trailing .zip in the junk" "$MGL" \
+   "$(resolve_rom "$S0" "$FAT" "$HOME_DIR")"
+
 echo "rom_setname"
-is "basename minus extension" "gng"  "$(rom_setname /media/fat/games/MAMESTer/roms/gng.zip)"
+is "basename minus extension" "gng"  "$(rom_setname "$ROMS/gng.zip")"
 is "uppercase extension"      "GnG"  "$(rom_setname /roms/GnG.ZIP)"
 is "dots in the name"         "mk.2" "$(rom_setname /roms/mk.2.zip)"
+is "through an mgl"           "gng"  "$(rom_setname "$MGL" "$HOME_DIR")"
+is "mgl with no romset"       ""     "$(rom_setname "$HOME_DIR/Games/Missing.mgl" "$HOME_DIR")"
+
+echo "rom_path"
+is "romset picked in place" "$ROMS" "$(rom_path "$ROMS/gng.zip")"
+is "through an mgl"         "$HOME_DIR/roms" "$(rom_path "$MGL" "$HOME_DIR")"
 
 echo "game_opts"
 G="$TMP/gamedir"; mkdir -p "$G/opts"

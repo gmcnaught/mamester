@@ -251,7 +251,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // The DDR video read path (control word, BUF0/BUF1 addressing, RGB565
 // unpack, timing) is UNCHANGED.
 // -------------------------------------------------------------------------
-// Game selection (Stage 7). "SC0,MAMZIP,Load Game" is a mount slot, not a
+// Game selection (Stage 7). "SC0,MGLZIP,Load Game" is a mount slot, not a
 // download: Main_MiSTer's OSD file browser writes the picked path to
 // /media/fat/config/MAMESTer.s0 and pulses img_mounted; nothing is streamed
 // over SPI (an F-slot would push the whole romset zip through ioctl). The

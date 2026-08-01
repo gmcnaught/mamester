@@ -94,11 +94,15 @@ Two device directories, and they are not interchangeable:
   `roms/`, `opts/<setname>.opt`, `cfg/nvram/hi/inp/snap`). MAME `chdir()`s to its
   own binary's directory at startup, so this is its cwd.
 
-A game starts when Main_MiSTer writes the OSD pick to
-`/media/fat/config/MAMESTer.s0` (the `SC0,ZIP,Load Game` mount slot); the manager
-resolves it to a setname and launches MAME. `tools/make-mgl.py` also writes
-`.mgl` shortcuts into `/media/fat/_MAMESTer` so games appear in MiSTer's main
-menu. Host-side tests: `sh tests/game_manager_test.sh`.
+A game starts when Main_MiSTer writes the pick to
+`/media/fat/config/MAMESTer.s0` (the `SC0,MGLZIP,Load Game` mount slot); the
+manager resolves it to a setname and launches MAME. `tools/make-shortcuts.py`
+writes one `.mgl` per romset into `/media/fat/_MAMESTer`, which serves both entry
+points: MiSTer's main menu loads the core and mounts the romset, and the core's
+own "Load Game" picker reaches the same files through the
+`games/MAMESTer/Games` symlink. A romset zip can never be picked directly — the
+browser fakes every `.zip` into a directory and descends into it. Host-side
+tests: `sh tests/game_manager_test.sh`.
 
 ## Next steps
 

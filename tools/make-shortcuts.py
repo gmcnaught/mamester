@@ -1,37 +1,46 @@
 #!/usr/bin/env python3
 """
-Generate MiSTer .mgl shortcuts so MAMESTer romsets appear in MiSTer's own menu.
-
-Without these, a game is chosen from inside the core ("Load Game" in the OSD).
-An .mgl is the MiSTer-standard alternative: selecting one loads the core AND
-mounts the romset in one action, so games show up in the main menu next to every
-other system's titles.
+Generate one MiSTer .mgl shortcut per MAMESTer romset, serving both entry points.
 
     <mistergamedescription>
         <rbf>_Other/MAMESTer_20260801</rbf>
         <file delay="2" type="s" index="0" path="roms/gng.zip"/>
     </mistergamedescription>
 
-The path is relative to the core's home directory (/media/fat/games/MAMESTer) —
-device-observed: Main_MiSTer joins it onto that home dir before storing the
-result in MAMESTer.s0, which games/MAMESTer/game_manager.sh then resolves. The
-2-second delay is measured from core load and must stay long enough for the
-handler's FPGA-settle sleep; the manager anchors its "is this pick new?" test on
-/tmp/CORENAME's mtime so it cannot miss an early mount.
+The files live in /media/fat/_MAMESTer (a top-level _-prefixed directory becomes
+an entry in MiSTer's main menu), and games/MAMESTer/Games is symlinked to it so
+the core's own OSD picker reaches the same files:
 
-Titles come from `mame -listfull` on the device, so the menu reads "Ghosts'n
+  From the MAIN MENU   selecting one loads the core AND mounts the romset, so
+                       games sit in the menu next to every other system's titles.
+  From the CORE picker selecting one mounts the .mgl itself, and
+                       games/MAMESTer/game_lib.sh reads the romset path out of
+                       the XML.
+
+Why not point the picker straight at the romsets: it cannot select one.
+Main_MiSTer's browser fakes every .zip into a directory and descends into it
+(file_io.cpp ScanDirectory, suppressed only by SCANO_NOZIP, which a core cannot
+request), so a romset can be browsed but never picked.
+
+The XML path is relative to the core's home directory — device-observed:
+Main_MiSTer joins it onto games/MAMESTer before storing the result in
+MAMESTer.s0. The 2-second delay is measured from core load; the manager anchors
+its "is this pick new?" test on /tmp/CORENAME's mtime so it cannot miss an early
+mount.
+
+Titles come from `mame -listfull` on the device, so entries read "Ghosts'n
 Goblins (World? set 1)" rather than "gng".
 
-SPACE: this device's exFAT allocates 128 KB per file, so ~940 shortcuts cost
-~120 MB of card for a few hundred bytes of content. Generate a curated subset
-unless you actually want the whole romset in the menu.
+SPACE: this device's exFAT allocates 128 KB per file, so each shortcut costs
+128 KB of card whatever its contents — ~120 MB for 940 games. Generate a curated
+subset unless you really want the whole romset in the menus.
 
 Usage:
-  tools/make-mgl.py --match "gng,1943,mk"      just these setnames
-  tools/make-mgl.py --match "kof*"             glob against setname or title
-  tools/make-mgl.py --all                      every romset present (see SPACE)
-  tools/make-mgl.py --list                     show what would be written
-  tools/make-mgl.py --clean                    remove the generated directory
+  tools/make-shortcuts.py --match "gng,1943,mk"     just these setnames
+  tools/make-shortcuts.py --match "kof*"            glob on setname or title
+  tools/make-shortcuts.py --all                     every romset present
+  tools/make-shortcuts.py --list                    show what would be written
+  tools/make-shortcuts.py --clean                   remove the generated set
 """
 
 import argparse
@@ -42,11 +51,13 @@ import subprocess
 import sys
 
 DEFAULT_HOST = "192.168.20.81"
-HOMEDIR = "/media/fat/games/MAMESTer"
-GAMEDIR = "/media/fat/games/mame"
+HOMEDIR = "/media/fat/games/MAMESTer"   # core setname dir = OSD browser home
+GAMEDIR = "/media/fat/games/mame"       # emulator + romsets
 OTHERDIR = "/media/fat/_Other"
 # A top-level _-prefixed directory becomes an entry in MiSTer's main menu.
 MGLDIR = "/media/fat/_MAMESTer"
+# The core's picker opens at HOMEDIR, so it reaches the same files through this.
+PICKER_LINK = f"{HOMEDIR}/Games"
 
 MGL = """<mistergamedescription>
 \t<rbf>_Other/{rbf}</rbf>
@@ -85,7 +96,6 @@ def titles(host):
               check=False)
     table = {}
     for line in out.splitlines():
-        # "name      "Description"
         m = re.match(r'^(\S+)\s+"(.*)"\s*$', line)
         if m:
             table[m.group(1)] = m.group(2)
@@ -96,23 +106,36 @@ def safe_name(text):
     return UNSAFE.sub("-", text).strip().rstrip(".")
 
 
+def write_files(host, files):
+    """Write {remote_path: content} in one ssh round trip.
+
+    One round trip per file is minutes across 900 games; a single heredoc script
+    is seconds.
+    """
+    script = [f"cat > {shlex.quote(path)} <<'MAMEOF'\n{body}MAMEOF"
+              for path, body in files.items()]
+    ssh(host, "\n".join(script))
+
+
 def main():
     ap = argparse.ArgumentParser(
-        description="Generate MiSTer .mgl shortcuts for MAMESTer romsets.",
+        description="Generate MAMESTer .mgl game shortcuts.",
         epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default=DEFAULT_HOST)
     ap.add_argument("--match", help="comma-separated setnames or globs "
                                     "(matched against setname and title)")
     ap.add_argument("--all", action="store_true", help="every romset present")
     ap.add_argument("--list", action="store_true", help="show, do not write")
-    ap.add_argument("--clean", action="store_true", help=f"remove {MGLDIR} and exit")
+    ap.add_argument("--clean", action="store_true",
+                    help=f"remove {MGLDIR} and the picker symlink, then exit")
     ap.add_argument("--rbf", help="RBF basename without .rbf "
                                   "(default: newest MAMESTer_* on the device)")
     args = ap.parse_args()
 
     if args.clean:
-        ssh(args.host, f"rm -rf {shlex.quote(MGLDIR)}")
-        print(f"removed {MGLDIR}")
+        ssh(args.host, f"rm -rf {shlex.quote(MGLDIR)}; "
+                       f"rm -f {shlex.quote(PICKER_LINK)}")
+        print(f"removed {MGLDIR} and {PICKER_LINK}")
         return 0
 
     if not (args.all or args.match):
@@ -134,42 +157,45 @@ def main():
     if args.all:
         chosen = sorted(present)
     else:
-        patterns = [p.strip() for p in args.match.split(",") if p.strip()]
         # Exact setname or an explicit glob — no implicit trailing "*", so
         # "1943" means 1943 and "1943*" also brings in 1943kai/1943mii. Titles
         # are matched too, so --match "*ghosts*" works.
+        patterns = [p.strip() for p in args.match.split(",") if p.strip()]
+
         def hit(setname, pattern):
             return (fnmatch.fnmatch(setname, pattern)
                     or fnmatch.fnmatch(table.get(setname, "").lower(), pattern.lower()))
 
         chosen = sorted(s for s in present if any(hit(s, p) for p in patterns))
-        missing = [p for p in patterns if not any(hit(s, p) for s in chosen)]
-        for p in missing:
+        for p in [p for p in patterns if not any(hit(s, p) for s in chosen)]:
             print(f"  no romset matched '{p}'", file=sys.stderr)
 
     if not chosen:
         sys.exit("nothing matched")
 
-    print(f"rbf     {rbf}")
-    print(f"target  {MGLDIR}  ({len(chosen)} shortcuts)")
+    print(f"{len(chosen)} games -> {MGLDIR}  (rbf {rbf})")
     if args.list:
         for s in chosen:
-            print(f"  {s:<12} {table.get(s, '(no title)')}")
+            print(f"    {s:<12} {table.get(s, '(no title)')}")
         return 0
 
     ssh(args.host, f"mkdir -p {shlex.quote(MGLDIR)}")
-    # One ssh for the lot: a per-file round trip over 900 games is minutes.
-    script = []
-    for s in chosen:
-        title = safe_name(table.get(s) or s)
-        body = MGL.format(rbf=rbf, zip=present[s])
-        script.append(f"cat > {shlex.quote(f'{MGLDIR}/{title}.mgl')} <<'MGLEOF'\n"
-                      f"{body}MGLEOF")
-    ssh(args.host, "\n".join(script))
+    write_files(args.host, {
+        f"{MGLDIR}/{safe_name(table.get(s) or s)}.mgl":
+            MGL.format(rbf=rbf, zip=present[s])
+        for s in chosen
+    })
+    n = ssh(args.host, f"ls -1 {shlex.quote(MGLDIR)}/*.mgl | wc -l").strip()
 
-    written = ssh(args.host, f"ls -1 {shlex.quote(MGLDIR)}/*.mgl | wc -l").strip()
-    print(f"wrote   {written} .mgl files")
-    print(f"        they appear in MiSTer's main menu under _MAMESTer")
+    # The core's picker opens at HOMEDIR and cannot see _MAMESTer, so bridge the
+    # two with a symlink rather than a second copy of every file. Main_MiSTer's
+    # browser stat()s DT_LNK entries and shows them as directories.
+    ssh(args.host, f"test -e {shlex.quote(PICKER_LINK)} || "
+                   f"ln -s {shlex.quote(MGLDIR)} {shlex.quote(PICKER_LINK)}")
+
+    print(f"wrote {n} shortcuts")
+    print(f"  MiSTer main menu   _MAMESTer")
+    print(f"  core 'Load Game'   Games/  (-> {MGLDIR})")
     return 0
 
 
