@@ -51,3 +51,8 @@ tools/mister/test_frame_writer
 
 # Local build of the DDR write microbenchmark (tools/mister/ddr-write-bench.c)
 tools/mister/ddr-write-bench
+
+# libretro host binary and its libretro-common objects (both are build output;
+# *.o already covers lrc/, this catches the extensionless ELF)
+tools/mame-frontend/libretro-host/mame2003
+tools/mame-frontend/libretro-host/lrc/
