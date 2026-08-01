@@ -4,13 +4,15 @@
  * mame4all. This file is only the libretro-shaped adapter in front of it:
  * translate the pixel format, notice a geometry change, hand over the frame.
  *
- * Rotation is NOT handled here, on purpose. See host_env.c's SET_ROTATION case:
- * refusing that call makes the core rotate its own bitmap
- * (mame2003_video_init_orientation -> video_swap_xy -> frame_convert), which is
- * exactly what mame4all does. The alternative -- accepting SET_ROTATION and
- * transposing here -- would add a full cache-hostile pass over every frame of
- * every vertical game to do work the emulator is already set up to do inside a
- * loop it is already running.
+ * NOTHING IS ROTATED IN SOFTWARE. host_env.c accepts SET_ROTATION, so the core
+ * hands over an unrotated bitmap and a vertical game presents sideways --
+ * galaga is 288x224, not 224x288. That is deliberate and temporary: rotation
+ * belongs in ascal, with a [mamester_vertical] MiSTer.ini section in the shape
+ * of arcade_vertical. Until then vertical games are meant to be looked at
+ * sideways.
+ *
+ * The rotation the core reports is recorded and passed to nv_set_mode() so the
+ * modeline layer can act on it once that exists; nv_present ignores it today.
  */
 
 #include <stdio.h>
@@ -24,6 +26,7 @@ static nv_format     cur_fmt       = NV_FMT_0RGB1555; /* libretro's documented
                                                        * default until the core
                                                        * calls SET_PIXEL_FORMAT */
 static double        cur_refresh   = 60.0;
+static unsigned      cur_rotation  = 0;
 static unsigned      cur_w         = 0;
 static unsigned      cur_h         = 0;
 static int           mode_valid    = 0;
@@ -69,11 +72,14 @@ void host_set_pixel_format(unsigned fmt)
 
 void host_set_rotation(unsigned rot)
 {
-    /* Unreachable while host_env.c refuses SET_ROTATION, which is the point --
-     * if this ever fires, the refusal was lost and vertical games are about to
-     * come out sideways. */
-    fprintf(stderr, "MISTER-HOST: WARNING SET_ROTATION(%u) accepted; the core "
-                    "has stopped rotating its own bitmap\n", rot);
+    /* libretro's 0..3 is 0/90/180/270 counter-clockwise. Recorded, not acted
+     * on: see the file header. */
+    if (rot != cur_rotation) {
+        cur_rotation = rot;
+        mode_valid = 0;          /* republish; rot is an nv_set_mode argument */
+    }
+    fprintf(stderr, "MISTER-HOST: rotation %u (%u deg CCW), presented "
+                    "unrotated\n", rot, rot * 90);
 }
 
 void host_geometry_changed(const struct retro_game_geometry *geom)
@@ -146,7 +152,8 @@ void host_video_refresh(const void *data, unsigned width, unsigned height,
         cur_w = width;
         cur_h = height;
         mode_valid = 1;
-        nv_set_mode((int)width, (int)height, cur_refresh, 0, cur_fmt);
+        nv_set_mode((int)width, (int)height, cur_refresh,
+                    (int)(cur_rotation * 90), cur_fmt);
     }
 
     /* pitch is a BYTE stride and libretro cores do not guarantee it equals

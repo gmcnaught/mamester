@@ -220,24 +220,30 @@ bool host_environment(unsigned cmd, void *data)
         host_set_pixel_format(*(const enum retro_pixel_format *)data);
         return true;
 
-    /* REFUSED ON PURPOSE, and this is the single most consequential answer in
-     * this file after the log interface.
+    /* ACCEPTED, which means the core hands over the bitmap UNROTATED and the
+     * frontend owns rotation (mame2003_video_init_orientation, video.c:127).
      *
-     * mame2003_video_init_orientation() (src/mame2003/video.c:127) tests this
-     * call. Accept it and the core hands over an UNROTATED bitmap, expecting
-     * the frontend to rotate -- which the DDR reader cannot do, so every
-     * vertical game would come out sideways. Refuse it and the core takes the
-     * `Mame will rotate internally` branch: video_swap_xy is set and
-     * frame_convert() transposes inside the pixel loop it is already running.
-     * That is also exactly what mame4all does (nv_present.h: "mame4all rotates
-     * its own bitmap and passes 0"), so both engines present pre-rotated
-     * frames and the comparison stays honest.
+     * Nothing rotates in software here. Rotation belongs in ascal, alongside a
+     * [mamester_vertical] MiSTer.ini section in the shape of arcade_vertical;
+     * until that exists, vertical games are presented sideways on purpose and
+     * are meant to be looked at that way.
      *
-     * The alternative -- transpose in host_video.c -- would add a full
-     * cache-hostile pass over every frame of every vertical game to redo work
-     * the emulator is already positioned to do for free. */
+     * Three things follow from accepting it, all wanted:
+     *   - frame_convert() stops transposing, so every ROT90 driver drops a
+     *     cache-hostile pass per frame;
+     *   - video_flip_x/y and video_swap_xy all end up 0, which re-enables the
+     *     core's zero-copy bypass for depth 15 and 32 drivers (video.c:240
+     *     requires exactly that);
+     *   - a vertical game presents landscape (galaga 288x224, not 224x288), so
+     *     its line count drops back to ~262 and the H rate to ~15.7 kHz, which
+     *     is what makes it syncable on a 15 kHz CRT in the meantime.
+     *
+     * The core calls this TWICE: once with a probe value to test whether the
+     * frontend supports rotation at all, then again with the real 0..3. Both
+     * must be accepted or it takes the "Mame will rotate internally" branch. */
     case RETRO_ENVIRONMENT_SET_ROTATION:
-        return false;
+        host_set_rotation(*(const unsigned *)data);
+        return true;
 
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
         host_geometry_changed((const struct retro_game_geometry *)data);

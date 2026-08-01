@@ -75,12 +75,27 @@ through `nv_present.c`.
 | XRGB8888 (6-bits-per-gun, converted) | `eprom`, `batman` | 336×240 | renders |
 | 0RGB1555 (converted) | `crospang` | 320×240 | renders |
 
-Rotation is done by the **core**: refusing `SET_ROTATION` sends
-`mame2003_video_init_orientation()` down its `Mame will rotate internally`
-branch, so `frame_convert()` transposes inside the pixel loop it already runs.
-That matches mame4all and avoids a cache-hostile pass per frame on every
-vertical game. `contra` and `galaga` come out portrait at 3:4, which is the
-check that it works.
+**Nothing is rotated in software.** `SET_ROTATION` is accepted, so the core
+hands over an unrotated bitmap and vertical games present sideways —
+deliberately, and temporarily. Rotation belongs in ascal, with a
+`[mamester_vertical]` MiSTer.ini section in the shape of `arcade_vertical`;
+until that exists, vertical games are meant to be looked at sideways.
+
+Three consequences, all wanted:
+
+| | |
+|---|---|
+| `frame_convert()` stops transposing | every ROT90 driver drops a cache-hostile pass per frame — `galaga` 159.5 → 169.9 fps |
+| `video_flip_x/y` and `video_swap_xy` all end up 0 | re-enables the core's **zero-copy bypass** for depth 15/32 (`video.c:240` requires exactly that). `crospang` now reports pitch=1088 for a 320-wide frame — 544 px of the game bitmap's own padded stride, not `width*2` — which also exercises the `pitch != width*bpp` path `nv_frame` exists to handle |
+| vertical games present landscape | line count drops to ~262 and H rate to ~15.7 kHz, **syncable on a 15 kHz CRT** |
+
+| game | portrait (before) | landscape (now) | H rate |
+|---|---|---|---:|
+| `galaga` | 224×288 | 288×224 | 18.42 → **15.70 kHz** |
+| `contra` | 224×280 | 280×224 | 17.76 → **15.72 kHz** |
+
+The core calls `SET_ROTATION` **twice** — a probe first, then the real 0..3.
+Both must be accepted or it falls back to rotating internally.
 
 **The RGB565 row above was wrong when first written, and the way it was wrong is
 the lesson.** gng was recorded as verified on the strength of a screenshot
