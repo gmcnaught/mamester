@@ -19,6 +19,19 @@
  *   MISTER_BENCH_FRAMES=N   exit after N presented frames (for fixed-length runs)
  *   MISTER_FB=1             blit 16bpp frames to /dev/fb0 when available
  *   MISTER_JOY_DEBUG=1      log each MiSTer joystick word as it changes
+ *   MISTER_FRAME_HASH=N     print an FNV-1a 64 of the published frame at frame N,
+ *                           for comparing two builds that should be pixel-identical
+ *
+ * Two traps when using MISTER_FRAME_HASH:
+ *
+ *   1. Run the binary from its own directory. MAME chdir()s to realpath(argv[0])'s
+ *      directory at startup (src/rpi/rpi.cpp), so `/tmp/mame-x <game> -rompath roms`
+ *      looks in /tmp/roms and reports every ROM missing — which looks exactly like
+ *      a romset-version mismatch and is not one.
+ *   2. Pick a frame where the driver is actually animating. Attract modes hold
+ *      still for long stretches (gng frames 899-902 are byte-identical), so a
+ *      matching hash there is weak evidence. Confirm frames N and N+1 differ under
+ *      one build before comparing two. Vector drivers never hold still.
  */
 
 #include "minimal.h"
