@@ -196,3 +196,29 @@ Verify the MRA list before trusting any of the above: `gng`, `sf2`, `pacman` and
 `asteroid` must be present (MiSTer has cores) and `mk`, `klax` absent (Stage 8
 benched them as gaps). Tests: `sh tests/coverage_diff_test.sh`.
 
+
+---
+
+## Build note (Task 4, 2026-08-01)
+
+`mame2003_plus_libretro.a` built for the A9: 37 MB, **1789 objects**, all five
+key `retro_*` symbols exported, `Tag_FP_arch: VFPv3`, `Tag_Advanced_SIMD_arch:
+NEONv1`, `Tag_ABI_VFP_args: VFP registers` (hard float). Submodule `d6bf36f6`.
+
+**Two things to carry into the benchmark, both recorded before any number is
+taken:**
+
+1. **The two engines default to different optimisation levels.** mame4all is
+   built `-O3 -ffast-math -fno-builtin -fsingle-precision-constant`
+   (`Makefile.mister`); mame2003-plus's upstream default is **`-O2`**, and
+   `tools/build-m2003p.sh` does not override it. Using each project's own tuned
+   default is defensible for a "how would this ship" comparison, but it is a real
+   difference *outside* the emulator being measured, and it must not be
+   discovered after the fact. If the engine gap turns out close, add an arm with
+   2003-plus at `-O3` before drawing a conclusion.
+2. **`readelf -A` reports `Tag_CPU_name: "7-A"`, not `"Cortex-A9"`**, on the
+   object sampled from the archive, even though the compile command demonstrably
+   carries `-mcpu=cortex-a9`. The command line is what determines codegen, so this
+   is noted rather than treated as a fault — but it means the ELF attribute is not
+   a reliable way to confirm the A9 tuning applied here. Check the compile
+   command in the build log instead.
