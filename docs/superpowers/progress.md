@@ -382,6 +382,31 @@ mcr68 (xenophob 33, archrivl 34) and atarisy2 (paperboy 42, 720 44) each came ou
 slow twice from different games. **Psikyo at 41 fps is a notable miss** — it is
 named as a gap target in CLAUDE.md.
 
+**The sweep above measured the present path, not the drivers (2026-08-01).**
+Profiling atarisy2 found 65% of process CPU in `nv_present`: the 8bpp path stored
+converted pixels one halfword at a time into the uncached `/dev/mem` window,
+where each store is its own bus transaction (24.8 MB/s = 15.1 ms per 512×384
+frame, vs 89 MB/s for a memcpy — `tools/mister/ddr-write-bench.c`). It now
+converts into a cached staging frame and crosses once with memcpy. `720`
+44.2 → 78.9 fps, `paperboy` 44.2 → 80.2, `toobin` 45.2 → 82.6, `quantum`
+55.1 → 113.2, `klax` 105.1 → 189.1; 22 games re-benched in
+`docs/bench-results.md`. Six of the eleven below-real-time families clear 60 Hz
+outright. 16bpp drivers keep writing DDR directly (staging them too cost `mk`
+2.5%); with that carve-out `mk` is 78.1. Moving the residual 4.19 ms DDR write
+to the second A9 core was built and backed out — 1.3× real time with sound is
+enough, and it is not worth a threaded DDR channel. Also: an orphaned busy-loop
+(PID 5922) was pinning one of the two A9 cores for the whole original sweep.
+**Operator decision (2026-08-01): do NOT re-baseline the 196-family sweep.** Its
+bands are a *lower* bound — every family is at least that fast, and the 8bpp ones
+(most of the set) are substantially faster — so the shippable list only grows.
+Treat the bands as conservative rather than current, and re-measure a single
+family only when its exact number matters. Verified on device: `720` renders
+correctly at 512×384 through the scaler.
+
+New tools: `MISTER_PROFILE=<hz>` (SIGPROF PC sampler in the backend) plus
+`tools/symbolize-prof.py`, since the device has no `perf` and gdb cannot unwind
+these frames; `MISTER_NO_NATIVE=1` benches the emulator with the present removed.
+
 **Next:** profile the below-real-time families (the operator deferred this);
 `mk` at 71 fps deserves attention as a marquee title. Note the earlier
 "1.6-2.1x real time" figures for mk/nbajam came from the no-core-loaded bench and
@@ -395,3 +420,74 @@ judge the three slow families (profile, or ship with a lower `samplerate` /
 - **8 (original note):** ~40% of drivers fail (dkong/rtype ROM-load;
   sf2/mk2/tmnt/… post-init hang) — establish the shippable list. See
   `docs/bench-results.md`.
+
+## Stage 9 — mame2003-plus as a second engine (in progress)
+
+Evaluating MAME 2003-Plus (0.78, libretro) on the same present path and launch
+harness as mame4all-pi. Spec:
+[`specs/2026-08-01-mame2003-plus-engine-design.md`](specs/2026-08-01-mame2003-plus-engine-design.md);
+plan: [`plans/2026-08-01-mame2003-plus-engine.md`](plans/2026-08-01-mame2003-plus-engine.md).
+Operator's stated wins are **only** two: driver families mame4all lacks, and
+romset compatibility with the widely distributed 2003-plus reference set.
+
+Branch `mame2003-plus-eval`, based on `presentfix` (the present-path fix plus
+`MISTER_FRAME_HASH`), not on `main`.
+
+| Task | Status | Result |
+|---|---|---|
+| 0 Base on presentfix | ✅ | rebased; backend is the 26 KB hooked version |
+| 1 Coverage diff | ✅ | **297 families / 816 parents / 703 non-mahjong** |
+| 2 Cross-compile container | ✅ | **+0.27%**, bit-identical frames, ~3× faster |
+| 3 Extract `nv_present.c` | ⏳ NEXT | |
+| 4 Build 2003-plus static lib | ⏳ building | submodule `d6bf36f6` |
+| 5–9 host, bench, decide | — | |
+
+**Task 1 — what 2003-plus actually adds.** `tools/coverage-diff.py` against the
+reference set's `-listinfo` XML, mame4all's `-sourcefile` list and the 2,954
+`_Arcade` MRA setnames: **297 families / 816 parents** that mame4all lacks and no
+MiSTer core covers, of which 113 are mahjong → **703 substantive net-new
+parents**. Largest: `taito_f3` 31, `metro` 23, `konamigx` 17, `system32` 17,
+`itech32`+`itech8` 29, `kaneko16` 13, `system24` 13. Excluded and reported
+separately per `feasibility.md` §5: console-core false gaps (4 families, 152
+parents — PlayChoice-10, Vs. System, NSS, Sega C-2) and PS1-class 3D (7 families,
+76 parents). Report: [`../coverage-2003plus.md`](../coverage-2003plus.md).
+
+Note this is a **different and smaller number than feasibility.md's ~1,868**,
+deliberately: that compared 2003-plus against MiSTer cores, this compares it
+against MiSTer cores *plus the mame4all port that already works* — the actual
+marginal value of adding an engine.
+
+**Two methodology bugs, both inflating the answer, both fixed with regression
+tests.** (a) Driver *filenames* are not stable across MAME versions — mame4all's
+`wmsyunit.cpp` is 2003-plus's `midyunit.c`, the hardware Stage 8 benched `mk` and
+`nbajam` on — so matching is on **setnames**. (b) The tool sniffed its input
+format, and a setname list and a filename list are both single-column; it read
+2,301 setnames as families and silently fell back to filename matching. Format is
+now an explicit argument.
+
+**Task 2 — the toolchain is not a confound.** A host-native `arm-linux-gnueabihf`
+container (`tools/mister/Dockerfile.cross-armhf`, `CROSS=1`) measured against the
+qemu one: **+0.27% mean**, every cell inside the 1.5–4% noise floor, and
+`MISTER_FRAME_HASH` reports **bit-identical frames** from both arms across four
+frames and three drivers — matching values from a third separately built binary.
+Both containers are gcc 10.2.1, so this measures *hosting*, not compiler
+generation. And it is **~3× faster**: 9m10s against ~30 minutes, because on an
+arm64 host there is no emulation at all. Details in
+[`../bench-results.md`](../bench-results.md).
+
+**`make` does not rebuild when flags or the compiler change** — no clean step,
+one shared `obj_$(TARGET)_mister`, and pattern rules that depend only on their
+source. Both arms under one `TARGET` would have relinked identical objects and
+reported a ~0% delta: the right-looking answer with nothing behind it.
+`TARGET_NAME` now gives each configuration its own object directory. It overrides
+`OBJ`/`EMULATOR` rather than `TARGET`, because `Makefile.mister` also uses
+`TARGET` for `include src/$(TARGET).mak` — `TARGET=mame-cross` dies on a missing
+`src/mame-cross.mak`.
+
+**`MISTER_FRAME_HASH=N`** (on `presentfix`) hashes the published DDR frame, so it
+covers both the 8bpp staged and 16bpp direct paths. Two usage traps, documented in
+the source: run the binary from its own directory (MAME `chdir()`s to
+`realpath(argv[0])`, so `/tmp/mame-x -rompath roms` looks in `/tmp/roms` and
+reports every ROM missing), and pick a frame where the driver animates — attract
+modes hold still (gng 899–902 are byte-identical), and it has already caught
+three would-be false passes.
