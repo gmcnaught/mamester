@@ -309,7 +309,48 @@ picks kills the running game and starts the new one; per-game opts reach MAME.
 **Ledger note:** `_MAMESTer/*.mgl` and `games/mame/opts/*.opt` are device-side
 user data. The repo ships `games/mame/opts/README.md` documenting the flags.
 
+## Stage 8 — driver/romset triage (in progress)
+
+**Scope rule (operator, 2026-07-31): ignore any driver MiSTer already has a core
+for.** Coverage is computed from the installed MRAs — every `<setname>` and every
+`zip=` name under `/media/fat/_Arcade` (6622 MRAs, 2954 distinct setnames) — and
+judged at FAMILY level (`mame "*" -sourcefile`): a hardware family counts as
+covered if ANY of its drivers has an MRA. Per-driver matching is useless here
+because clone setnames are rarely named in MRAs, which made cps1/pacman/system16
+look like gaps. **NeoGeo must be excluded by hand** — it has a wholesale core but
+ships `.neo` files, not MRAs. Result: 2270 drivers in the build, **196 families /
+~622 drivers with no MiSTer core** — the actual target library for this port.
+
+**Root cause of most "failures": the Cyclone ASM 68000 core.** It segfaults on
+entry to emulation for EVERY 68000 driver tested (klax, rambo3, aerofgt,
+xenophob, toki, rastan, tmnt, sf2); all of them run with it off. This is one bug
+behind most of what the Stage 4 bench recorded as "~40% hang after
+`set_video_mode`". It is NOT the per-driver question `fe_drivers` answers: those
+drivers are listed `cores=1/3` ("Cyclone OK") and still crash, and `rpi.cpp`
+never consults the table for Cyclone anyway — only DrZ80 is gated, the Cyclone
+substitution above it is unconditional. Defaulted off in patch
+`0002-default-asm-cores-off.patch`; `-cyclone` opts back in.
+
+**The other failure class is romset version.** The romsets that ship with a
+MiSTer install are a MODERN set and fail to load on many 0.37b5 drivers (files
+renamed/split). Triage pulls a matching 0.37b5 set per game —
+`tools/gap-triage.sh`, from the Ghostware collection on archive.org. ROMs stay on
+the device; never commit them.
+
+**39 gap representatives tested, 39 run** (unthrottled, with sound, core loaded —
+the production configuration; divide by 60 for the real-time multiple):
+
+| ≥100 fps | 60–100 fps | BELOW 60 |
+|---|---|---|
+| astrof 164, marineb 159, docastle 154, warpwarp 144, seicross 142, astrob 139, thepit 137, ninjakd2 131, locomotn 129, route16 128, monymony 125, snakepit 124, zodiack 122, jackrabt 121, tsamurai 115, wiz 115, atarifb 111, klax 104, kingofb 103, mainevt 103 | polepos 97, puzznic 99, battlnts 99, lkage 99, rpunch 90, rambo3 88, assault 82, aerofgt 81, nbajam 78, lastduel 77, ataxx 73, offroad 72, starcas 65, punchout 64 | **paperboy 42** (Atari System 2), **xenophob 33** (MCR68), **crossbow 25** (Exidy 440) |
+
+`starcas` and `punchout` are marginal (~1.07x) and will likely not hold 60 Hz.
+
+**Next:** extend the sweep across the remaining ~160 uncovered families, then
+judge the three slow families (profile, or ship with a lower `samplerate` /
+`-frameskip`).
+
 ## Later stages (pointers)
-- **8 Driver/romset triage:** ~40% of drivers fail (dkong/rtype ROM-load;
+- **8 (original note):** ~40% of drivers fail (dkong/rtype ROM-load;
   sf2/mk2/tmnt/… post-init hang) — establish the shippable list. See
   `docs/bench-results.md`.
