@@ -45,3 +45,6 @@ tools/mister/test_frame_writer
 
 # Claude Code worktrees
 /.claude/worktrees/
+
+# Serena MCP index cache
+/.serena/
