@@ -346,6 +346,18 @@ the production configuration; divide by 60 for the real-time multiple):
 
 `starcas` and `punchout` are marginal (~1.07x) and will likely not hold 60 Hz.
 
+**Open question (deferred 2026-08-01, needs an idle device).** Is the in-core
+OSD picker redundant? MiSTer's in-core core browser may already list the
+`_MAMESTer/*.mgl` shortcuts, and selecting one switches games through exactly the
+path already proven — a new mount writes `MAMESTer.s0`, the manager kills the
+running game and starts the new one, with no handler restart. If it does, hide
+the picker with `H0SC0,...` (`status_menumask` is already wired in `MAME.sv`).
+**Do NOT simply delete `SC0`:** it is not just the OSD item, it is the mount slot
+the `.mgl`'s `<file index="0">` targets and the reason `.s0` is written at all,
+so removing it likely breaks MGL launching from the main menu too. To check: open
+the OSD mid-game and see whether the core browser shows `_MAMESTer` and its
+entries.
+
 **Next:** extend the sweep across the remaining ~160 uncovered families, then
 judge the three slow families (profile, or ship with a lower `samplerate` /
 `-frameskip`).
