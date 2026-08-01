@@ -21,6 +21,7 @@
 #include <stdbool.h>
 
 #include "libretro.h"
+#include "nv_present.h"
 
 /* --- environment (host_env.c) -------------------------------------------- */
 
@@ -61,6 +62,34 @@ void    host_video_refresh(const void *data, unsigned width, unsigned height,
 void          host_video_set_refresh(double hz);
 unsigned long host_video_shown(void);   /* frames presented                   */
 unsigned long host_video_duped(void);   /* NULL frames re-published as dupes  */
+
+/* --- present (host_present.c) --------------------------------------------- */
+
+/* Every nv_present call the video path makes goes through these four, so that
+ * MISTER_THREADED_PRESENT can move them onto a worker thread without host_video.c
+ * knowing. With the knob off they are direct calls on the emulation thread and
+ * the behaviour is bit-for-bit what it was before the thread existed.
+ *
+ * host_present_init() must run after nv_open() and before the first frame -- the
+ * core can present from inside retro_load_game(). */
+void          host_present_init(void);
+void          host_present_mode(int width, int height, double refresh_hz,
+                                int rot, nv_format fmt);
+void          host_present_frame(const void *src, int pitch_bytes,
+                                 int src_w, int src_h);
+void          host_present_repeat(void);
+
+/* Block until the worker has finished everything queued. Needed before reading
+ * nv_frame_count() for the exit summary, and it is where the deferred present
+ * cost lands rather than in the measured loop. */
+void          host_present_drain(void);
+
+/* Join the worker. MUST happen before nv_close() unmaps /dev/mem. */
+void          host_present_stop(void);
+
+/* Frames the queue discarded because the worker was still busy. Zero unless
+ * MISTER_THREADED_PRESENT is on. */
+unsigned long host_present_drops(void);
 
 /* --- audio (host_audio.c) ------------------------------------------------- */
 
