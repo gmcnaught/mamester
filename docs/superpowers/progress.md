@@ -358,7 +358,36 @@ so removing it likely breaks MGL launching from the main menu too. To check: ope
 the OSD mid-game and see whether the core browser shows `_MAMESTer` and its
 entries.
 
-**Next:** extend the sweep across the remaining ~160 uncovered families, then
+**Full sweep done (196 families, one parent representative each; unthrottled,
+with sound, core loaded).** 188 of the 189 testable drivers run.
+
+- **159 healthy** (>=75 fps, i.e. >=1.25x real time), range 77 (88games) to 195
+  (cheekyms).
+- **18 marginal (60-75 fps)** — will not reliably hold 60 Hz once throttle and
+  OSD are in play: ultraman 61, dynduke 62, sichuan2 62, aafb 64, aztarac 66,
+  punchout 67, jedi 68, lastduel 69, thunderj 69, **mk 71**, ataxx 71, wardner 71,
+  tail2nos 72, batman 72, supbtime 73, hydra 73, blockout 75, eprom 70.
+- **11 below real time**: cheyenne 27 (exidy440), archrivl 34 (mcr68), gunbird 41
+  (psikyo), shanghai 41, cchasm 42, 720 44 (atarisy2), toobin 47, turbo 51,
+  quantum 56, cischeat 57, wecleman 57.
+- **1 crash**: armora (cinemat vector hardware) segfaults right after
+  `set_video_mode` — the only driver-specific crash left after the Cyclone fix.
+- **7 romsets not in the Ghostware collection** under their 0.37b5 setname, so
+  untested: argus, karianx (deniam), firetrk, kncljoe, momoko, skyfox, hardhead
+  (suna8).
+
+The slow families reproduce across independent representatives, which is what
+makes the family-level grouping trustworthy: exidy440 (crossbow 25, cheyenne 27),
+mcr68 (xenophob 33, archrivl 34) and atarisy2 (paperboy 42, 720 44) each came out
+slow twice from different games. **Psikyo at 41 fps is a notable miss** — it is
+named as a gap target in CLAUDE.md.
+
+**Next:** profile the below-real-time families (the operator deferred this);
+`mk` at 71 fps deserves attention as a marquee title. Note the earlier
+"1.6-2.1x real time" figures for mk/nbajam came from the no-core-loaded bench and
+are not comparable — the present path costs ~3.5x (see `docs/bench-results.md`).
+
+**Superseded:** extend the sweep across the remaining ~160 uncovered families, then
 judge the three slow families (profile, or ship with a lower `samplerate` /
 `-frameskip`).
 
