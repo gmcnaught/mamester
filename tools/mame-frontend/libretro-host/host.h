@@ -21,6 +21,7 @@
 #include <stdbool.h>
 
 #include "libretro.h"
+#include "nv_present.h"
 
 /* --- environment (host_env.c) -------------------------------------------- */
 
@@ -61,6 +62,49 @@ void    host_video_refresh(const void *data, unsigned width, unsigned height,
 void          host_video_set_refresh(double hz);
 unsigned long host_video_shown(void);   /* frames presented                   */
 unsigned long host_video_duped(void);   /* NULL frames re-published as dupes  */
+
+/* --- present (host_present.c) --------------------------------------------- */
+
+/* Nonzero when MISTER_THREADED_PRESENT put the present on a worker thread.
+ *
+ * READ IT AT THE CALL SITE and go straight to nv_present when it is 0. Threading
+ * is meant to be a per-driver carve-out for drivers that cannot reach 60 fps any
+ * other way -- the same shape as nv_present.c's "8bpp stages, 16bpp writes DDR
+ * direct" split -- so OFF is the common case and has to be the cheap one:
+ * measured, galaga throttled is identical either way with 0 present-dropped, so
+ * threading correctly buys nothing where there is headroom. Nothing in
+ * host_present.c may run in that case -- no staging allocation, no copy, no
+ * mutex, no thread.
+ *
+ * Written once by host_present_init(), before retro_init(); read-only after,
+ * including by the worker. */
+extern int host_present_on;
+
+/* Start the worker if the knob is set and the present is live. Must run after
+ * nv_open() and before the first frame -- the core can present from inside
+ * retro_load_game(). Leaves host_present_on at 0 and creates no thread when the
+ * knob is unset, which is the default. */
+void          host_present_init(void);
+/* The three present entry points, valid ONLY when host_present_on is nonzero.
+ * They are not a wrapper around nv_present for the OFF case: when the knob is
+ * off, call nv_set_mode/nv_frame/nv_frame_repeat directly. */
+void          host_present_mode(int width, int height, double refresh_hz,
+                                int rot, nv_format fmt);
+void          host_present_frame(const void *src, int pitch_bytes,
+                                 int src_w, int src_h);
+void          host_present_repeat(void);
+
+/* Block until the worker has finished everything queued. Needed before reading
+ * nv_frame_count() for the exit summary, and it is where the deferred present
+ * cost lands rather than in the measured loop. */
+void          host_present_drain(void);
+
+/* Join the worker. MUST happen before nv_close() unmaps /dev/mem. */
+void          host_present_stop(void);
+
+/* Frames the queue discarded because the worker was still busy. Zero unless
+ * MISTER_THREADED_PRESENT is on. */
+unsigned long host_present_drops(void);
 
 /* --- audio (host_audio.c) ------------------------------------------------- */
 

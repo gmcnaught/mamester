@@ -64,7 +64,10 @@ CPPFLAGS := -I$(CORE)/src/libretro-common/include -I$(BACKEND)
 # zlib is inside the archive (Makefile.common: src/lib/zlib/*). libasound comes
 # from libasound2-dev:armhf in Dockerfile.cross-armhf and is present on the
 # MiSTer rootfs, so it stays a shared dependency like mame4all's.
-LDLIBS := -lm -lasound
+#
+# -lpthread is for host_present.c's worker. glibc only folded pthread into libc
+# in 2.34; this toolchain is 2.31, so the explicit link is required.
+LDLIBS := -lm -lasound -lpthread
 
 # --- libretro-common, which the archive deliberately does not contain -------
 #
@@ -113,7 +116,7 @@ LRC_CFLAGS   := $(CFLAGS) -fsigned-char -Wno-unused-parameter
 
 LRC_OBJ := $(addprefix lrc/,$(notdir $(LRC_SRC:.c=.o)))
 
-OBJS := host_main.o host_env.o host_video.o host_input.o \
+OBJS := host_main.o host_env.o host_video.o host_present.o host_input.o \
         host_audio.o host_throttle.o nv_present.o
 
 .PHONY: all clean
