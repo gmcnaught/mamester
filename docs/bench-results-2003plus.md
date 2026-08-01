@@ -152,6 +152,16 @@ same boundary:
 
 gng now renders its full BEST RANKING table; contra its background.
 
+**Every fps figure in this document that predates this fix was measured with
+the unpinned core options in an undefined state, and none of them should be
+treated as a baseline.** Post-fix spot checks, present on, `-nosound`, 600
+frames: `gng` 146.7 against 146.2 before (noise), but `galaga` 159.5 against
+149.0, about 7%. Those are single non-interleaved samples so no delta is being
+claimed, but 7% is outside the 1.5–4% floor and cannot be waved away — the
+options now take their real defaults, so the emulator's workload may genuinely
+differ. Task 8 re-measures everything interleaved anyway; the point here is that
+the Task 5 early-answer table is a *direction*, not a baseline.
+
 **The general lesson for this host:** every remaining `return false` in
 `host_env.c` deserves the same question — does the core have an `else` for it?
 For `GET_VARIABLE` it did not, and the failure was silent and graphical rather
@@ -198,6 +208,8 @@ ALSA reaches `state: RUNNING` with `/dev/MrAudio` held by `mame2003` and a
 1706-frame prefill. **Still needing a human at the device: whether it is
 actually audible, and whether every button does what it should.** No automated
 check substitutes for either.
+
+**Operator-confirmed 2026-08-01: audio is audible and the controls work.**
 
 ---
 
