@@ -9,9 +9,10 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 
 - Stages 1–7 complete and **hardware-verified on `.81`**; Stage 7 on branch
   `stage7-launch`. Stage 8 (driver triage) is next.
-- **A game launches from the MiSTer menu**: pick an `_MAMESTer/*.mgl` shortcut,
-  or load the core and pick a romset from the OSD ("Load Game"). Video at the
-  driver's native geometry, pad input, and sound all work.
+- **A game launches from the MiSTer menu or from inside the core**: pick an
+  `_MAMESTer/*.mgl` shortcut, or load the core and pick the same file from the
+  OSD ("Load Game" → `Games/`). Video at the driver's native geometry, pad input
+  and sound all work.
 - **Games present at their native geometry**: gng at 256×224, mk at 416×254
   @53.2 Hz — no center-clip, correct colors.
 - Fabric = MiSTer_OpenBOR rebranded (RGB565 `0x3A000000` reader + `sys_top` scaler).
@@ -265,6 +266,13 @@ one `.mgl` per romset into `/media/fat/_MAMESTer` and symlinks
 - from the core's **"Load Game"** picker, selecting the same file mounts the
   `.mgl` itself and `game_lib.sh` reads the romset out of its XML.
 
+A "Games" symlink to `_MAMESTer` sits in BOTH the core home and the romset
+directory, because MiSTer starts a mount browser at the directory of the last
+mounted file — after any `.mgl` launch that is the romset directory, not the
+core home. The romset listing is never selectable there: the browser fakes every
+`.zip` into a directory whatever the CONF_STR extension filter says, so dropping
+`ZIP` from `SC0` would not hide them either.
+
 Titles come from `mame -listfull`. Space cost: exFAT allocates 128 KB per file
 here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
 
@@ -291,16 +299,12 @@ here, so `--all` over 940 romsets burns ~120 MB — generate a subset.
    Main_MiSTer stamps at core load: a `.s0` newer than that belongs to this
    session and is acted on; anything older is a leftover and ignored.
 
-**Verified on device**: daemon spawns the handler on core load; a `.s0` write
-launches gng at 60.0 fps; `.mgl` shortcuts launch Contra and Galaga from MiSTer's
-main menu (user-confirmed), including the pick-before-manager-start path;
-selecting an `.mgl` *as* the mount resolves and launches with an absolute
-`-rompath`; switching picks kills the running game and starts the new one;
-per-game opts reach MAME. `tests/game_manager_test.sh` covers selection and
-lifecycle on the host (31 cases). **Still unconfirmed by hand: choosing an entry
-in the core's own "Load Game" browser.** The `.s0` content that produces has been
-tested by writing it directly, but the browser listing an `.mgl` under `Games/`
-needs the RBF carrying `SC0,MGLZIP` in front of a human.
+**Verified on device**, both entry points user-confirmed: loading a game from
+MiSTer's main menu (`_MAMESTer`) and from the core's own "Load Game" picker
+(`Games/`). Also: the daemon spawns the handler on core load; a `.s0` write
+launches gng at 60.0 fps; the pick-before-manager-start path works; switching
+picks kills the running game and starts the new one; per-game opts reach MAME.
+`tests/game_manager_test.sh` covers selection and lifecycle on the host (31 cases).
 
 **Ledger note:** `_MAMESTer/*.mgl` and `games/mame/opts/*.opt` are device-side
 user data. The repo ships `games/mame/opts/README.md` documenting the flags.
