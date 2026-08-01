@@ -9,10 +9,14 @@
  * at 89 MB/s (nv_present.c's header), against several hundred MB/s for the
  * cached-to-cached copy this file pays instead.
  *
- * DEFAULT OFF. Every fps figure measured so far was measured with the direct
- * path, and with the knob unset host_present_frame() is literally a call to
- * nv_frame() on the emulation thread -- same code, same order, same numbers. The
- * two arms are meant to be benchmarked interleaved against each other.
+ * DEFAULT OFF, and off means NOTHING IN THIS FILE RUNS. host_video.c branches on
+ * host_present_on and calls nv_present directly, so the disabled path has no
+ * staging allocation, no copy, no mutex and no thread in it -- not even a call
+ * into this translation unit. That is deliberate twice over: threading is meant
+ * to be a per-driver carve-out for the drivers that cannot reach 60 fps any
+ * other way (galaga throttled measures identical either way, 0 present-dropped),
+ * so OFF is the common case; and it keeps every fps figure already measured
+ * reproducible against a binary that also contains this file.
  *
  * The shape:
  *
@@ -78,7 +82,9 @@ static int              in_flight;        /* worker is inside an nv_* call     *
 static int              quit;
 static unsigned long    drops;
 
-static int              threaded;         /* off => direct nv_* calls          */
+/* Declared in host.h. Written once by host_present_init() before retro_init(),
+ * read-only afterwards, so host_video.c's per-frame read needs no barrier. */
+int                     host_present_on;
 static nv_format        cur_fmt = NV_FMT_RGB565;  /* emulation thread only     */
 
 /* Two slots: the emulator fills N+1 while the worker presents N. A third would
@@ -154,8 +160,14 @@ void host_present_init(void)
 {
     const char *e = getenv("MISTER_THREADED_PRESENT");
 
-    if (!e || strtol(e, NULL, 10) == 0)
+    /* Logged in BOTH directions, always. A run that hangs on the device is
+     * diagnosed from its log, and the first question is which arm it was; a
+     * silent default answers that with an absence, which is not an answer. */
+    if (!e || strtol(e, NULL, 10) == 0) {
+        fprintf(stderr, "MISTER-HOST: present on the emulation thread "
+                        "(MISTER_THREADED_PRESENT off)\n");
         return;
+    }
 
     /* With the present disabled (-nopresent / MISTER_NO_NATIVE) every nv_ call
      * returns immediately, so a worker would only add a staging copy to a run
@@ -172,13 +184,13 @@ void host_present_init(void)
         return;
     }
 
-    threaded = 1;
+    host_present_on = 1;
     fprintf(stderr, "MISTER-HOST: threaded present (worker owns nv_present)\n");
 }
 
 void host_present_drain(void)
 {
-    if (!threaded) return;
+    if (!host_present_on) return;
     pthread_mutex_lock(&lock);
     wait_idle_locked();
     pthread_mutex_unlock(&lock);
@@ -186,19 +198,19 @@ void host_present_drain(void)
 
 /* Must run before nv_close() unmaps /dev/mem: the worker dereferences that
  * mapping inside nv_frame() and an unmap under it is a segfault at exit, not a
- * hang. After the join `threaded` is 0, so a late frame -- retro_unload_game()
- * is entitled to present one -- takes the direct path and is presented rather
- * than dropped. */
+ * hang. Clearing host_present_on after the join is what makes a late frame --
+ * retro_unload_game() is entitled to present one -- go straight to nv_present
+ * from host_video.c rather than into a queue with no worker behind it. */
 void host_present_stop(void)
 {
-    if (!threaded) return;
+    if (!host_present_on) return;
 
     pthread_mutex_lock(&lock);
     quit = 1;
     pthread_cond_signal(&wake);
     pthread_mutex_unlock(&lock);
     pthread_join(worker, NULL);
-    threaded = 0;
+    host_present_on = 0;
 
     free(slot_buf[0]); slot_buf[0] = NULL; slot_bytes[0] = 0;
     free(slot_buf[1]); slot_buf[1] = NULL; slot_bytes[1] = 0;
@@ -217,11 +229,6 @@ void host_present_mode(int width, int height, double refresh_hz, int rot,
                        nv_format fmt)
 {
     cur_fmt = fmt;      /* emulation thread only: it sizes the staging copy */
-
-    if (!threaded) {
-        nv_set_mode(width, height, refresh_hz, rot, fmt);
-        return;
-    }
 
     pthread_mutex_lock(&lock);
     wait_idle_locked();
@@ -242,7 +249,6 @@ void host_present_frame(const void *src, int pitch_bytes, int src_w, int src_h)
     int    slot, y;
     size_t row, need, rowcopy;
 
-    if (!threaded) { nv_frame(src, pitch_bytes, src_w, src_h); return; }
     if (!src || src_w <= 0 || src_h <= 0 || pitch_bytes <= 0) return;
 
     /* The slot is compacted to width*bpp rather than carrying the source's own
@@ -305,8 +311,6 @@ void host_present_frame(const void *src, int pitch_bytes, int src_w, int src_h)
 
 void host_present_repeat(void)
 {
-    if (!threaded) { nv_frame_repeat(); return; }
-
     pthread_mutex_lock(&lock);
     if (job.kind == JOB_FRAME) {
         /* "Show the previous frame again" is older news than a real frame that

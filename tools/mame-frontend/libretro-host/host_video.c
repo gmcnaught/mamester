@@ -146,14 +146,23 @@ void host_video_refresh(const void *data, unsigned width, unsigned height,
 {
     /* A NULL frame means "show the previous one again". The counter must still
      * advance or the reader's stale-frame watchdog blanks the screen. */
-    if (!data) { frames_duped++; host_present_repeat(); return; }
+    if (!data) {
+        frames_duped++;
+        if (host_present_on) host_present_repeat();
+        else                 nv_frame_repeat();
+        return;
+    }
 
     if (!mode_valid || width != cur_w || height != cur_h) {
         cur_w = width;
         cur_h = height;
         mode_valid = 1;
-        host_present_mode((int)width, (int)height, cur_refresh,
-                          (int)(cur_rotation * 90), cur_fmt);
+        if (host_present_on)
+            host_present_mode((int)width, (int)height, cur_refresh,
+                              (int)(cur_rotation * 90), cur_fmt);
+        else
+            nv_set_mode((int)width, (int)height, cur_refresh,
+                        (int)(cur_rotation * 90), cur_fmt);
     }
 
     /* pitch is a BYTE stride and libretro cores do not guarantee it equals
@@ -168,12 +177,23 @@ void host_video_refresh(const void *data, unsigned width, unsigned height,
     if (src_stats_at && frames_shown + 1 == src_stats_at)
         host_src_stats(data, width, height, pitch, cur_fmt);
 
-    /* host_present_frame(), not nv_frame(): with MISTER_THREADED_PRESENT the
-     * worker does the DDR write and `data` cannot be handed over as-is, because
-     * frame_convert() rewrites video_buffer every frame and the depth-15/32
-     * bypass (video.c:459) passes the game bitmap the driver is still drawing
-     * into. host_present.c copies it. */
-    host_present_frame(data, (int)pitch, (int)width, (int)height);
+    /* The branch is HERE, not inside host_present.c, and it is not a style
+     * preference. When MISTER_THREADED_PRESENT is off this has to be the same
+     * instruction sequence the host had before the worker existed -- straight
+     * into nv_frame with no allocation, no staging copy, no mutex and no second
+     * thread anywhere in the process. Threading is a carve-out for the drivers
+     * that cannot reach 60 fps otherwise, so the disabled path is the one that
+     * runs for almost every game and the one every measured fps figure belongs
+     * to.
+     *
+     * With it on, `data` cannot be handed to the worker as-is: frame_convert()
+     * rewrites video_buffer every frame and the depth-15/32 bypass
+     * (video.c:459) passes the game bitmap the driver is still drawing into, so
+     * host_present.c copies it into a slot it owns. */
+    if (host_present_on)
+        host_present_frame(data, (int)pitch, (int)width, (int)height);
+    else
+        nv_frame(data, (int)pitch, (int)width, (int)height);
     frames_shown++;
 }
 

@@ -18,9 +18,12 @@
  * figure is comparable to mame4all run the same way and to nothing else.
  *
  * MISTER_THREADED_PRESENT=1 moves that cost to the second A9 core
- * (host_present.c). Off by default so every figure already measured stays
- * reproducible; the exit line's `present-dropped` count is how much of the
- * threaded arm's speed came from not presenting at all.
+ * (host_present.c). Off by default, and off means host_video.c calls nv_present
+ * directly with nothing in between; the exit line's `present-dropped` count is
+ * how much of the threaded arm's speed came from not presenting at all.
+ *
+ * MISTER_LOOP_TRACE=N prints a flushed heartbeat every N frames, for localising
+ * a hang that only reproduces on the device.
  *
  * The fps line format (`MISTER-BENCH fps=%.1f`) matches mame4all's so that
  * gap-triage.sh's parser works unchanged for both engines.
@@ -67,6 +70,7 @@ int main(int argc, char **argv)
     const char *rompath = "roms2003";
     const char *env_frames;
     unsigned long frame_limit = 0;
+    unsigned long trace_every = 0;
     char rom_path[1024];
     struct retro_system_info sysinfo;
     struct retro_system_av_info av;
@@ -117,6 +121,14 @@ int main(int argc, char **argv)
      * wins when both are given. */
     if (!frame_limit && (env_frames = getenv("MISTER_BENCH_FRAMES")) != NULL)
         frame_limit = strtoul(env_frames, NULL, 10);
+
+    /* MISTER_LOOP_TRACE=N: a flushed heartbeat every N frames. A run that hangs
+     * inside the loop only does it on the device, so the log has to be able to
+     * say where it stopped: the last MISTER-TRACE line names the frame the loop
+     * did not get past, and the counters beside it say whether that frame had
+     * already reached the present. One compare per frame when unset. */
+    if ((env_frames = getenv("MISTER_LOOP_TRACE")) != NULL)
+        trace_every = strtoul(env_frames, NULL, 10);
 
     snprintf(rom_path, sizeof rom_path, "%s/%s.zip", rompath, setname);
 
@@ -220,6 +232,18 @@ int main(int argc, char **argv)
 
     t0 = now_ns();
     for (f = 0; !frame_limit || f < frame_limit; f++) {
+        if (trace_every && f % trace_every == 0) {
+            /* nv_frame_count() is the worker's counter when threading is on, so
+             * this read is unsynchronised. It is a diagnostic line: a stale
+             * value costs nothing, and taking the present mutex here would put
+             * the emulation thread behind the worker, which is the one thing
+             * the design refuses to do. */
+            fprintf(stderr, "MISTER-TRACE frame=%lu presented=%lu duped=%lu "
+                            "published=%lu audio=%lu\n",
+                    f, host_video_shown(), host_video_duped(),
+                    nv_frame_count(), host_audio_frames());
+            fflush(stderr);
+        }
         retro_run();
         if (throttle) host_throttle_wait();
     }

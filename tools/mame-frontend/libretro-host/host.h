@@ -65,14 +65,29 @@ unsigned long host_video_duped(void);   /* NULL frames re-published as dupes  */
 
 /* --- present (host_present.c) --------------------------------------------- */
 
-/* Every nv_present call the video path makes goes through these four, so that
- * MISTER_THREADED_PRESENT can move them onto a worker thread without host_video.c
- * knowing. With the knob off they are direct calls on the emulation thread and
- * the behaviour is bit-for-bit what it was before the thread existed.
+/* Nonzero when MISTER_THREADED_PRESENT put the present on a worker thread.
  *
- * host_present_init() must run after nv_open() and before the first frame -- the
- * core can present from inside retro_load_game(). */
+ * READ IT AT THE CALL SITE and go straight to nv_present when it is 0. Threading
+ * is meant to be a per-driver carve-out for drivers that cannot reach 60 fps any
+ * other way -- the same shape as nv_present.c's "8bpp stages, 16bpp writes DDR
+ * direct" split -- so OFF is the common case and has to be the cheap one:
+ * measured, galaga throttled is identical either way with 0 present-dropped, so
+ * threading correctly buys nothing where there is headroom. Nothing in
+ * host_present.c may run in that case -- no staging allocation, no copy, no
+ * mutex, no thread.
+ *
+ * Written once by host_present_init(), before retro_init(); read-only after,
+ * including by the worker. */
+extern int host_present_on;
+
+/* Start the worker if the knob is set and the present is live. Must run after
+ * nv_open() and before the first frame -- the core can present from inside
+ * retro_load_game(). Leaves host_present_on at 0 and creates no thread when the
+ * knob is unset, which is the default. */
 void          host_present_init(void);
+/* The three present entry points, valid ONLY when host_present_on is nonzero.
+ * They are not a wrapper around nv_present for the OFF case: when the knob is
+ * off, call nv_set_mode/nv_frame/nv_frame_repeat directly. */
 void          host_present_mode(int width, int height, double refresh_hz,
                                 int rot, nv_format fmt);
 void          host_present_frame(const void *src, int pitch_bytes,
