@@ -1,3 +1,7 @@
+/* _GNU_SOURCE before any header: cpu_set_t and pthread_setaffinity_np are GNU
+ * extensions and glibc hides them otherwise. */
+#define _GNU_SOURCE
+
 /* host_present.c -- MISTER_THREADED_PRESENT: the DDR present on the second core.
  *
  * The HPS is a dual-core Cortex-A9 and MAME 0.78 is single-threaded, so one core
@@ -182,6 +186,37 @@ void host_present_init(void)
         fprintf(stderr, "MISTER-HOST: present worker failed to start, "
                         "presenting on the emulation thread\n");
         return;
+    }
+
+    /* Pin the two threads to opposite cores rather than leaving it to the
+     * scheduler. The whole point of this path is that the DDR write happens on
+     * the OTHER A9 while the emulator runs; if Linux puts them on the same
+     * core the code is correct and buys nothing, and the difference is
+     * invisible in the fps number. It is also not observable after the fact:
+     * tick-based accounting undercounts a worker that runs in ~2 ms bursts and
+     * sleeps between them, so /proc reported it using ~0 CPU while it was
+     * demonstrably publishing 1200 frames. Pinning removes the question.
+     *
+     * Failures are non-fatal and reported: an unpinned run still presents
+     * correctly, it just stops being a controlled measurement, and a benchmark
+     * that silently lost its premise is worse than one that says so.
+     * MISTER_PRESENT_AFFINITY=0 disables pinning. */
+    if (!getenv("MISTER_PRESENT_AFFINITY") ||
+        getenv("MISTER_PRESENT_AFFINITY")[0] != '0') {
+        cpu_set_t emu, wrk;
+        int rc_e, rc_w;
+        CPU_ZERO(&emu); CPU_SET(0, &emu);
+        CPU_ZERO(&wrk); CPU_SET(1, &wrk);
+        rc_e = pthread_setaffinity_np(pthread_self(), sizeof emu, &emu);
+        rc_w = pthread_setaffinity_np(worker,         sizeof wrk, &wrk);
+        if (rc_e || rc_w)
+            fprintf(stderr, "MISTER-HOST: WARNING affinity not set "
+                            "(emu=%d worker=%d); the two threads may share a "
+                            "core and the threaded arm means nothing\n",
+                    rc_e, rc_w);
+        else
+            fprintf(stderr, "MISTER-HOST: emulation pinned to cpu0, "
+                            "present worker to cpu1\n");
     }
 
     host_present_on = 1;
