@@ -38,9 +38,15 @@ DOCKER := docker run --rm -v "$(REPO):/repo" \
 # `make`, not $(MAKE): $(MAKE) is the host's absolute path (on macOS,
 # /Library/Developer/CommandLineTools/usr/bin/make), which does not exist in the
 # container.
+#
+# $(MAKEOVERRIDES) forwards the command-line assignments -- without it,
+# `make BIN=mame2003-o2 ARCHIVE=...` silently rebuilds the DEFAULT target inside
+# the container and reports success. Note that an ARCHIVE passed this way must
+# be a CONTAINER path (/repo/vendor/...), because that is where the bind mount
+# puts the repo.
 .PHONY: all clean image
 all clean: image
-	$(DOCKER) make $@
+	$(DOCKER) make $@ $(MAKEOVERRIDES)
 
 image:
 	@docker image inspect $(IMAGE) >/dev/null 2>&1 || \

@@ -56,3 +56,6 @@ tools/mister/ddr-write-bench
 # *.o already covers lrc/, this catches the extensionless ELF)
 tools/mame-frontend/libretro-host/mame2003
 tools/mame-frontend/libretro-host/lrc/
+
+# A/B host binaries built against a non-default archive (mame2003-o2, -o3)
+tools/mame-frontend/libretro-host/mame2003-*

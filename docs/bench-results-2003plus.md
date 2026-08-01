@@ -58,6 +58,64 @@ Task 8, not the light ones.
 | different romsets — 0.37b5 sets from `roms/` against the 2003-plus reference sets from `roms2003/` — though the same three games | unknown |
 
 The first two are the reason Task 8 benches Cyclone/DrZ80 on **and** off rather
-than taking the default; the third is the reason an `-O3` arm is needed if the
-engine gap ever comes out close. `mame2003-plus_cyclone_mode` was left unpinned
-for this run, so it took the core's own default — pin it before Task 8.
+than taking the default. The third is settled below. `mame2003-plus_cyclone_mode`
+was left unpinned for this run, so it took the core's own default — pin it
+before Task 8.
+
+---
+
+## `-O2` vs `-O3` — the NEON arm
+
+Upstream builds 2003-plus at `-O2`; mame4all builds at `-O3` (`Makefile.mister:42`).
+That was recorded as an asymmetry in the table above, and it is a bigger one than
+an `-O` level usually is: **gcc 10.2.1 enables `-ftree-loop-vectorize` and
+`-ftree-slp-vectorize` at `-O3` and not at `-O2`** (they only moved to `-O2` in
+gcc 12, under the very-cheap cost model). At `-O2` the `-mfpu=neon` this build
+passes therefore buys little beyond instruction selection — the NEON unit is
+essentially idle.
+
+Confirmed at the codegen level. Same source, same toolchain, only `-O` differs:
+
+| | SIMD-typed instructions | `.text` |
+|---|---:|---:|
+| `src/palette.o` at `-O2` | 19 | 13,309 |
+| `src/palette.o` at `-O3` | **307** | 30,813 |
+| whole `mame2003` binary at `-O2` | 10,678 | 18,114,614 |
+| whole `mame2003` binary at `-O3` | **39,883** | 19,995,790 |
+
+3.7× the SIMD instructions, +10.4% text. And it changes **nothing** measurable:
+
+| game | `-O3` (fps) | `-O2` (fps) | delta |
+|---|---:|---:|---:|
+| `gng`    | 179.9 / 181.8 / 178.5 → **180.1** | 180.6 / 181.5 / 181.8 → **181.3** | −0.7% |
+| `contra` | 101.8 / 100.0 / 100.9 → **100.9** |  99.8 /  99.6 / 100.3 →  **99.9** | +1.0% |
+| `galaga` | 200.9 / 206.6 / 203.6 → **203.7** | 202.0 / 198.3 / 193.6 → **198.0** | +2.9% |
+
+Interleaved, order alternating per repetition, identical hosts and romsets, the
+archive's `-O` level the only difference. Every delta is inside the device's
+1.5–4% noise floor, so **no difference is being claimed in either direction** —
+the protocol does not license reporting one.
+
+**Read:** auto-vectorised NEON is not a lever for this workload. In hindsight
+that follows from what MAME 0.78 spends its time on — CPU-emulation interpreters,
+which are dependent chains of loads, table lookups and unpredictable branches.
+The vectoriser needs countable, independent, contiguous loops, and an
+instruction-set interpreter has almost none. The 39,883 SIMD instructions are
+overwhelmingly in cold code: driver init, palette construction, blit setup, and
+SLP-vectorised struct copies.
+
+Two consequences:
+
+- **The `-O` asymmetry is not the explanation for the engine gap.** The 0.29–0.60×
+  in the table above was measured with the `-O2` archive; at `-O3` it is
+  unchanged. mame4all's 1.7–3.4× lead over 0.78 is the emulator, not the flags.
+- **`-O3` is kept as the default** (`tools/build-m2003p.sh`, `OPT=-O2` to revert).
+  It costs nothing measurable, and it removes the asymmetry from the comparison
+  rather than leaving it to be argued about.
+
+Not tried, and on this evidence not worth a 21-minute rebuild: `-ffast-math`.
+mame4all has it, and on ARMv7 it is what additionally unlocks vectorisation of
+*floating-point* loops (NEON is not IEEE-754 there, so gcc refuses without
+`-funsafe-math-optimizations`). But if integer vectorisation moved nothing,
+floating-point vectorisation of a mostly-integer emulator will not either, and
+`-ffast-math` changes results.
