@@ -273,6 +273,102 @@ check substitutes for either.
 
 ---
 
+## Threading the present: +9.7%, and what it actually converts
+
+`MISTER_THREADED_PRESENT=1` moves the DDR write to the second A9. A/B over all
+85 SLOW+MARGINAL families, interleaved with alternating order, unthrottled, 600
+frames — the same configuration as the 288-family sweep so the OFF column is
+comparable to it.
+
+| | |
+|---|---|
+| mean | **+9.7%** |
+| median | +9.0% |
+| range | −3.8% to **+27.9%** |
+| `present-dropped` | **0 in all 85 runs** |
+
+That last row is the one that makes the rest trustworthy. An unthrottled
+threaded run can raise fps by *not presenting* — the worker saturates and the
+queue discards — so a gain with a large drop count is not a gain. Zero drops
+across every run means every frame still reached the screen.
+
+**Affinity is mandatory, not an optimisation.** Unpinned, the same games
+measured +2.2% mean; pinned, +9.7%. `cairblad` went +7.4% → +13.5%. Linux was
+putting both threads on one core often enough to halve the benefit, and it was
+not observable after the fact: tick-based accounting reported the worker using
+**0 jiffies over 5 s** while it was demonstrably publishing all 1200 frames with
+0 dropped, because it runs in ~2 ms bursts and sleeps between them.
+
+**The gain scales with pixels pushed, not driver weight.** The largest wins are
+the large-geometry drivers, where the present is a big share of frame time:
+`paperboy` at 512×384 gained +29%, `mk` at 400×254 +20%, against +2% on light
+drivers. That is also why the original +22% projection was wrong — it was
+extrapolated from `galaga`, a 288×224 driver, and then measured unpinned.
+
+### Judged against each driver's own native rate
+
+The sweep's fixed 60 fps bar is wrong for drivers that do not run at 60.
+`cheesech` is 50.27 Hz and was already clearing at 61.9 fps with threading off;
+`mk` is 53.20 Hz. Re-judged against `retro_get_system_av_info`'s reported rate,
+weighted by the parent romsets each family represents:
+
+| | families | parents | share |
+|---|---:|---:|---:|
+| clears its native rate unaided | 189 | 448 | 56.7% |
+| **clears only with threading** | **12** | **44** | **5.6%** |
+| below native even threaded | 34 | 175 | 22.2% |
+| renders nothing (suspect, unverified) | 41 | 98 | 12.4% |
+| ROM load failed / absent | 12 | 25 | 3.2% |
+
+**Shippable: 201 families / 492 parents / 62.3%.**
+
+The twelve threading converts, all of them within ~10% of their target before it:
+
+| game | native | off → on |
+|---|---:|---|
+| `orbit` | 60.00 | 56.9 → 72.8 |
+| `spbactn` | 60.00 | 57.2 → 69.4 |
+| `policetr` | 60.00 | 58.9 → 64.0 |
+| `beathead` | 60.00 | 55.6 → 64.0 |
+| `thndzone` | 60.00 | 58.7 → 63.5 |
+| `tunhunt` | 60.00 | 59.7 → 62.8 |
+| `cairblad` | 60.00 | 56.4 → 62.7 |
+| `gogomile` | 60.00 | 57.9 → 62.7 |
+| `rjammer` | 60.00 | 59.7 → 62.4 |
+| `motofren` | 60.00 | 54.0 → 60.6 |
+| `avengrgs` | 58.00 | 53.0 → 59.3 |
+| `hangzo` | 58.00 | 53.4 → 58.8 |
+
+Threading is worth having and worth restricting to these — a per-driver
+carve-out in the shape of `nv_present.c`'s existing 8bpp-stages /
+16bpp-writes-direct split. It converts 12 families; it does not touch `alien3`
+(25.2) or `crusnusa` (14.7), which need 140% and 300%.
+
+### Can 2003-Plus absorb mame4all's cases? Not the heavy ones
+
+| game | native | 2003-Plus off | + threading | mame4all | ratio |
+|---|---:|---:|---:|---:|---:|
+| `paperboy` | 60.00 | 46.9 | **60.4** | 80.2 | 0.75× |
+| `mk` | 53.20 | 46.6 | **55.9** | 78.1 | 0.72× |
+
+Both **fail** unthreaded and clear only marginally with it — `paperboy` by
+0.4 fps. These are 600-frame attract-mode figures and gameplay is heavier, so
+that is not a margin to ship on. mame4all stays: at 0.72–0.75× on exactly the
+drivers it was chosen for, it is not redundant.
+
+### The larger lever, unexploited
+
+The framework holds **~1.16 of the 2 cores at idle** — measured 42% idle of two
+cores with nothing running: `Main_MiSTer` plus `Master_Daemon.sh`,
+`game_manager.sh` and `solarus_daemon.sh`, each spawning `sleep 1` in a loop.
+Reclaiming even part of that dwarfs threading's 9.7%. The Dreamster approach
+(kill `Main_MiSTer` and replace it) trades away the OSD, the menu and
+`/dev/MiSTer_cmd` — which this project's launch harness and every screenshot
+depend on — so it is an architectural fork rather than a knob. Recorded as a
+costed option, not a plan.
+
+---
+
 ## `-O2` vs `-O3` — the NEON arm
 
 Upstream builds 2003-plus at `-O2`; mame4all builds at `-O3` (`Makefile.mister:42`).
