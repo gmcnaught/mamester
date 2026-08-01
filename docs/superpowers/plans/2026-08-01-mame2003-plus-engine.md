@@ -33,10 +33,32 @@ POSIX sh (device-side triage), ALSA, `/dev/mem` MMIO.
   `echo screenshot > /dev/MiSTer_cmd`, newest PNG in
   `/media/fat/screenshots/MAMESTer/`. MAME **ignores SIGTERM** — use
   `timeout -s KILL` and `killall -9`.
-- **Device is a shared resource.** Another session (`sweep`) also benchmarks on
-  `.81`. Before any device step, confirm nothing of theirs is running
-  (`ssh root@192.168.20.81 'ps w | grep -E "mame|docker"'`). An orphaned busy-loop
-  pinning one of the two A9 cores silently corrupted an entire earlier sweep.
+- **Device is a shared resource, and orphaned processes are the standing hazard.**
+  Three separate orphans appeared in one session, each from the same cause: killing
+  a local wrapper (an ssh client, a background-task runner) does **not** kill the
+  remote command or the Docker container it started. One pinned a core through an
+  entire 196-family sweep before anyone noticed.
+
+  **Do not use load average to detect this.** Measured on `.81`: load is ~1.4 both
+  with an orphan (1.51) and idle (1.24–1.44). Three polling daemons —
+  `Master_Daemon.sh`, `solarus_daemon.sh` and `game_manager.sh`, each spawning
+  `sleep 1` in a loop and stat-ing the filesystem — hold it there permanently, so
+  "non-zero load means something is orphaned" fires every single time.
+
+  Check for unexpected *named* processes instead, and confirm nothing holds CPU:
+
+  ```bash
+  ssh root@192.168.20.81 'ps w | grep -vE "\[|grep|sleep 1|sshd|agetty|dhcpcd|\
+  wpa_supplicant|ntpd|dbus|proftpd|gpm|udevd|bluetoothd|syslogd|klogd|init|\
+  MiSTer|Master_Daemon|solarus_daemon|game_manager|remote.sh|ps w"'
+  ssh root@192.168.20.81 'top -b -n2 -d1 | grep -A6 "PID  PPID"'   # 2nd sample
+  ```
+
+  The first should print nothing. In the second, every process should show 0% CPU —
+  `top`'s *first* sample is averaged since boot and will mislead, which is why
+  `-n2` is not optional. The known-good idle set with a core loaded is: `MiSTer`,
+  `game_manager.sh`, `Master_Daemon.sh`, `solarus_daemon.sh`, `remote.sh`, and the
+  usual system daemons.
 - **Benchmark protocol is non-negotiable** (`docs/bench-results.md`): per-cell spread
   on this device is 1.5–4%, and *cell order alone* moved one arm by 2%. Any
   comparison must be **interleaved, with alternating order, repeated**. Two blocks
