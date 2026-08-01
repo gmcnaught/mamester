@@ -184,6 +184,49 @@ than loud.
 
 ---
 
+## The ASM CPU cores: validated, and they ship on
+
+mame4all runs with **both** Cyclone and DrZ80 disabled — Cyclone segfaulted on
+entry for every 68000 driver and DrZ80 crashed in `DrZ80Run`
+(`0002-default-asm-cores-off.patch`). Those are *different vintages of the same
+cores*, and **that verdict does not transfer**: 2003-plus's copies work here.
+
+`cyclone_mode=default` is not "on". It is mode 6, a **per-driver curated
+whitelist** (`frontend_list.h`, 2,286 entries, `check_list()` at
+`mame2003.c:1647`). Anything not listed gets 0 — no ASM cores at all — and some
+drivers are explicitly listed as 0, e.g. `eprom`. So `default` is upstream's own
+tested per-game configuration rather than a blanket switch.
+
+Frame hashes on this device are **deterministic** — gng at frame 600 gives
+`9041c29fdee5eb43` on repeated runs — which makes a bit-identical correctness
+test possible.
+
+**DrZ80: bit-identical, and faster.** Same frame hash with the ASM core swapped
+in, across four games and five replaced Z80s. 600 frames, `-nosound`:
+
+| game | Z80s replaced | hash off vs on | fps off → on |
+|---|---:|---|---|
+| `gng` | 1 | identical | 145.5 → 146.9 |
+| `galaga` | 3 | identical | 155.7 → **166.0** (+6.6%) |
+| `pacman` | 1 | identical | 181.0 → **198.1** (+9.4%) |
+| `1942` | 1 (sound only) | identical | 165.4 → 164.4 |
+
+**Cyclone: +22%, renders correctly, not bit-identical.** `batman` 70.7 → **86.6
+fps**, hash `e11149905e1f5fdf` → `5413cfa52bc1e6f1`. Cyclone's 68000 cycle timing
+is approximate, so a differing hash at frame 600 is expected and the
+bit-identical test simply cannot validate it. Checked by eye instead: the Atari
+Games logo renders with full gradient shading and correct colour either way.
+
+`contra` shows no replacement despite being whitelisted as 3 — it is 6809-based
+with a 6809 sound CPU, so there is no Z80 or 68000 to replace. Correct
+behaviour, and a useful reminder that a whitelist entry is permission, not
+effect.
+
+**Decision: ship with `cyclone_mode=default`**, which is what the host already
+sends. `MISTER_CYCLONE_MODE` overrides it for benchmarking.
+
+---
+
 ## Task 7 — input, audio and throttle
 
 **A blocking ALSA write silently turns the benchmark into a measurement of
