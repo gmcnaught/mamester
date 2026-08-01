@@ -21,10 +21,24 @@ below by a sound factor for a realistic figure; it stays large either way.
 
 "×RT" = fps ÷ 60 ≈ real-time headroom multiple.
 
-**Update (Stage 6):** these are no-sound numbers. With sound enabled the same
-unthrottled bench gives contra 94 fps (was 472) and galaga 128 (was 729) — sound
-costs roughly 5x the CPU, so divide the headroom below by about five for a
-playable configuration. Both still clear real time (1.6x and 2.1x).
+**Correction (Stage 8):** the "sound costs ~5x" note recorded here after Stage 6
+was wrong — it compared two different configurations. The 472/729 figures were
+measured with NO FPGA core loaded (see Method above), so nothing was written to
+the DDR framebuffer; the 94/128 figures were measured with the core running.
+Measured properly, both with the core loaded:
+
+| | no sound | 44100 | cost |
+|---|---|---|---|
+| contra | 123.8 | 94.8 | 1.31x |
+| galaga | 135.2 | 125.9 | 1.07x |
+
+Most of that is fixed cost (the sound CPU and demand-driven stream updates), not
+rate-proportional mixing: contra at 11025 Hz only reaches 101.7. What the old
+comparison actually measured is the **present path** — contra drops 446 -> 124 fps
+when the DDR framebuffer write is enabled (`MISTER_NO_NATIVE=1` vs not, core
+loaded). That is the real cost centre, and it is the uncached `/dev/mem` mapping
+(`O_SYNC`), not sound. Left as a future optimisation; every driver below still
+clears real time.
 
 ## Results (unthrottled, no sound)
 

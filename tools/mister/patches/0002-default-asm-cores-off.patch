@@ -1,0 +1,45 @@
+--- a/src/rpi/rpi.cpp
++++ b/src/rpi/rpi.cpp
+@@ -103,9 +103,25 @@
+ 	int res, i, j = 0, game_index;
+     char *playbackname = NULL;
+     char gamenameselection[32];
+-    int use_cyclone=1;
++   	// MiSTer: default the Cyclone assembly 68000 core OFF. It segfaults on
++   	// entry to emulation for EVERY 68000 driver tested on this ARMv7 target --
++   	// klax, rambo3, aerofgt, xenophob, toki, rastan, tmnt and sf2 all crash
++   	// with it, and all run with it off (65-94 fps unthrottled). This is not
++   	// the per-driver question the fe_drivers table answers: those drivers are
++   	// listed cores=1/3 ("Cyclone OK") and still crash, and the table is never
++   	// consulted for Cyclone anyway -- the substitution below is unconditional.
++   	// Since it works for nothing here, disabling it costs nothing measurable
++   	// and fixes most of what was recorded as "hangs after set_video_mode".
++   	// Pass -cyclone to opt back in (for debugging the core itself).
++    int use_cyclone=0;
+     int use_drz80_save=0;
+-   	int use_drz80_snd_save=1;
++   	// MiSTer: default the DrZ80 assembly core OFF for sound CPUs. It segfaults
++   	// in DrZ80Run on this ARMv7 target for drivers that are not on the
++   	// fe_drivers ASM-core blacklist (gng and 1943 both crash within seconds of
++   	// sound starting), and measurement says it buys nothing here: contra
++   	// 94.39 -> 94.57 fps and galaga 128.20 -> 129.04 fps with it disabled.
++   	// Pass -drz80_snd to opt back in.
++   	int use_drz80_snd_save=0;
+     int use_drz80;
+    	int use_drz80_snd;
+     extern int video_scale;
+@@ -140,10 +156,14 @@
+ 			errorlog = fopen("error.log","wa");
+ 		if (strcasecmp(argv[i],"-nocyclone") == 0)
+ 			use_cyclone=0;
++		if (strcasecmp(argv[i],"-cyclone") == 0)
++			use_cyclone=1;
+ 		if (strcasecmp(argv[i],"-drz80") == 0)
+ 			use_drz80_save=1;
+ 		if (strcasecmp(argv[i],"-nodrz80_snd") == 0)
+ 			use_drz80_snd_save=0;
++		if (strcasecmp(argv[i],"-drz80_snd") == 0)
++			use_drz80_snd_save=1;
+ 		if (strcasecmp(argv[i],"-scale") == 0)
+ 			video_scale=1;
+ 		if (strcasecmp(argv[i],"-border") == 0)
