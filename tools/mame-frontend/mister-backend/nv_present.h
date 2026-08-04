@@ -17,6 +17,9 @@
  * Env knobs read by nv_open():
  *   MISTER_NO_NATIVE=1   disable the present entirely; the gap against a normal
  *                        run is the present cost (used for profiling)
+ *   MISTER_NO_WC=1       ignore /dev/mem_wc and keep the pixel buffers on the
+ *                        strongly-ordered mapping — the A/B for the
+ *                        write-combining win, without unloading the module
  *   MISTER_FRAME_HASH=N  print an FNV-1a 64 of the published frame at frame N
  *   MISTER_JOY_DEBUG=1   log each joystick word as it changes
  */
@@ -39,12 +42,21 @@ typedef enum {
 
 /* Map /dev/mem and initialise. Idempotent, and fails gracefully off-device (no
  * /dev/mem, or not root) so bench modes still work. Returns 1 if the present is
- * live, 0 if it is disabled or unavailable. */
+ * live, 0 if it is disabled or unavailable.
+ *
+ * Also overlays the pixel pages with a write-combining mapping when
+ * /dev/mem_wc is present; absence is not an error, only slower. */
 int  nv_open(void);
 void nv_close(void);
 
 /* True when the present path is live. */
 int  nv_is_enabled(void);
+
+/* True when the pixel buffers got a write-combining mapping through
+ * /dev/mem_wc (tools/mister/mem_wc/). False means the strongly-ordered
+ * /dev/mem fallback, i.e. ~89.5 MB/s instead of ~540: correct, just slow.
+ * Exposed so a bench run can report which path it measured. */
+int  nv_is_write_combined(void);
 
 /* Choose the presented geometry, publish its modeline, and set the pixel format
  * the following nv_frame() calls will supply. Geometry too large for the reader

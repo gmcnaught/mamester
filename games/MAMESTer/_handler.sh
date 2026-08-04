@@ -70,6 +70,22 @@ for _link in "$HOMEDIR/Games" "$GAMEDIR/roms/Games"; do
     [ -e "$_link" ] || ln -s /media/fat/_MAMESTer "$_link" 2>/dev/null
 done
 
+# Write-combining for the present path. Without this the DDR framebuffer window
+# maps Strongly-Ordered — ARM's phys_mem_access_prot() gives any /dev/mem mmap
+# of a fabric address pgprot_noncached(), whatever O_SYNC says — and the frame
+# memcpy runs at 89.5 MB/s (4.19 ms at 512x384) instead of merging into bursts.
+# Restricted to this core's own 4 MB window rather than left wide open.
+#
+# ENTIRELY OPTIONAL. The module is built out-of-tree against a specific MiSTer
+# kernel (tools/mister/mem_wc/README.md), so a MiSTer update invalidates its
+# vermagic and insmod starts failing here. nv_present.c falls back to /dev/mem
+# on its own, so that must cost frame rate and nothing else — hence no error
+# check and no exit path. `dmesg | grep mem_wc` says whether it took.
+if [ -f "$GAMEDIR/mem_wc.ko" ] && [ ! -e /dev/mem_wc ]; then
+    insmod "$GAMEDIR/mem_wc.ko" phys_base=0x3A000000 phys_size=0x00400000 \
+        2>/dev/null
+fi
+
 # Rotate the previous manager log, and cap the per-game log history so
 # /media/fat/logs/MAMESTer cannot grow without bound (one .log + one .prev per
 # romset ever launched — with a 2000-driver romset that adds up).

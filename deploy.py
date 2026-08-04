@@ -23,6 +23,10 @@ The three pieces:
                Both carry the same present/input/audio backend (nv_present.c).
   3. HARNESS   games/MAMESTer/ — _handler.sh (Master_Daemon entry point),
                game_manager.sh + game_lib.sh (OSD game selection).
+  4. MEM_WC    tools/mister/mem_wc/mem_wc.ko, IF it has been built — the
+               write-combining /dev/mem the present path wants. Optional: it is
+               tied to one MiSTer kernel's vermagic, nv_present.c falls back to
+               /dev/mem without it, and deploy warns rather than failing.
 
 Device tree — two directories, and they are not interchangeable:
 
@@ -37,6 +41,8 @@ Device tree — two directories, and they are not interchangeable:
     mame.cfg                     startup, so this is the cwd its relative
     roms/                        config paths resolve against.
     opts/<setname>.opt           per-game launch flags (user-owned)
+    mem_wc.ko                    write-combining /dev/mem, insmod'd by the
+                                 handler; optional (see tools/mister/mem_wc/)
     cfg/ nvram/ hi/ inp/ snap/ samples/    MAME state
 
   /media/fat/_Other/MAMESTer_*.rbf                               <- RBF
@@ -296,6 +302,22 @@ def main():
                 # the absent one simply will not launch. Loud, not fatal.
                 print(f"  WARNING: {path.relative_to(REPO)} missing ({why}) — "
                       f"not deployed; build with {how}")
+
+    # Optional and deliberately non-fatal: the module is built out-of-tree
+    # against one MiSTer kernel's vermagic, so most checkouts will not have it.
+    # Without it the present path still works, just strongly-ordered.
+    ko = REPO / "tools" / "mister" / "mem_wc" / "mem_wc.ko"
+    if ko.is_file():
+        print("\nwrite-combining module")
+        push(dev, ko, f"{GAMEDIR}/mem_wc.ko")
+        print("  _handler.sh insmods it at core launch "
+              "(phys_base=0x3A000000 phys_size=0x00400000)")
+    elif do_bin:
+        print("\nwrite-combining module")
+        print("  mem_wc.ko not built — the present path will use the "
+              "strongly-ordered /dev/mem mapping (~4.2 ms/frame at 512x384).")
+        print("  Build it with tools/mister/mem_wc/ (see its README) to "
+              "recover ~3.5 ms/frame.")
 
     if do_rbf:
         print("\ncore")

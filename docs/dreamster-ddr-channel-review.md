@@ -323,6 +323,56 @@ Keep the frame size and the four store forms. Change:
 intermittent under WC — a torn frame every few thousand presents — and they are
 exactly the class of bug that gets misattributed to the reader RTL.
 
+### 6.1 What landed
+
+Items 1 and 3–5 are implemented; **nothing here has been run on hardware**, so
+item 2 and every number in §7 are still open.
+
+| Where | What |
+|---|---|
+| `tools/mister/mem_wc/` | the module, vendored from minicast (GPL-2.0), its Makefile and a build/install README. **Not compiled** — that needs a prepared MiSTer kernel tree, which this checkout does not have |
+| `nv_present.c` | the page-exact WC overlay (below), `NV_FENCE()` = `dsb sy` at all three doorbell sites, `MISTER_NO_WC=1` to force the fallback |
+| `nv_present.h` | `nv_is_write_combined()`, so a bench run can say which mapping it measured |
+| `ddr-write-bench.c` | a `/dev/mem_wc` arm, `/dev/fb0` relabelled as a probe, a doorbell micro-arm, and the NEON-inversion verdict |
+| `_handler.sh` | `insmod … phys_base=0x3A000000 phys_size=0x00400000`, unconditional-failure-tolerant |
+| `deploy.py` | ships `mem_wc.ko` when built; warns and continues when not |
+| `mister_video.cpp`, `host_main.c` | `present=write-combined\|strongly-ordered` on the bench lines |
+
+**The mapping is split page-exactly**, which §5.1(b) argued for and which turns
+out to be forced twice over:
+
+```
+0x000000..0x001000   control word + joystick words   strongly-ordered
+0x001000..0x300000   BUF0 / BUF1                     write-combining
+0x300000..0x400000   timing registers                strongly-ordered
+```
+
+The `MAP_FIXED` overlay *replaces* those pages rather than adding a second
+mapping, so — beyond keeping the doorbell strongly-ordered — no physical page is
+ever mapped at two memory types at once, which would be the same mismatched
+alias §1.2 rules out against the kernel.
+
+Two details the implementation had to deal with that the analysis did not
+anticipate:
+
+- **`BUF0` begins 0x40 into page 0**, so its first 4032 bytes stay
+  strongly-ordered. That is ~4 lines of a 512-wide frame, ~45 µs against the
+  ~700 µs the rest of the copy should cost under WC — ~1 %, in exchange for the
+  window staying one linear pointer instead of `nv_frame()` growing a
+  straddling special case.
+- **`MAP_FIXED` unmaps its target range before the driver's `.mmap` runs**, so a
+  mapping the driver then rejects — `mem_wc` loaded with an allowlist that does
+  not cover our window returns `-EPERM` — would leave a *hole* mid-window rather
+  than the SO mapping we started from, and the next present would take SIGSEGV.
+  `nv_map_wc()` therefore probes at a scratch address first, unmaps, and only
+  then overlays.
+
+**[DER]** The barriers are unconditional rather than gated on which `open()`
+succeeded, per §5.3. Cross-compiled for armhf, `dsb sy` appears exactly three
+times, in `nv_frame`, `nv_frame_repeat` and `nv_set_mode` — which is the
+invariant to check if this is ever refactored: *every doorbell store in
+`nv_present.c` is preceded by `NV_FENCE()`*.
+
 ---
 
 ## 7. Unknowns
