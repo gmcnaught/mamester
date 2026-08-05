@@ -502,11 +502,12 @@ Branch `claude/libretro-mame-engine-target-u14ehm`. Submodule `vendor/lrmame` =
 **This is the first engine whose feasibility is genuinely in doubt, so the plan
 is one kill decision rather than a schedule.** MAME 0.289's device model,
 `emumem` dispatch and scheduler are built for 64-bit desktop silicon; this is an
-800 MHz Cortex-A9 on a 32-bit ABI, and **ARM32 has no DRC backend in MAME**
-(`FORCE_DRC_C_BACKEND=1` is mandatory), so every recompiler-backed CPU runs its C
-interpreter. **Gate: build `SOURCES=pacman`, bench it on the device with sound and
-the core loaded. Below 60 fps → stop and write it up.** Everything past the gate
-is deliberately unbuilt.
+800 MHz Cortex-A9 on a 32-bit ABI. **Gate: build `SOURCES=pacman`, bench it on the
+device with sound and the core loaded. Below 60 fps → stop and write it up.**
+Everything past the gate is deliberately unbuilt. (The missing ARM32 DRC backend
+is a separate and much smaller issue — measured at 3.2% of drivers and descoped,
+below. Pac-Man is a Z80 and never touches `drcuml`, so the gate measures core
+overhead, which is the thing genuinely in doubt.)
 
 **The 2003-plus work paid off — the engine is mostly a build problem, not a port.**
 Verified by reading the core, not assumed:
