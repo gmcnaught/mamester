@@ -7,6 +7,7 @@
 [submodule "vendor/lrmame"]
 	path = vendor/lrmame
 	url = https://github.com/libretro/mame.git
+	ignore = dirty
 [submodule "vendor/asmjit-a32"]
 	path = vendor/asmjit-a32
 	url = https://github.com/asmjit/asmjit.git
