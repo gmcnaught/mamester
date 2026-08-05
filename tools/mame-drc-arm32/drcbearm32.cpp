@@ -30,6 +30,31 @@
     handling. uml.h is byte-identical between 0.287 and 0.289, so the IR this
     lowers is exactly the IR drcbex86 lowered.
 
+    ---------------
+    The encoder
+    ---------------
+
+    asmjit's AArch32 back-end, from its unmerged a32_port branch, injected into
+    MAME's vendored asmjit by tools/mame-drc-arm32/inject.sh. Chosen over the
+    hand-written encoder in arm32emit.h for one reason: drcbex86 is itself
+    written against asmjit, so retargeting its ~7,700 lines happens inside the
+    same CodeHolder/Label/Mem/relocation machinery rather than across an API
+    boundary.
+
+    a32_port is upstream WIP and is treated as such. tests/a32-asmjit/ diffs it
+    against arm-linux-gnueabihf-as over the subset this lowering needs (88
+    encodings, all matching), and asmjit-a32-fixes.py carries the two defects
+    that test found. arm32emit.h is kept as the fallback, and as the oracle the
+    corpus was built from.
+
+    Two API traps, both of which cost time here:
+      * The shift operation lives in the predicate of the LAST operand, so it
+        is add(rd, rn, rm, lsr(16)), never add(rd, rn, lsr(rm), imm(16)). The
+        wrong form silently encodes as LSL, because LSL is predicate 0.
+      * A rejected instruction segfaulted rather than returning its error, as
+        the a32 emitter installs no formatter and the reporting path calls
+        through it. Fixed locally; do not drop that fix.
+
     Design rationale in
     docs/superpowers/specs/2026-08-05-drcbearm32-design.md.
 
@@ -129,13 +154,14 @@
 #include "emu.h"
 #include "drcbearm32.h"
 
-#include "arm32emit.h"
 #include "drcbeut.h"
 
 #include "debug/debugcpu.h"
 #include "emuopts.h"
 
 #include "mfpresolve.h"
+
+#include "asmjit/asmjit/a32.h"
 
 #include <cstddef>
 #include <vector>
@@ -159,7 +185,8 @@ namespace drc {
 namespace {
 
 using namespace uml;
-using namespace arm32;
+using namespace asmjit;
+using namespace asmjit::a32;
 
 
 //**************************************************************************
@@ -167,24 +194,15 @@ using namespace arm32;
 //**************************************************************************
 
 // r11 holds &m_state for the life of a generated sequence
-constexpr gpr REG_STATE = r11;
+const Gp REG_STATE = r11;
 
-// scratch registers, in the order the lowering should consume them
-constexpr gpr REG_SCRATCH0 = r0;
-constexpr gpr REG_SCRATCH1 = r1;
-constexpr gpr REG_SCRATCH2 = r2;
-constexpr gpr REG_SCRATCH3 = r3;
+// the call trampoline register: any address in two instructions, no literal pool
+const Gp REG_CALL = r12;
 
-// callee-saved set the entry stub preserves. r11 is included because the
-// generated code owns it, and lr because the entry stub is itself a function.
-constexpr u32 SAVED_REGS =
-		(1u << 4) | (1u << 5) | (1u << 6) | (1u << 7) |
-		(1u << 8) | (1u << 9) | (1u << 10) | (1u << 11) | (1u << 14);
-
-// scratch space reserved below sp inside generated code, in bytes. AAPCS wants
-// sp 8-byte aligned at every public interface, and a call may pass arguments on
+// bytes of scratch reserved below sp inside generated code. AAPCS wants sp
+// 8-byte aligned at every public interface, and a call may pass arguments on
 // the stack once it runs out of r0-r3.
-constexpr u32 STACK_SCRATCH = 32;
+constexpr uint32_t STACK_SCRATCH = 32;
 
 
 //**************************************************************************
@@ -223,37 +241,34 @@ private:
 	{
 		uint32_t    stacksave;      // sp at entry, so EXIT can unwind
 		uint32_t    emulated_flags; // UML flags when they are not live in NZCV
-		void       *hashstacksave;  // sp at the last hashjmp
 	};
 
-	void generate_one(assembler &a, const uml::instruction &inst);
+	size_t emit(CodeHolder &ch, bool invariant);
+	void emit_load_state_base(Assembler &a);
+	void emit_call(Assembler &a, void const *target);
+
+	void generate_one(Assembler &a, const uml::instruction &inst);
 	[[noreturn]] void unimplemented(const uml::instruction &inst) const;
 
 	// structural
-	void op_handle(assembler &a, const uml::instruction &inst);
-	void op_hash(assembler &a, const uml::instruction &inst);
-	void op_label(assembler &a, const uml::instruction &inst);
-	void op_comment(assembler &a, const uml::instruction &inst);
-	void op_mapvar(assembler &a, const uml::instruction &inst);
+	void op_handle(Assembler &a, const uml::instruction &inst);
+	void op_hash(Assembler &a, const uml::instruction &inst);
+	void op_label(Assembler &a, const uml::instruction &inst);
+	void op_comment(Assembler &a, const uml::instruction &inst);
+	void op_mapvar(Assembler &a, const uml::instruction &inst);
 
 	// control flow
-	void op_nop(assembler &a, const uml::instruction &inst);
-	void op_break(assembler &a, const uml::instruction &inst);
-	void op_debug(assembler &a, const uml::instruction &inst);
-	void op_exit(assembler &a, const uml::instruction &inst);
-	void op_hashjmp(assembler &a, const uml::instruction &inst);
-	void op_jmp(assembler &a, const uml::instruction &inst);
-	void op_exh(assembler &a, const uml::instruction &inst);
-	void op_callh(assembler &a, const uml::instruction &inst);
-	void op_ret(assembler &a, const uml::instruction &inst);
-	void op_callc(assembler &a, const uml::instruction &inst);
-	void op_recover(assembler &a, const uml::instruction &inst);
-
-	// helpers
-	void emit_load_state_base(assembler &a);
-	void emit_jump_abs(assembler &a, drccodeptr target, condition c = COND_AL);
-	drccodeptr *label_codeptr(uml::code_label label);
-	static void debug_log_hashjmp(int mode, offs_t pc);
+	void op_nop(Assembler &a, const uml::instruction &inst);
+	void op_break(Assembler &a, const uml::instruction &inst);
+	void op_debug(Assembler &a, const uml::instruction &inst);
+	void op_exit(Assembler &a, const uml::instruction &inst);
+	void op_hashjmp(Assembler &a, const uml::instruction &inst);
+	void op_jmp(Assembler &a, const uml::instruction &inst);
+	void op_exh(Assembler &a, const uml::instruction &inst);
+	void op_callh(Assembler &a, const uml::instruction &inst);
+	void op_ret(Assembler &a, const uml::instruction &inst);
+	void op_callc(Assembler &a, const uml::instruction &inst);
+	void op_recover(Assembler &a, const uml::instruction &inst);
 
 	drc_hash_table      m_hash;
 	drc_map_variables   m_map;
@@ -265,10 +280,6 @@ private:
 	arm32_entry_point_func m_entry;
 	drccodeptr          m_exit;
 	drccodeptr          m_nocode;
-
-	// the currently-generating assembler, so label fixups can reach it
-	assembler *         m_curasm;
-	std::vector<std::pair<uml::code_label, u32>> m_pending_labels;
 };
 
 
@@ -286,7 +297,6 @@ drcbe_arm32::drcbe_arm32(drcuml_state &drcuml, device_t &device, drc_cache &cach
 	, m_entry(nullptr)
 	, m_exit(nullptr)
 	, m_nocode(nullptr)
-	, m_curasm(nullptr)
 {
 	std::fill_n((uint8_t *)&m_near, sizeof(m_near), 0);
 
@@ -308,51 +318,53 @@ drcbe_arm32::~drcbe_arm32()
 
 void drcbe_arm32::reset()
 {
-	// forget any code we generated and rebuild the fixed stubs at the top of
-	// the cache
-	constexpr size_t STUB_BYTES = 4096;
-	drccodeptr *cachetop = m_cache.begin_codegen(STUB_BYTES);
-	if (!cachetop)
-		fatalerror("drcbearm32: out of cache space after a reset\n");
+	uint8_t *const dst = (uint8_t *)m_cache.top();
 
-	assembler a(*cachetop, *cachetop + STUB_BYTES);
+	CodeHolder ch;
+	ch.init(Environment::host(), uint64_t(dst));
+
+	Assembler a(&ch);
+
+	GpList const saved({ r4, r5, r6, r7, r8, r9, r10, r11, r14 });
 
 	// ---- entry point: uint32_t entry(void *codeptr) ----
-	drccodeptr const entry = a.pc();
-	a.push(SAVED_REGS);
+	uint64_t const entry_offs = a.offset();
+	a.push(saved);
 	a.sub(sp, sp, imm(STACK_SCRATCH));
 
 	// stash sp so EXIT can unwind from any depth
-	a.mov32(REG_SCRATCH1, &m_near.stacksave);
-	a.str(sp, ptr(REG_SCRATCH1));
+	a.mov(r1, imm(uint32_t(uintptr_t(&m_near.stacksave))));
+	a.str(sp, ptr(r1));
 
 	emit_load_state_base(a);
 
-	// call rather than jump, so the nocode handler can simply return -- this
-	// is drcbex86's arrangement and the stubs only make sense together
+	// call rather than jump, so the nocode handler can simply return -- this is
+	// drcbex86's arrangement and the three stubs only make sense together
 	a.blx(r0);
 
 	// falls straight through into the exit point below, which is the whole
-	// reason exit is generated here and not somewhere more convenient
+	// reason exit is generated here rather than somewhere more convenient
 	// ---- exit point: return value already in r0 ----
-	m_exit = a.pc();
-	a.mov32(REG_SCRATCH1, &m_near.stacksave);
-	a.ldr(sp, ptr(REG_SCRATCH1));
+	uint64_t const exit_offs = a.offset();
+	a.mov(r1, imm(uint32_t(uintptr_t(&m_near.stacksave))));
+	a.ldr(sp, ptr(r1));
 	a.add(sp, sp, imm(STACK_SCRATCH));
-	a.pop(SAVED_REGS & ~(1u << 14));
-	a.pop(assembler::rmask(pc));
+	a.pop(saved);
+	a.bx(r14);
 
 	// ---- nocode handler: the hash table's default target ----
 	// Just a return: a hashjmp that misses lands here and unwinds to whoever
 	// called into the block, which is what decides what to do about the miss.
-	m_nocode = a.pc();
-	a.bx(lr);
+	uint64_t const nocode_offs = a.offset();
+	a.bx(r14);
 
-	if (!a.finalize() || a.overflowed())
-		fatalerror("drcbearm32: stub generation overflowed the cache\n");
+	a.finalize();
+	if (!emit(ch, true))
+		fatalerror("drcbearm32: out of cache space generating the entry stubs\n");
 
-	m_entry = (arm32_entry_point_func)entry;
-	m_cache.end_codegen();
+	m_entry = (arm32_entry_point_func)(uintptr_t(dst) + entry_offs);
+	m_exit = drccodeptr(uintptr_t(dst) + exit_offs);
+	m_nocode = drccodeptr(uintptr_t(dst) + nocode_offs);
 
 	m_hash.reset();
 	m_hash.set_default_codeptr(m_nocode);
@@ -373,13 +385,10 @@ void drcbe_arm32::generate(drcuml_block &block, const uml::instruction *instlist
 	m_labels.block_begin(block);
 	m_map.block_begin(block);
 
-	size_t const reserve = size_t(numinst) * 128;
-	drccodeptr *cachetop = m_cache.begin_codegen(reserve);
-	if (!cachetop)
-		block.abort();
+	CodeHolder ch;
+	ch.init(Environment::host(), uint64_t(m_cache.top()));
 
-	assembler a(*cachetop, *cachetop + reserve);
-	m_curasm = &a;
+	Assembler a(&ch);
 	m_carry_state = carry_state::POISON;
 
 	for (uint32_t inum = 0; inum < numinst; inum++)
@@ -388,14 +397,10 @@ void drcbe_arm32::generate(drcuml_block &block, const uml::instruction *instlist
 		generate_one(a, instlist[inum]);
 	}
 
-	if (!a.finalize())
-		fatalerror("drcbearm32: an unbound label or an out-of-range branch survived code generation\n");
-	if (a.overflowed())
+	a.finalize();
+	if (!emit(ch, false))
 		block.abort();
 
-	m_curasm = nullptr;
-
-	m_cache.end_codegen();
 	m_map.block_end(block);
 	m_labels.block_end(block);
 	m_hash.block_end(block);
@@ -428,34 +433,46 @@ void drcbe_arm32::get_info(drcbe_info &info) const noexcept
 //  HELPERS
 //**************************************************************************
 
-void drcbe_arm32::emit_load_state_base(assembler &a)
+// Copy a finished CodeHolder into the DRC cache at the address it was
+// assembled for, and make the instruction cache agree. Same shape as
+// drcbe_arm64::emit(): asmjit assembles against a fixed base address, so the
+// allocation has to land at or below that address rather than wherever the
+// allocator would otherwise put it.
+size_t drcbe_arm32::emit(CodeHolder &ch, bool invariant)
 {
-	a.mov32(REG_STATE, &m_state);
+	size_t const alignment = ch.base_address() - uint64_t(m_cache.top());
+	size_t const code_size = ch.code_size();
+
+	auto space = invariant
+			? m_cache.alloc_invariant(alignment + code_size, std::align_val_t(1))
+			: m_cache.alloc_transient(alignment + code_size, std::align_val_t(1));
+	if (!space)
+		return 0;
+
+	assert(uintptr_t(space) <= ch.base_address());
+	Error const err = ch.copy_flattened_data(drccodeptr(ch.base_address()), code_size, CopySectionFlags::kPadTargetBuffer);
+	if (err != Error::kOk)
+		throw emu_fatalerror("drcbearm32: CodeHolder::copy_flattened_data() error %u", std::underlying_type_t<Error>(err));
+
+	osd::invalidate_instruction_cache(drccodeptr(ch.base_address()), code_size);
+
+	return code_size;
 }
 
 
-// An unconditional jump to an address that may be anywhere in the process.
-// Inside the code cache a plain B reaches, but the cache is not guaranteed to
-// be within ±32 MB of a stub allocated separately, so this falls back to
-// movw/movt + bx rather than emitting a branch that is usually in range.
-void drcbe_arm32::emit_jump_abs(assembler &a, drccodeptr target, condition c)
+void drcbe_arm32::emit_load_state_base(Assembler &a)
 {
-	ptrdiff_t const delta = target - (a.pc() + 8);
-	if (delta >= -33554432 && delta <= 33554428 && !(delta & 3))
-	{
-		a.b(target, c);
-	}
-	else
-	{
-		a.mov32(ip, target, c);
-		a.bx(ip, c);
-	}
+	a.mov(REG_STATE, imm(uint32_t(uintptr_t(&m_state))));
 }
 
 
-void drcbe_arm32::debug_log_hashjmp(int mode, offs_t pc)
+// A call to an arbitrary C function. Deliberately not BL: the code cache and
+// libc are not guaranteed to be within BL's +/-32 MB of each other, and a call
+// that is nearly always in range is worse than one that never is.
+void drcbe_arm32::emit_call(Assembler &a, void const *target)
 {
-	osd_printf_info("mode=%d PC=%08X\n", mode, pc);
+	a.mov(REG_CALL, imm(uint32_t(uintptr_t(target))));
+	a.blx(REG_CALL);
 }
 
 
@@ -473,7 +490,7 @@ void drcbe_arm32::debug_log_hashjmp(int mode, offs_t pc)
 //  DISPATCH
 //**************************************************************************
 
-void drcbe_arm32::generate_one(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::generate_one(Assembler &a, const uml::instruction &inst)
 {
 	switch (inst.opcode())
 	{
@@ -507,19 +524,19 @@ void drcbe_arm32::generate_one(assembler &a, const uml::instruction &inst)
 //  STRUCTURAL OPCODES
 //**************************************************************************
 
-void drcbe_arm32::op_handle(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_handle(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
 	assert(inst.numparams() == 1);
 	assert(inst.param(0).is_code_handle());
 
-	inst.param(0).handle().set_codeptr(a.pc());
+	inst.param(0).handle().set_codeptr(drccodeptr(a.code()->base_address() + a.offset()));
 	m_carry_state = carry_state::POISON;
 }
 
 
-void drcbe_arm32::op_hash(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_hash(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
@@ -527,24 +544,24 @@ void drcbe_arm32::op_hash(assembler &a, const uml::instruction &inst)
 	assert(inst.param(0).is_immediate());
 	assert(inst.param(1).is_immediate());
 
-	m_hash.set_codeptr(inst.param(0).immediate(), inst.param(1).immediate(), a.pc());
+	m_hash.set_codeptr(inst.param(0).immediate(), inst.param(1).immediate(), drccodeptr(a.code()->base_address() + a.offset()));
 	m_carry_state = carry_state::POISON;
 }
 
 
-void drcbe_arm32::op_label(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_label(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
 	assert(inst.numparams() == 1);
 	assert(inst.param(0).is_code_label());
 
-	m_labels.set_codeptr(inst.param(0).label(), a.pc());
+	m_labels.set_codeptr(inst.param(0).label(), drccodeptr(a.code()->base_address() + a.offset()));
 	m_carry_state = carry_state::POISON;
 }
 
 
-void drcbe_arm32::op_comment(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_comment(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
@@ -553,7 +570,7 @@ void drcbe_arm32::op_comment(assembler &a, const uml::instruction &inst)
 }
 
 
-void drcbe_arm32::op_mapvar(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_mapvar(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
@@ -561,7 +578,7 @@ void drcbe_arm32::op_mapvar(assembler &a, const uml::instruction &inst)
 	assert(inst.param(0).is_mapvar());
 	assert(inst.param(1).is_immediate());
 
-	m_map.set_value(a.pc(), inst.param(0).mapvar(), inst.param(1).immediate());
+	m_map.set_value(drccodeptr(a.code()->base_address() + a.offset()), inst.param(0).mapvar(), inst.param(1).immediate());
 }
 
 
@@ -569,72 +586,72 @@ void drcbe_arm32::op_mapvar(assembler &a, const uml::instruction &inst)
 //  CONTROL FLOW
 //**************************************************************************
 
-void drcbe_arm32::op_nop(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_nop(Assembler &a, const uml::instruction &inst)
 {
 }
 
 
-void drcbe_arm32::op_break(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_break(Assembler &a, const uml::instruction &inst)
 {
 	assert_no_condition(inst);
 	assert_no_flags(inst);
 
 	static char const *const message = "break from drc";
-	a.mov32(r0, (void *)message);
-	a.call((void *)&osd_break_into_debugger);
+	a.mov(r0, imm(uint32_t(uintptr_t(message))));
+	emit_call(a, (void *)&osd_break_into_debugger);
 	m_carry_state = carry_state::POISON;
 }
 
 
-void drcbe_arm32::op_debug(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_debug(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_exit(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_exit(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_hashjmp(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_hashjmp(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_jmp(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_jmp(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_exh(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_exh(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_callh(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_callh(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_ret(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_ret(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_callc(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_callc(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }
 
 
-void drcbe_arm32::op_recover(assembler &a, const uml::instruction &inst)
+void drcbe_arm32::op_recover(Assembler &a, const uml::instruction &inst)
 {
 	unimplemented(inst);
 }

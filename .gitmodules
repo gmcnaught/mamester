@@ -7,3 +7,7 @@
 [submodule "vendor/lrmame"]
 	path = vendor/lrmame
 	url = https://github.com/libretro/mame.git
+[submodule "vendor/asmjit-a32"]
+	path = vendor/asmjit-a32
+	url = https://github.com/asmjit/asmjit.git
+	branch = a32_port

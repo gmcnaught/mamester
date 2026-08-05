@@ -751,3 +751,45 @@ correctness-so-far but **staleness**: the branch is unmerged and four months
 behind master, and vendoring 21k WIP lines into a submodule we do not control is
 a maintenance position, not a free win. Switching encoders after the lowering
 exists is a rewrite, which is why this is a decision and not a preference.
+
+### Adopted: asmjit a32 is the encoder (operator decision)
+
+Integration proved before commitment, in this order:
+
+1. **The a32 sources compile against MAME's asmjit core**, not just upstream's.
+   The branch's seven core/x86 hook files apply to MAME's copy despite the two
+   trees sitting at different points on master — both are 1.21.0.
+2. **They encode identically there.** Rebuilt on MAME's core, the corpus still
+   matches `arm-linux-gnueabihf-as` on every case, so the 16-file drift changes
+   nothing that matters.
+3. **The `lsr #32` defect is fixed**, and the fix found a second, worse half.
+
+**The shift bug was worse than "rejects a legal instruction".** a32 validates
+every immediate shift amount as `amount <= 31`, which is wrong in both
+directions at once: it rejects the legal `lsr #32`/`asr #32`, *and* it accepts
+`lsr #0`/`asr #0` and silently encodes them as shift-by-32 — asmjit's `lsr(0)`
+and the assembler's `lsr #32` are the same word, `e0843025`. A32 has no LSR #0
+or ASR #0; an encoded amount of 0 *means* 32. The accepting half is the
+dangerous one, and it would have been invisible: the lowering would have asked
+for a no-op shift and got a 32-bit erasure.
+
+`tools/mame-drc-arm32/asmjit-a32-fixes.py` fixes both that and the null-formatter
+crash, at the three general data-processing sites. The `pkhbt`/`pkhtb`/`ssat`
+sites have the same bug class and are left alone — different per-instruction
+shift rules, and outside the UML lowering's path. Corpus after the fix:
+**88 of 88 encodings match, 3 of 3 invalid forms correctly refused.**
+
+**Vendoring.** `vendor/asmjit-a32` is a submodule pinned to `594cb9e`;
+`inject.sh` copies the `a32*` sources into MAME's asmjit, takes the core hooks
+straight from the commit (`git diff HEAD~1 HEAD`) rather than storing a patch so
+provenance stays upstream, runs the fixes, and opens `3rdparty.lua`'s asmjit
+project — which is gated on the same x86/arm64 pair `cpu.lua` is — to
+`PLATFORM=arm`. All idempotent; `--revert` restores the submodule exactly.
+
+**`drcbearm32.cpp` now emits through `a32::Assembler`**, with drcbearm64's
+`CodeHolder`/`copy_flattened_data`/`invalidate_instruction_cache` mechanics
+rather than a hand-rolled buffer. It compiles against 0.289 with the a32 encoder
+installed. Scope is unchanged and still small: structural opcodes only,
+everything else `fatalerror`. `arm32emit.h` and `tests/arm32emit/` stay as the
+fallback and as the oracle the a32 corpus was built from — 391 instructions,
+still passing, still the thing that would catch a32 regressing.

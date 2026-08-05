@@ -36,6 +36,24 @@ using namespace asmjit::a32;
 struct Case { std::string text; std::vector<unsigned> words; bool err; };
 static std::vector<Case> g_cases;
 
+static std::vector<std::string> g_refuse_ok, g_refuse_bad;
+
+// records a case that MUST fail to encode; a success here is a silent
+// miscompile waiting to happen, not a missing feature
+template <typename Fn>
+static void refuse(const char *text, Fn &&fn)
+{
+	Environment env;
+	env.set_arch(Arch::kARM);
+	CodeHolder code;
+	if (code.init(env, 0) != Error::kOk) { printf("init failed\n"); exit(1); }
+	Assembler a(&code);
+	if (fn(a) == Error::kOk)
+		g_refuse_bad.push_back(text);
+	else
+		g_refuse_ok.push_back(text);
+}
+
 template <typename Fn>
 static void add(const char *text, Fn &&fn)
 {
@@ -92,6 +110,8 @@ int main()
 	// REMOVED: "add r3, r4, r5, lsr #32" -- a32 rejects it (kInvalidInstruction)
 	// and the rejection path segfaults; see notes.
 	add("add r3, r4, r5, lsr #32", [](Assembler &a){ return a.add(r3, r4, r5, lsr(32)); });
+	add("add r3, r4, r5, asr #32", [](Assembler &a){ return a.add(r3, r4, r5, asr(32)); });
+	add("mov r0, r1, lsr #32",     [](Assembler &a){ return a.mov(r0, r1, lsr(32)); });
 	add("add r3, r4, r5, lsl r6",  [](Assembler &a){ return a.add(r3, r4, r5, lsl(r6)); });
 	add("rrx r0, r1",              [](Assembler &a){ return a.rrx(r0, r1); });
 	add("add r3, r4, r5, lsr r6",  [](Assembler &a){ return a.add(r3, r4, r5, lsr(r6)); });
@@ -168,6 +188,16 @@ int main()
 	add("vmov d5, r6, r7",       [](Assembler &a){ return a.vmov(d5, r6, r7); });
 	add("vmov r6, r7, d5",       [](Assembler &a){ return a.vmov(r6, r7, d5); });
 
+	// ---- must be REFUSED ----
+	// There is no LSR #0 or ASR #0 in A32: an encoded amount of 0 means 32.
+	// Upstream a32_port accepts these and silently emits shift-by-32 -- the
+	// same word arm-linux-gnueabihf-as gives for `lsr #32`. Accepting a
+	// spelling that means something else is worse than rejecting a legal one,
+	// which is why this is checked as its own class.
+	refuse("add r3, r4, r5, lsr #0", [](Assembler &a){ return a.add(r3, r4, r5, lsr(0)); });
+	refuse("add r3, r4, r5, asr #0", [](Assembler &a){ return a.add(r3, r4, r5, asr(0)); });
+	refuse("add r3, r4, r5, ror #0", [](Assembler &a){ return a.add(r3, r4, r5, ror(0)); });
+
 	// ---- emit ----
 	FILE *bin = fopen("ours.bin", "wb");
 	FILE *asmf = fopen("ref.s", "w");
@@ -190,6 +220,12 @@ int main()
 		emitted++;
 	}
 	fclose(bin); fclose(asmf); fclose(txt);
-	printf("%d encoded, %d refused, of %zu cases\n", emitted, failed, g_cases.size());
-	return 0;
+	printf("%d encoded, %d unexpectedly refused, of %zu cases\n", emitted, failed, g_cases.size());
+
+	for (const std::string &t : g_refuse_bad)
+		printf("ACCEPTED BUT MUST NOT BE: %s\n", t.c_str());
+	printf("%zu of %zu invalid forms correctly refused\n",
+			g_refuse_ok.size(), g_refuse_ok.size() + g_refuse_bad.size());
+
+	return (failed || !g_refuse_bad.empty()) ? 1 : 0;
 }

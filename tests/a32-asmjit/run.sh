@@ -26,27 +26,11 @@ if [ ! -d "$SRC" ]; then
         https://github.com/asmjit/asmjit.git "$SRC"
 fi
 
-# asmjit's a32 emitter never installs _funcs.format_instruction, so the
-# invalid-instruction path in log_instruction_failed() calls through a null
-# pointer -- a REFUSED instruction crashes instead of returning its error.
-# Guarded here so the harness can report refusals; upstream this is a real
-# robustness bug for any JIT that hits an unsupported operand combination.
-GUARD="$SRC/asmjit/core/emitterutils.cpp"
-if ! grep -q "MAMESTER-GUARD" "$GUARD"; then
-    echo "# patching the null-formatter crash in log_instruction_failed()"
-    python3 - "$GUARD" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-# Anchor inside log_instruction_failed specifically -- the same call appears
-# first in log_instruction_emitted, which has no `err` in scope.
-fn = s.index("Error log_instruction_failed(")
-call = s.index("  self->_funcs.format_instruction(sb,", fn)
-guard = ("  // MAMESTER-GUARD: a32 leaves _funcs.format_instruction null\n"
-         "  if (!self->_funcs.format_instruction) { self->reset_state(); return self->report_error(err, sb.data()); }\n")
-open(p, 'w').write(s[:call] + guard + s[call:])
-PY
-fi
+# Apply the same local fixes the build applies, via the same script -- this
+# harness must qualify the tree drcbearm32 actually stands on, not upstream's
+# unpatched one. Both fixes ARE upstream bugs (see the design doc); testing
+# without them just re-demonstrates that, which is already recorded.
+python3 "$HERE/../../tools/mame-drc-arm32/asmjit-a32-fixes.py" "$SRC"
 
 echo "# building (first run takes a few minutes)"
 g++ -std=c++17 -O1 -I"$SRC" -DASMJIT_STATIC -DASMJIT_NO_COMPILER \
