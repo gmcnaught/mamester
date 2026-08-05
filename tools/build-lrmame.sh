@@ -86,6 +86,29 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
     exit 1
 }
 
+# DRC=1 builds the ARM32 dynamic recompiler instead of the UML interpreter.
+# Two flags come OFF rather than one going on:
+#
+#   FORCE_DRC_C_BACKEND  is the obvious one -- it pins every DRC-backed CPU to
+#                        drcbec regardless of host.
+#   NOASM                is not. It defines MAME_NOASM, which drcuml.cpp's
+#                        NATIVE_DRC chain tests, so leaving it set would select
+#                        drcbec even with the back-end compiled in. Dropping it
+#                        also lets src/osd/eminline.h reach eigccarm.h, which is
+#                        an ARM path that has been sitting unused in this build
+#                        the whole time.
+#
+# See docs/superpowers/specs/2026-08-05-drcbearm32-design.md. The back-end is
+# incomplete -- unlowered opcodes are a fatalerror -- so this is not the
+# shipping configuration yet.
+if [ "${DRC:-0}" = "1" ]; then
+    echo "# DRC=1: injecting the ARM32 back-end into vendor/lrmame"
+    "$REPO/tools/mame-drc-arm32/inject.sh"
+    DRC_VARS=()
+else
+    DRC_VARS=(NOASM=1 FORCE_DRC_C_BACKEND=1)
+fi
+
 MAKE_VARS=(
     CONFIG=libretro
     OSD=retro
@@ -95,8 +118,7 @@ MAKE_VARS=(
     PLATFORM=arm
     PTR64=0
     ARCHITECTURE=
-    NOASM=1
-    FORCE_DRC_C_BACKEND=1
+    "${DRC_VARS[@]}"
     NO_USE_PORTAUDIO=1
     NO_USE_MIDI=1
     CROSS_BUILD=1

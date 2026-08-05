@@ -612,3 +612,93 @@ both ways), not a free win.
 BSD-3-Clause since 0.172**, not the pre-2016 non-commercial licence that governs
 mame4all and 2003-plus. Less restrictive, but different obligations —
 `CLAUDE.md`'s licensing note describes only the old one and needs updating.
+
+## Stage 11 — `drcbearm32`, an ARM32 DRC back-end (in progress)
+
+Reverses this file's own 2026-08-05 descope, on the operator's instruction.
+Design: [`specs/2026-08-05-drcbearm32-design.md`](specs/2026-08-05-drcbearm32-design.md).
+
+**The descope had the wrong base, and that is the whole finding.** It sized the
+work as backporting `drcbearm64.cpp` and rejected it on ARMv7 having ~14 GPRs
+against 31 and no 64-bit registers for a 64-bit-register IR. Both facts are
+true; neither is the relevant one. **MAME shipped a 32-bit back-end,
+`drcbex86.cpp`, through `mame0287` and deleted it only in 0.288/0.289** —
+verified by fetching the file at each tag (present at 0.250 … 0.287, 404 at
+0.289). It ran the whole UML on *seven* usable GPRs for two decades. Register
+pairs, synthesised 64-bit shifts/multiplies/divides, flag reconstruction: all
+already solved there. Relative to the back-end actually worth copying, ARMv7 is
+a *doubling* of the register file, not a scarcity.
+
+And the port distance is short. **`uml.h` is byte-identical between 0.287 and
+0.289** — every opcode, every parameter type. The entire interface delta is
+`drcbe_interface::hash_invalidate_range()`, a `max_sequence_length` argument on
+`drcuml_state`/`drc_hash_table`, and the factory signature.
+
+**What is genuinely new is the encoder, because asmjit has no AArch32.** It
+enumerates `Arch::kARM` and `kThumb` — which is the trap — but
+`3rdparty/asmjit/asmjit/arm/` ships `a64*` and nothing else. There is no
+`a32::Assembler` to target, so `drcbex86`'s algorithms cannot simply be
+retargeted by swapping an emitter namespace.
+
+### Done
+
+- **`tools/mame-drc-arm32/arm32emit.h`** — an ARMv7-A A32 encoder: data
+  processing with all four shift kinds, `movw`/`movt`, both load/store
+  families, block transfer, multiplies, ARMv6T2 bitfield ops, NZCV access,
+  VFP single/double. Targeting ARMv7 rather than v5/v6 is load-bearing:
+  `movw`/`movt` mean **no literal pool**, so no pool placement, no
+  mid-sequence drain, no PC-relative reach limit inside the code cache.
+  `SDIV`/`UDIV` are deliberately absent — they are ARMv7-R/M or ARMv7-A with
+  the idiv extension and **the A9 has neither**, so `DIVU`/`DIVS` must lower
+  to a call.
+- **`tests/arm32emit/`** — the encoder differentially tested against
+  `arm-linux-gnueabihf-as`, which is installed in this container, so it runs
+  with no device and no MAME: **391 instructions, all matching.** It paid for
+  itself on the first run — the single-precision `Vm` field splits high-4 into
+  bits[3:0] and low-1 into bit 5, the first draft wrote it as a plain shift,
+  and 15 VFP instructions silently addressed the wrong register. That is
+  exactly the failure mode this back-end cannot afford, since a mis-encode is
+  not a compile error but a wrong answer inside a game minutes in.
+- **`tools/mame-drc-arm32/inject.sh`** — idempotent copy-and-patch into the
+  submodule (`--check`, `--revert`), following `build-mame.sh`'s arrangement
+  for the mame4all present back-end. Patches `drcuml.cpp`'s `NATIVE_DRC` chain
+  and `scripts/src/cpu.lua`. Note it adds a **separate** `files{}` block for
+  `PLATFORM=arm` rather than widening the existing one, which would have handed
+  the armhf compiler `drcbex64.cpp` and `drcbearm64.cpp` for no reason.
+- **`DRC=1` in `tools/build-lrmame.sh`.** Two flags come off, not one:
+  `FORCE_DRC_C_BACKEND=1` is obvious, but **`NOASM=1` also has to go** — it
+  defines `MAME_NOASM`, which the `NATIVE_DRC` chain tests, so leaving it set
+  selects `drcbec` even with the back-end compiled in. Dropping it also lets
+  `eminline.h` reach `eigccarm.h`, an ARM path unused in this build until now.
+- **`drcbearm32.{h,cpp}` compiles against 0.289's `drcbe_interface`**, verified
+  with a native `g++ -fsyntax-only` over MAME's headers — no cross toolchain
+  and no full build needed, which makes the iteration loop seconds rather than
+  the hour a genie build costs.
+
+### Not done — and this is most of the work
+
+**No instruction that computes anything is lowered yet.** Structural opcodes
+(`HANDLE`/`HASH`/`LABEL`/`COMMENT`/`MAPVAR`/`NOP`) are real; everything else —
+control flow, the integer ALU, the flag ops, the entire float set — is a
+`fatalerror`, deliberately, so a missing opcode cannot become a game that runs
+and is wrong. The entry/exit/nocode stub shapes follow `drcbex86`'s model (call
+into generated code, `nocode` returns to the caller) but have **not** been
+checked against its `hashjmp`/`exit` contract; that check is the next step and
+it gates everything after.
+
+Correctness plan, in order: link into the `pacman` subset (proves wiring only —
+Pac-Man is a Z80 and never touches `drcuml`); link and boot a DRC subset
+(`psikyosh`, SH-2, a `CLAUDE.md` gap target); then the real gate, **`MISTER_FRAME_HASH`
+matching between a `FORCE_DRC_C_BACKEND=1` build and a `DRC=1` build of the same
+driver over N frames**; then `MISTER-BENCH fps=` to say whether it was worth
+doing. Steps 2–4 need the device.
+
+**This is downstream of a gate that has not been run.** `tools/lrmame-drc-scan.sh`
+still measures the reachable set at **147 of 4652 driver files, 3.2%**, most of
+it out of scope for other reasons (SGI, Mac, Jaguar, skeletons); the real
+recoveries are the SH-2/SH-3 boards — `psikyosh`, `stv`, `feversoc`, `cv1000`.
+And Stage 10's Pac-Man gate — can 0.289's device model, `emumem` dispatch and
+scheduler hold 60 fps on an 800 MHz A9 — is untouched by any of this and still
+unmeasured. If that gate fails, this back-end has no engine to live in. It is
+being built gate-independent (it is tied to MAME's UML, not to the libretro
+host) but the ordering risk is real and deliberate.
