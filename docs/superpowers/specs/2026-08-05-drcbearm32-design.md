@@ -230,6 +230,62 @@ means `DRC=0` is the configuration for shipping or benching those ~3.2% of
 drivers. Everything else, including the whole target library and the pacman
 gate, never reaches `drcuml` and is unaffected either way.
 
+## Build status (2026-08-05)
+
+The back-end **compiles and links inside a real MAME build that contains a
+DRC-backed CPU**: `SOURCES=src/mame/psikyo/psikyosh.cpp` (SH-2), `PLATFORM=arm`,
+DRC on → `drcbearm32.cpp` compiles clean, the asmjit a32 project builds, and
+`drcsh_libretro.so` links at 40 MB. genie selects `drcbearm32.cpp` and excludes
+`drcbearm64.cpp`/`drcbex64.cpp`, with `drcbec` still present as the fallback.
+
+Note for anyone repeating this: **the pacman gate build cannot exercise any of
+it.** `CPU_INCLUDE_DRC` is false when no DRC-backed CPU is in the build, so the
+entire `drcbe*` set — including this back-end — drops out and the generated
+makefiles show no backend at all. Verify against an SH/MIPS/PowerPC driver.
+
+## Sequencing: the parameter layer comes before the control flow
+
+Recorded 2026-08-05, after starting the lowering and backing out.
+
+"REMAINING WORK" lists control flow first, and that is the right order for
+*contract* — the structural stubs mean nothing until EXIT/JMP/HASHJMP give them
+one — but it is **not** the right order to write. `drcbex86`'s `op_exit`,
+`op_jmp`, `op_hashjmp` and `op_exh` are each a handful of lines sitting on three
+things that do not exist here yet:
+
+1. **`be_parameter`** — the operand abstraction (immediate / int register /
+   float register / memory), constructed from a `uml::parameter` with an allowed
+   type mask.
+2. **Materialisation helpers** — `emit_mov_r32_p32` and friends, which turn a
+   `be_parameter` into a value in a host register, plus the 64-bit register-pair
+   forms.
+3. **A UML→ARM condition mapping**, the analogue of `X86_CONDITION()`.
+
+v1's execution model makes (1) and (2) markedly simpler than `drcbex86`'s,
+because no UML register is pinned to a host register: every I-register is a
+`[r11, #offset]` access, so the whole `select_register` family collapses to
+"load it into the scratch you were going to use anyway". That is the first slice
+to write, and it is shared by every opcode group that follows.
+
+**Why the first attempt stopped short of emitting code.** The asmjit a32
+conditional-branch API could not be pinned down from the injected headers inside
+one session, and this file already documents two places where that API silently
+does the wrong thing rather than failing (a shift in the wrong operand position
+encodes as LSL; a rejected instruction segfaulted instead of returning its
+error). Writing several hundred lines of ARM codegen against an unconfirmed API
+with no execution test would produce something that compiles and is probably
+wrong — which is the exact failure the fatalerror-everything design exists to
+prevent.
+
+**So the next unit of work is the test loop, not more lowering.**
+`tests/a32-asmjit/` already diffs the *encoder* against
+`arm-linux-gnueabihf-as`. The analogue for the *lowering* is to execute
+generated blocks under `qemu-arm` and diff against `drcbec` on the same UML.
+Until that exists, "each opcode group is an independently testable unit of work"
+is an aspiration rather than a fact, and every group written before it is
+unverified. With it, the order is: parameter layer → harness → control flow →
+integer ALU → flags → floats.
+
 ## Verification
 
 The encoder is the part that can be wrong silently and catastrophically — a
