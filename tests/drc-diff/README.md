@@ -12,6 +12,10 @@ tests/drc-diff/run.sh alu          # one group, or one case, by name
 tests/drc-diff/run.sh --probe      # just the no-content probe, no diff
 ```
 
+**Status: `--host` is clean — 48 of 48 cases agree between `drcbe_c` and
+`drcbe_x64`.** The ARM32 run has not been done yet; with only the structural
+opcodes lowered it will report `UNIMPL` for everything, `SAVE`/`RESTORE` first.
+
 ## Run `--host` first, and believe nothing until it is clean
 
 `--host` diffs `drcbe_c` against **`drcbe_x64`** — a back-end with two decades
@@ -25,6 +29,77 @@ disagreements in a pattern that read exactly like "asmjit drops the shift
 type", and the bug was in the calling code. The wrong answer was *plausible*,
 which is what made it dangerous. `--host` is the control that makes an ARM32
 failure mean something.
+
+**It earned its keep immediately.** The first calibration run crashed, and the
+next reported 32 of 48 cases failing. Every one was the harness's or the
+corpus's fault; `drcbe_x64` was correct throughout. What it caught:
+
+- **`drc_cache` is two-phase in 0.289** — the constructor allocates nothing and
+  leaves every pointer null; `allocate_cache()` maps the memory, and every CPU
+  core calls it from `device_start` (`sh.cpp:41`). Omitting it does not fail
+  loudly: `alloc_near()` just returns null and the crash lands in whichever
+  back-end constructor first writes through it. That reads exactly like a
+  broken back-end.
+- **The cache floor is set by the hash table, not by the generated code.** At
+  `addrbits=32, ignorebits=1` the empty L1/L2 tables alone are
+  `(8 << 15) + (8 << 16)` = 768 KB out of the *main* cache. 1 MB segfaulted;
+  the SH cores use 32 MB, which is what the harness now uses.
+- **Three kinds of state UML leaves undefined**, all of which the corpus was
+  comparing — see below.
+- **Two real corpus bugs**: `FFRFLT` converts *between* float widths, so a
+  size-matched `fdfrflt(F1, F2, SIZE_QWORD)` is not a no-op but an invalid
+  opcode — `drcbe_c` refusing it is what flagged it, which is the `BAD-CASE`
+  path working as designed. And a `GETFLGS` over `FLAGS_ALL` in an integer
+  context reads back `FLAG_U`, which is meaningless there.
+
+The crash handler and `masks_for()` both exist because of that run. Neither was
+in the original design.
+
+## What is undefined, and why the diff has to know
+
+A differential test that compares undefined state reports differences that are
+not bugs. Three showed up, and each would have been read as an ARM32 lowering
+bug:
+
+- **A 4-byte operation on a 64-bit register defines the low 32 bits only.**
+  `drcbe_c` zeroes the upper half, `drcbe_x64` preserves it, and both conform.
+- **`FLAG_U` is floating-point only.** `drcbe_x64` reconstructs flags with
+  `lahf` and maps x86's *parity* flag onto `FLAG_U`, so after any integer op it
+  holds parity while `drcbe_c` holds zero.
+- **Flags are undefined until an opcode computes them.** `RESTORE` *loads*
+  flags, which is not the same thing: a back-end may keep UML flags in the
+  host's own flag register and rematerialise them only when an opcode needs
+  them, so restored flags need not survive intervening opcodes that define
+  none. Calling that a `drcbe_x64` defect on this evidence would have been
+  wrong.
+
+So the compare mask is computed from the block itself, in `masks_for()`: a
+register is compared to the width of the last thing that wrote it, and flags to
+the set the last flag-*producing* opcode defines. `is_param_out()` and
+`output_flags()` are public, so this is read off the IR rather than
+hand-maintained per case.
+
+One trap in that computation, which the `fdtoint` case found:
+**`instruction::size()` is not always the destination's width.** For `FTOINT`
+it is the width of the float *source*, while the integer destination's width is
+the `SIZE_` parameter — so `fdtoint(I0, F1, SIZE_DWORD, ...)` is a size-8
+instruction that defines 32 bits of an I register.
+
+## Crashing is a result too
+
+A back-end being written does not only `fatalerror` on a missing opcode — it
+also emits wrong code and jumps into it. That arrives as SIGSEGV somewhere
+inside the code cache, with no stack worth reading and no indication of which
+of forty-eight cases was running. The harness tracks case, back-end and phase
+in three strings and prints them from a signal handler (`write(2)` only, so it
+is async-signal-safe), then exits 3.
+
+That is what turned the first bare segfault into
+`case='empty' backend=drcbe_c phase=drcuml_state`, which named the bug in a
+single run.
+
+Exit status: **0** everything agrees, **1** a real diff, **2** no native
+back-end compiled in, **3** crashed.
 
 ## How the harness works
 

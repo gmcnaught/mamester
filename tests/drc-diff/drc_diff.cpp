@@ -79,11 +79,16 @@
 #include "drcuml.h"
 #include "uml.h"
 
+#include "emuopts.h"    // drc_rwx() -- emu.h forward-declares emu_options only
+
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
+
+#include <unistd.h>
 
 
 // Mirrors drcuml.cpp's NATIVE_DRC chain. Kept as a copy rather than shared
@@ -105,6 +110,7 @@
 #define DIFF_MAKE_NATIVE    drc::make_drcbe_arm32
 #else
 #define DIFF_NO_NATIVE      1
+#define DIFF_NATIVE_NAME    "(none)"
 #endif
 
 
@@ -119,10 +125,6 @@ using namespace uml;
 //  CONFIGURATION
 //**************************************************************************
 
-// Comfortably over drc_cache's 128 KB near reservation, and small enough that
-// allocating a fresh pair per case costs nothing measurable.
-constexpr size_t CACHE_BYTES = 1 * 1024 * 1024;
-
 // Matches the SH cores' drcuml_state parameters, since the SH-2/SH-3 boards
 // are the drivers this back-end exists to recover.
 constexpr int MODES       = 1;
@@ -130,7 +132,83 @@ constexpr int ADDRBITS    = 32;
 constexpr int IGNOREBITS  = 1;
 constexpr u32 MAX_SEQ_LEN = 128;
 
+// The same 32 MB the SH cores give their caches (sh.h, CACHE_SIZE), and it is
+// the hash table that sets the floor, not the generated code.
+//
+// drc_hash_table splits ADDRBITS-IGNOREBITS in half, so 32/1 gives 15 L1 bits
+// and 16 L2 bits, and the empty tables alone are (8 << 15) + (8 << 16) = 768 KB
+// out of the MAIN cache before a single instruction is generated. Undersizing
+// this does not report an error: drc_cache::alloc() returns nullptr, the
+// constructor's fills are null-guarded, and the crash happens later somewhere
+// else entirely. A 1 MB cache segfaulted here, which is what the --host
+// calibration run was for.
+constexpr size_t CACHE_BYTES = 32 * 1024 * 1024;
+
 constexpr u32 MAXINST = 64;
+
+
+//**************************************************************************
+//  CRASHING IS A RESULT, TOO
+//**************************************************************************
+
+// A back-end being written will not only raise fatalerror on an opcode it does
+// not have -- it will also emit code that is wrong and jump into it. That
+// arrives as SIGSEGV/SIGBUS/SIGILL somewhere inside the code cache, with no
+// stack worth reading (the generated frame is not walkable) and, without this,
+// no indication of which of forty cases was running.
+//
+// So the harness tracks where it is in three strings and prints them from the
+// handler. Everything below the handler is async-signal-safe: write(2) only,
+// no printf, no allocation.
+
+char const *volatile g_case    = "(none)";
+char const *volatile g_backend = "(none)";
+char const *volatile g_phase   = "(none)";
+
+void write_str(char const *s) noexcept
+{
+	if (!s)
+		s = "(null)";
+	size_t n = 0;
+	while (s[n])
+		n++;
+	ssize_t const ignored = ::write(STDERR_FILENO, s, n);
+	(void)ignored;
+}
+
+extern "C" void diff_crash_handler(int sig) noexcept
+{
+	write_str("\nDRC-DIFF: CRASH ");
+	switch (sig)
+	{
+	case SIGSEGV: write_str("SIGSEGV"); break;
+	case SIGBUS:  write_str("SIGBUS");  break;
+	case SIGILL:  write_str("SIGILL");  break;
+	case SIGFPE:  write_str("SIGFPE");  break;
+	default:      write_str("signal");  break;
+	}
+	write_str(" in case='");
+	write_str(const_cast<char const *>(g_case));
+	write_str("' backend=");
+	write_str(const_cast<char const *>(g_backend));
+	write_str(" phase=");
+	write_str(const_cast<char const *>(g_phase));
+	write_str("\n");
+
+	// Not a return and not abort(): returning would re-fault at the same
+	// instruction forever, and a core dump of generated code is not the
+	// artefact anyone wants. 3 is distinct from 1 (a real diff) and 2 (no
+	// native back-end).
+	std::_Exit(3);
+}
+
+void install_crash_handler()
+{
+	std::signal(SIGSEGV, diff_crash_handler);
+	std::signal(SIGBUS,  diff_crash_handler);
+	std::signal(SIGILL,  diff_crash_handler);
+	std::signal(SIGFPE,  diff_crash_handler);
+}
 
 
 //**************************************************************************
@@ -167,8 +245,104 @@ drcuml_machine_state make_seed()
 
 
 //**************************************************************************
+//  WHAT IS ACTUALLY DEFINED AFTER A BLOCK RUNS
+//**************************************************************************
+
+// UML leaves state undefined in places, and a differential test that compares
+// undefined state reports differences that are not bugs. The --host
+// calibration run found all three of these, and every one of them would
+// otherwise have been read as an ARM32 lowering bug:
+//
+//   * A 4-byte operation on a 64-bit register defines the LOW 32 BITS ONLY.
+//     drcbe_c happens to zero the upper half and drcbe_x64 happens to preserve
+//     it. Neither is wrong.
+//   * FLAG_U is defined for floating point only. drcbe_x64 reconstructs flags
+//     with lahf and maps x86's PARITY flag onto FLAG_U, so after any integer
+//     op it holds parity while drcbe_c holds zero. Neither is wrong.
+//   * Flags in general are undefined until an opcode defines them -- after
+//     SETFMOD/GETFMOD alone, drcbe_x64's saved flags are whatever the host
+//     happened to be carrying.
+//
+// So the mask is computed from the block itself: a register is compared to the
+// width of the last thing that wrote it, and the flags are compared to the set
+// the last flag-producing opcode defines. `is_param_out()` and
+// `output_flags()` are public, so this is read off the IR rather than
+// hand-maintained per case.
+struct compare_masks
+{
+	u64 ireg[REG_I_COUNT];
+	u64 freg[REG_F_COUNT];
+	u8  flags;
+};
+
+compare_masks masks_for(std::vector<instruction> const &b)
+{
+	compare_masks m;
+
+	// RESTORE writes every register in full from the seed, and it is the first
+	// thing every case does, so everything starts fully defined.
+	for (u64 &v : m.ireg)
+		v = ~u64(0);
+	for (u64 &v : m.freg)
+		v = ~u64(0);
+
+	// Flags are the exception: RESTORE sets them from the seed, but nothing
+	// downstream is obliged to preserve them, so nothing is comparable until an
+	// opcode defines it.
+	m.flags = 0;
+
+	for (instruction const &i : b)
+	{
+		// instruction::size() is not always the destination's width. FTOINT is
+		// the fd*/fs* prefix -- the width of the FLOAT SOURCE -- while the
+		// integer destination's width is the SIZE_ parameter, so fdtoint with
+		// SIZE_DWORD is an 8-size instruction that defines 32 bits of an I
+		// register. Reading size() there compares an undefined upper half.
+		u64 intwidth = (i.size() == 8) ? ~u64(0) : 0xffffffffULL;
+		if (i.opcode() == OP_FTOINT)
+		{
+			for (int p = 0; p < i.numparams(); p++)
+			{
+				if (i.param(p).is_size())
+					intwidth = (i.param(p).size() == SIZE_QWORD) ? ~u64(0) : 0xffffffffULL;
+			}
+		}
+
+		for (int p = 0; p < i.numparams(); p++)
+		{
+			if (!i.is_param_out(p))
+				continue;
+
+			parameter const &param = i.param(p);
+			if (param.is_int_register())
+				m.ireg[param.ireg() - REG_I0] = intwidth;
+			else if (param.is_float_register())
+				m.freg[param.freg() - REG_F0] = (i.size() == 8) ? ~u64(0) : 0xffffffffULL;
+		}
+
+		// RESTORE is excluded deliberately. It LOADS flags, which is not the
+		// same as COMPUTING them: a back-end is free to keep UML flags in the
+		// host's own flag register and rematerialise them only when an opcode
+		// needs them, so restored flags need not survive intervening opcodes
+		// that define none. drcbe_x64 does exactly that -- after
+		// SETFMOD/GETFMOD alone its saved flags are host state, and calling
+		// that a defect on this evidence would be wrong.
+		if (i.output_flags() && (i.opcode() != OP_RESTORE))
+			m.flags = i.output_flags();
+	}
+
+	return m;
+}
+
+
+//**************************************************************************
 //  THE CORPUS
 //**************************************************************************
+
+// The flags an INTEGER opcode can define. FLAGS_ALL includes FLAG_U, which is
+// floating-point only, so a GETFLGS over FLAGS_ALL in an integer context reads
+// back whatever the host left in it.
+constexpr u8 IFLAGS = FLAG_C | FLAG_V | FLAG_Z | FLAG_S;
 
 using builder = void (*)(std::vector<instruction> &);
 
@@ -233,9 +407,10 @@ testcase const CORPUS[] =
 	ins(b).dmov(I0, I7);
 } },
 
-// A 32-bit MOV into a 64-bit register: the upper half must be zeroed, and
-// getting that wrong is invisible until a later 64-bit read.
-{ "mov", "mov.zeroes.upper", [] (std::vector<instruction> &b) {
+// A 32-bit MOV into a 64-bit register. The upper half is a DON'T CARE, not a
+// zero: drcbe_c zeroes it, drcbe_x64 preserves it, and both are conforming.
+// masks_for() is what keeps this case honest.
+{ "mov", "mov.32into64", [] (std::vector<instruction> &b) {
 	ins(b).mov(I0, 0xffffffff);
 	ins(b).mov(I1, I2);
 } },
@@ -487,16 +662,18 @@ testcase const CORPUS[] =
 	ins(b).mov(I8, 0xffffffff);
 	ins(b).mov(I9, 1);
 	ins(b).add(I7, I8, I9);
-	ins(b).getflgs(I0, FLAGS_ALL);
+	// Not FLAGS_ALL: that includes FLAG_U, which is defined for floating point
+	// only, so asking for it here reads back drcbe_x64's x86 parity bit.
+	ins(b).getflgs(I0, IFLAGS);
 	ins(b).getflgs(I1, FLAG_C);
 	ins(b).getflgs(I2, FLAG_Z);
 } },
 
 { "flags", "setflgs", [] (std::vector<instruction> &b) {
 	ins(b).setflgs(FLAG_C | FLAG_Z);
-	ins(b).getflgs(I0, FLAGS_ALL);
+	ins(b).getflgs(I0, IFLAGS);
 	ins(b).setflgs(0);
-	ins(b).getflgs(I1, FLAGS_ALL);
+	ins(b).getflgs(I1, IFLAGS);
 } },
 
 { "flags", "carry", [] (std::vector<instruction> &b) {
@@ -577,7 +754,10 @@ testcase const CORPUS[] =
 { "float", "ffrint.ffrflt", [] (std::vector<instruction> &b) {
 	ins(b).mov(I9, 0xfffffff0);
 	ins(b).fdfrint(F0, I9, SIZE_DWORD);
-	ins(b).fdfrflt(F1, F2, SIZE_QWORD);
+	// FFRFLT converts BETWEEN float widths, so a 64-bit destination takes a
+	// 32-bit source. Size-matched is not a no-op, it is an invalid opcode, and
+	// drcbe_c refusing it is what flagged this.
+	ins(b).fdfrflt(F1, F2, SIZE_DWORD);
 	ins(b).fsfrint(F2, I9, SIZE_DWORD);
 } },
 
@@ -604,6 +784,7 @@ struct outcome
 	std::string             err;                // why, if it refused
 	int                     exitcode = 0;       // what EXIT returned
 	drcuml_machine_state    state;              // what SAVE wrote
+	compare_masks           masks;              // which of it is even defined
 };
 
 // A full, isolated run: its own caches, its own drcuml_state, its own
@@ -617,16 +798,32 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 	outcome result;
 	std::memset(&result.state, 0, sizeof(result.state));
 
+	g_case    = tc.name;
+	g_backend = (kind == BE_C) ? "drcbe_c" : DIFF_NATIVE_NAME;
+	g_phase   = "cache";
+
 	try
 	{
+		// drc_cache is TWO-PHASE in 0.289: the constructor allocates nothing
+		// and leaves every pointer null, and allocate_cache() is what maps the
+		// memory. Skipping it does not fail loudly -- alloc_near() just returns
+		// null, and the crash lands in whichever back-end constructor first
+		// writes through it, which reads exactly like a broken back-end. Every
+		// CPU core calls this from device_start (sh.cpp:41 and friends); a
+		// harness that builds back-ends outside a device has to do it itself.
 		drc_cache umlcache(CACHE_BYTES);
 		drc_cache becache(CACHE_BYTES);
+		bool const rwx = device.mconfig().options().drc_rwx();
+		umlcache.allocate_cache(rwx);
+		becache.allocate_cache(rwx);
 
 		// This state constructs a back-end of its own, per drc_use_c(), which
 		// is neither of the two under test and is never asked to do anything.
 		// It is here for the block, handle and symbol bookkeeping.
+		g_phase = "drcuml_state";
 		drcuml_state uml(device, umlcache, 0, MODES, ADDRBITS, IGNOREBITS, MAX_SEQ_LEN);
 
+		g_phase = "construct";
 		std::unique_ptr<drcbe_interface> be;
 		if (kind == BE_C)
 			be = drc::make_drcbe_c(uml, device, becache, 0, MODES, ADDRBITS, IGNOREBITS);
@@ -638,8 +835,10 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 			{ result.err = "no native back-end on this host"; return result; }
 #endif
 
+		g_phase = "reset";
 		be->reset();
 
+		g_phase = "build";
 		drcuml_machine_state seed = make_seed();
 
 		code_handle *const entry = uml.handle_alloc("diff_entry");
@@ -652,6 +851,7 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 		ins(block).save(&result.state);
 		ins(block).exit(0x600d600d);
 		request_all_flags(block);
+		result.masks = masks_for(block);
 
 		if (block.size() > MAXINST)
 			throw emu_fatalerror("drc-diff: case '%s' is %u instructions, over MAXINST", tc.name, unsigned(block.size()));
@@ -659,9 +859,11 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 		// No block.end(): end() would route generation through the state's own
 		// back-end. begin_block() is called only to get a block object, which
 		// generate() reads nothing from but invariant().
+		g_phase = "generate";
 		drcuml_block &blk = uml.begin_block(MAXINST);
 		be->generate(blk, block.data(), u32(block.size()));
 
+		g_phase = "execute";
 		result.exitcode = be->execute(*entry);
 		result.ran = true;
 	}
@@ -679,6 +881,7 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 		result.err = e.what();
 	}
 
+	g_phase = "(between cases)";
 	return result;
 }
 
@@ -702,11 +905,12 @@ unsigned diff_state(char const *name, outcome const &c, outcome const &n)
 
 	for (int i = 0; i < REG_I_COUNT; i++)
 	{
-		if (c.state.r[i].d != n.state.r[i].d)
+		u64 const mask = c.masks.ireg[i];
+		if ((c.state.r[i].d & mask) != (n.state.r[i].d & mask))
 		{
 			char buf[16];
 			std::snprintf(buf, sizeof(buf), "i%d", i);
-			report(buf, c.state.r[i].d, n.state.r[i].d);
+			report(buf, c.state.r[i].d & mask, n.state.r[i].d & mask);
 		}
 	}
 
@@ -718,11 +922,12 @@ unsigned diff_state(char const *name, outcome const &c, outcome const &n)
 		u64 cv, nv;
 		std::memcpy(&cv, &c.state.f[i].d, sizeof(cv));
 		std::memcpy(&nv, &n.state.f[i].d, sizeof(nv));
-		if (cv != nv)
+		u64 const mask = c.masks.freg[i];
+		if ((cv & mask) != (nv & mask))
 		{
 			char buf[16];
 			std::snprintf(buf, sizeof(buf), "f%d", i);
-			report(buf, cv, nv);
+			report(buf, cv & mask, nv & mask);
 		}
 	}
 
@@ -730,8 +935,9 @@ unsigned diff_state(char const *name, outcome const &c, outcome const &n)
 		report("exp", c.state.exp, n.state.exp);
 	if (c.state.fmod != n.state.fmod)
 		report("fmod", c.state.fmod, n.state.fmod);
-	if (c.state.flags != n.state.flags)
-		report("flags", c.state.flags, n.state.flags);
+	u8 const flagmask = c.masks.flags;
+	if ((c.state.flags & flagmask) != (n.state.flags & flagmask))
+		report("flags", c.state.flags & flagmask, n.state.flags & flagmask);
 	if (c.exitcode != n.exitcode)
 		report("exitcode", u32(c.exitcode), u32(n.exitcode));
 
@@ -763,6 +969,7 @@ void diff_run_once(device_t &device)
 	std::_Exit(2);
 #else
 	std::fprintf(stderr, "DRC-DIFF: drcbe_c vs " DIFF_NATIVE_NAME "\n");
+	install_crash_handler();
 
 	unsigned pass = 0, fail = 0, unimpl = 0, skipped = 0;
 

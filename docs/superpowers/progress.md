@@ -864,3 +864,42 @@ test proves that two things disagree and never whose fault it is, and
 `tests/a32-asmjit/` already paid for that lesson once — six disagreements in a
 pattern that read exactly like an asmjit defect, and the bug was in the calling
 code.
+
+**The calibration run is clean: 48 of 48 cases agree between `drcbe_c` and
+`drcbe_x64`.** It took four rounds to get there and `drcbe_x64` was correct in
+every one — the failures were all the harness's or the corpus's, which is
+exactly the outcome that makes the control worth running. What it caught,
+because each would otherwise have been read as an ARM32 lowering bug:
+
+- **`drc_cache` is two-phase in 0.289.** The constructor allocates nothing and
+  leaves every pointer null; `allocate_cache()` maps the memory, and every CPU
+  core calls it from `device_start` (`sh.cpp:41`). Omitting it does not fail
+  loudly — `alloc_near()` returns null and the crash lands in whichever
+  back-end constructor first writes through it.
+- **The cache floor is the hash table, not the generated code.** At
+  `addrbits=32, ignorebits=1` the empty L1/L2 tables alone are 768 KB out of
+  the main cache; 1 MB segfaulted. The SH cores use 32 MB and so does this.
+- **Three kinds of UML state are undefined and must not be compared**: a 4-byte
+  op on a 64-bit register defines the low half only (`drcbe_c` zeroes the
+  upper, `drcbe_x64` preserves it, both conform); `FLAG_U` is FP-only and
+  `drcbe_x64` maps x86 *parity* onto it; and flags are undefined until an
+  opcode *computes* them — `RESTORE` loading them is not the same thing. The
+  compare mask is therefore derived from the block via `is_param_out()` and
+  `output_flags()` rather than hand-maintained per case.
+- **`instruction::size()` is not always the destination width.** For `FTOINT`
+  it is the float *source* width; the integer destination's width is the
+  `SIZE_` parameter.
+- **Two corpus bugs**, one of them found by the oracle path: `FFRFLT` converts
+  *between* float widths, so a size-matched `fdfrflt` is an invalid opcode, not
+  a no-op, and `drcbe_c` refusing it is the `BAD-CASE` report working.
+
+A crash handler was added off the back of this — a back-end being written emits
+wrong code and jumps into it, and a bare SIGSEGV in the code cache has no
+walkable stack. It names case, back-end and phase from a signal handler and
+exits 3, which is what turned the first crash into
+`case='empty' backend=drcbe_c phase=drcuml_state`.
+
+**Next: `tests/drc-diff/run.sh` against the ARM32 core.** With only the
+structural opcodes lowered it will report `UNIMPL` for all 48. `SAVE` and
+`RESTORE` are the first two to lower, because every case begins and ends with
+them — until they exist the corpus cannot report anything else.
