@@ -549,11 +549,38 @@ configuration; the emu core cross-compiles; all six host sources compile clean
 against 0.289's `libretro.h` with `-DMAMESTER_ENGINE_LRMAME`; the Makefile
 resolves both engines' link lines.
 
+**The build works end to end.** `SOURCES=src/mame/pacman/pacman.cpp` cross-built
+clean (~40 min on 4 cores, dominated by MAME's own emu core and 3rdparty, not by
+the driver): **`mamester_libretro.so`, 40 MB, ELF 32-bit ARM EABI5**, 151 drivers,
+exporting **34 `retro_*` symbols and nothing else** (link.T works as advertised)
+and needing only `libm`/`libc`/`ld-linux-armhf.so.3` — no SDL, no GL, not even
+pthread. The host links against it and **runs**: under `qemu-arm` it reports
+`MAME 0.289 (85eaed9c)`, captures 28 core-option defaults through
+`host_environment()`, selects XRGB8888, and MAME's own init resolves the driver
+("System found: pacman", rotation 3 = 270° CCW accepted) before failing at ROM
+load with `Required files are missing` — correct, since no romset exists here.
+So the frontend contract, the environment callback, the engine seam and the
+toolchain recipe are all proven; what is untested is pixels, sound and speed.
+
+**Two findings that only appeared by running the artefact:**
+
+1. **Link the `.so` with `-L<dir> -l:<file>`, never by path.** genie builds it
+   with **no `-soname`**, so `ld` records whatever it is handed; given a path,
+   `DT_NEEDED` becomes the absolute *build-host* path, which does not exist on
+   the MiSTer — the binary then dies in the loader before `main()`. Both forms
+   link without a warning, so this is visible only under `objdump -p` or on the
+   device. Fixed; `RUNPATH=$ORIGIN` resolves the bare name beside the binary.
+2. **`SOURCES=` filtering breaks clone→parent links across files.** The pacman
+   build emitted **30** `Driver is a clone of nonexistent driver` validity errors
+   (e.g. `8bpm` → `8ballact`) because the parents live in files the filter
+   excluded. Non-fatal — it proceeded to ROM load — but the shippable subset has
+   to be closed over parents, or accept that those clones are unrunnable. Worth
+   settling when the subset is chosen (Stage 5 of the design doc).
+
 **Not verified — needs the operator's machine:** the gate itself. This session's
-container has **no `ssh`**, so `.81` was unreachable and nothing was benched. The
-full `SOURCES=pacman` link had not finished when the session ended either — it is
-a multi-hour build on 4 cores, dominated by MAME's own emu core rather than by
-the driver.
+container has **no `ssh`**, so `.81` was unreachable and nothing was benched, and
+no ROMs exist here to run. The fps number is the whole decision and it does not
+exist yet.
 
 **Open, deliberately deferred to after the gate:** `M16B`. Defining it makes the
 core report RGB565 (`libretro.cpp:771`) — already the DDR format, skipping a
