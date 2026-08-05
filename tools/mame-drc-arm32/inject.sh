@@ -131,11 +131,17 @@ if sentinel not in text:
     anchor = 'CPU_INCLUDE_DRC_NATIVE = CPU_INCLUDE_DRC and (not _OPTIONS["FORCE_DRC_C_BACKEND"]) and ((_OPTIONS["PLATFORM"] == "x86") or (_OPTIONS["PLATFORM"] == "arm64"))\n'
     if anchor not in text:
         sys.exit("cpu.lua: CPU_INCLUDE_DRC_NATIVE not found — upstream layout changed")
+    # arm32 is folded INTO CPU_INCLUDE_DRC_NATIVE rather than kept in a parallel
+    # flag, so that everything upstream gates on "the native DRC is available"
+    # turns on for PLATFORM=arm exactly where it turns on for arm64 -- including
+    # the i386 disassembler at the bottom of this file, which arm64 already
+    # pulls in. A parallel variable would have had to be added to each of those
+    # conditions by hand, and any future one would silently miss arm32.
     text = text.replace(
         anchor,
-        anchor +
         '-- %s BEGIN\n'
-        'CPU_INCLUDE_DRC_ARM32 = CPU_INCLUDE_DRC and (not _OPTIONS["FORCE_DRC_C_BACKEND"]) and (_OPTIONS["PLATFORM"] == "arm")\n'
+        'CPU_INCLUDE_DRC_NATIVE = CPU_INCLUDE_DRC and (not _OPTIONS["FORCE_DRC_C_BACKEND"]) and ((_OPTIONS["PLATFORM"] == "x86") or (_OPTIONS["PLATFORM"] == "arm64") or (_OPTIONS["PLATFORM"] == "arm"))\n'
+        'CPU_INCLUDE_DRC_ARM32 = CPU_INCLUDE_DRC_NATIVE and (_OPTIONS["PLATFORM"] == "arm")\n'
         '-- %s END\n' % (sentinel, sentinel),
         1)
 
@@ -149,10 +155,20 @@ if sentinel not in text:
               'end\n')
     if anchor not in text:
         sys.exit("cpu.lua: native files block not found — upstream layout changed")
+    # The FILES stay architecture-split even though the flag is now shared:
+    # drcbex64.cpp and drcbearm64.cpp do not compile for a 32-bit ARM target, so
+    # "enabled in the same places" must not mean "same source list".
     text = text.replace(
         anchor,
-        anchor +
         '-- %s BEGIN\n'
+        'if CPU_INCLUDE_DRC_NATIVE and not CPU_INCLUDE_DRC_ARM32 then\n'
+        '\tfiles {\n'
+        '\t\tMAME_DIR .. "src/devices/cpu/drcbearm64.cpp",\n'
+        '\t\tMAME_DIR .. "src/devices/cpu/drcbearm64.h",\n'
+        '\t\tMAME_DIR .. "src/devices/cpu/drcbex64.cpp",\n'
+        '\t\tMAME_DIR .. "src/devices/cpu/drcbex64.h",\n'
+        '\t}\n'
+        'end\n'
         'if CPU_INCLUDE_DRC_ARM32 then\n'
         '\tfiles {\n'
         '\t\tMAME_DIR .. "src/devices/cpu/arm32emit.h",\n'

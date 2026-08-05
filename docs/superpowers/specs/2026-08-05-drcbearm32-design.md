@@ -193,6 +193,43 @@ differ from x86 and neither of which `drcbex86` can warn us about:
 - There is **no `ROL`** (`ROR #(32-n)`), and **no `RCL`/`RCR`**, so UML's
   `ROLC`/`RORC` are synthesised.
 
+## Enablement: on wherever the AArch64 back-end would be
+
+**Operator decision 2026-08-05.** `PLATFORM=arm` is folded **into**
+`CPU_INCLUDE_DRC_NATIVE` rather than kept in a parallel `CPU_INCLUDE_DRC_ARM32`
+flag beside it:
+
+```lua
+CPU_INCLUDE_DRC_NATIVE = CPU_INCLUDE_DRC and (not FORCE_DRC_C_BACKEND)
+    and ((PLATFORM == "x86") or (PLATFORM == "arm64") or (PLATFORM == "arm"))
+CPU_INCLUDE_DRC_ARM32  = CPU_INCLUDE_DRC_NATIVE and (PLATFORM == "arm")
+```
+
+The point of folding rather than paralleling: everything upstream gates on "the
+native DRC is available" then turns on for ARM32 in exactly the places it turns
+on for arm64 — including the i386 disassembler at the bottom of `cpu.lua`, which
+arm64 already pulls in. A parallel flag would have to be added to each of those
+conditions by hand, and any condition upstream adds later would silently miss
+ARM32.
+
+The **files** stay architecture-split (`CPU_INCLUDE_DRC_ARM32` selects
+`drcbearm32.cpp`, the others get `drcbearm64.cpp`/`drcbex64.cpp`), because
+"enabled in the same places" must not become "same source list" — the 64-bit
+back-ends do not compile for a 32-bit target.
+
+`tools/build-lrmame.sh` therefore defaults to **DRC on**, and two flags come off
+rather than one going on: `FORCE_DRC_C_BACKEND` (the obvious one) and `NOASM`,
+which defines `MAME_NOASM` and would make `drcuml.cpp`'s chain pick `drcbe_c`
+even with the back-end compiled in.
+
+**What this costs until the lowering lands.** With DRC on, a driver on a
+DRC-backed CPU **aborts** on the first unlowered opcode instead of running slowly
+through `drcbec`. That is the intended trade — a hard stop is how the remaining
+work gets found, and a silent wrong answer is what is being avoided — but it
+means `DRC=0` is the configuration for shipping or benching those ~3.2% of
+drivers. Everything else, including the whole target library and the pacman
+gate, never reaches `drcuml` and is unaffected either way.
+
 ## Verification
 
 The encoder is the part that can be wrong silently and catastrophically — a

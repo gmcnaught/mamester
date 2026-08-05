@@ -6,6 +6,7 @@
 #       tools/build-lrmame.sh                      # the gate build: one driver
 #   M16B=1 tools/build-lrmame.sh                   # RGB565 output instead of XRGB8888
 #   SUBTARGET=lrmame-gate tools/build-lrmame.sh    # name the build
+#   DRC=0 tools/build-lrmame.sh                    # UML interpreter, no ARM32 JIT
 #
 # Output: vendor/lrmame/libretro/mame_<SUBTARGET>_libretro.so, linked later by
 # tools/mame-frontend/libretro-host/.
@@ -14,7 +15,7 @@
 #
 # This is the third engine and the first one whose build is genie/lua rather than
 # a flat makefile, so the flags below are not interchangeable with the other two
-# build scripts. Six of them are load-bearing and every one was arrived at by a
+# build scripts. Five of them are load-bearing and every one was arrived at by a
 # failed build rather than by reading documentation:
 #
 #   OSD=retro          the makefile's OSD default is `sdl` (makefile:455-472).
@@ -37,12 +38,9 @@
 #                      is exactly how upstream's own android-arm block does it
 #                      (Makefile.libretro:143-153, `PLATFLAGS += ARCHITECTURE=`).
 #
-#   FORCE_DRC_C_BACKEND=1
-#                      MAME's dynamic recompiler has no ARM32 backend. Every
-#                      DRC-backed CPU therefore runs its C interpreter, which is
-#                      a large part of why this engine's viability is in doubt at
-#                      all -- see the gate in the design doc. Not optional:
-#                      without it the DRC-using drivers fail to build.
+#   (FORCE_DRC_C_BACKEND was here, and is not any more -- see the DRC block
+#    below. Upstream 0.289 ships no ARM32 back-end, which is why it used to be
+#    mandatory; this tree adds one.)
 #
 #   CROSS_BUILD=1 + OVERRIDE_CC/CXX/AR
 #                      MAME emits host-native code generators (complay.py,
@@ -86,7 +84,22 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
     exit 1
 }
 
-# DRC=1 builds the ARM32 dynamic recompiler instead of the UML interpreter.
+# The ARM32 dynamic recompiler is ON by default (DRC=0 opts back out to the UML
+# interpreter). Operator decision 2026-08-05: the back-end is enabled anywhere
+# the AArch64 one would be, which inject.sh implements by folding PLATFORM=arm
+# into CPU_INCLUDE_DRC_NATIVE rather than into a parallel flag beside it.
+#
+# WHAT THAT COSTS TODAY. Only the structural opcodes are lowered; every other
+# UML opcode is a fatalerror. So with DRC on, a driver that actually uses a
+# DRC-backed CPU -- SH, MIPS, PowerPC, Hyperstone, the DSPs, ~3.2% of drivers,
+# tools/lrmame-drc-scan.sh --summary -- ABORTS instead of running slowly through
+# drcbec. That is the intended trade while the lowering is built: a hard stop on
+# an unlowered opcode is how the remaining work gets found, and a silent wrong
+# answer is the thing being avoided. Everything else -- Z80, 6502, 6809, 68000,
+# the whole target library and the pacman gate -- never reaches drcuml at all
+# and is bit-identical either way. Build with DRC=0 to ship or to bench those
+# 3.2% of drivers.
+#
 # Two flags come OFF rather than one going on:
 #
 #   FORCE_DRC_C_BACKEND  is the obvious one -- it pins every DRC-backed CPU to
@@ -98,14 +111,16 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
 #                        an ARM path that has been sitting unused in this build
 #                        the whole time.
 #
-# See docs/superpowers/specs/2026-08-05-drcbearm32-design.md. The back-end is
-# incomplete -- unlowered opcodes are a fatalerror -- so this is not the
-# shipping configuration yet.
-if [ "${DRC:-0}" = "1" ]; then
-    echo "# DRC=1: injecting the ARM32 back-end into vendor/lrmame"
+# See docs/superpowers/specs/2026-08-05-drcbearm32-design.md.
+if [ "${DRC:-1}" = "1" ]; then
+    echo "# DRC on: injecting the ARM32 back-end into vendor/lrmame"
     "$REPO/tools/mame-drc-arm32/inject.sh"
+    echo "#   NOTE: only structural opcodes are lowered — a driver on a DRC-backed"
+    echo "#   CPU will fatalerror on the first unlowered opcode. Use DRC=0 for those."
     DRC_VARS=()
 else
+    echo "# DRC=0: UML interpreter (drcbec), back-end not injected"
+    "$REPO/tools/mame-drc-arm32/inject.sh" --revert >/dev/null 2>&1 || true
     DRC_VARS=(NOASM=1 FORCE_DRC_C_BACKEND=1)
 fi
 
