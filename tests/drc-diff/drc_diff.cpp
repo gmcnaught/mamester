@@ -1,0 +1,823 @@
+// license:BSD-3-Clause
+/***************************************************************************
+
+    drc_diff.cpp
+
+    Differential test of a native UML back-end against drcbe_c.
+
+    Run the same UML block through the native back-end and through the
+    interpreter, execute both, and diff the resulting machine state. That is
+    what makes each opcode group in drcbearm32.cpp's REMAINING WORK an
+    independently verifiable unit rather than an aspiration.
+
+    ---------------
+    Why it lives inside MAME
+    ---------------
+
+    A standalone harness does not work. drcuml_state's constructor reads
+    device.machine().options() to choose a back-end, and device_t::machine()
+    and running_machine::options() are header-inline, so they never appear as
+    undefined symbols -- nm on drcuml.o shows no device_t reference at all,
+    which makes linking against stubs look viable and it is not. It builds and
+    then dereferences a fake device at runtime.
+
+    The way in is that the libretro core loads with NULL content and MAME
+    starts its ___empty driver, so a real running_machine and a real device_t
+    exist with no romset, no hardware, and no MiSTer. tests/drc-diff/nogame.c
+    is the proof of that; this file is what it was proved for.
+
+    ---------------
+    Getting two back-ends into one process
+    ---------------
+
+    Not by flipping drc_use_c(). That option is read once, in drcuml_state's
+    constructor, and it selects the single back-end that state will own -- one
+    drcuml_state can never hold both. The factories are exported, though, so
+    the harness constructs both itself.
+
+    Each back-end gets its OWN drc_cache. That is not tidiness: drc_hash_table,
+    drc_map_variables, drc_label_list and the drcuml_machine_state the
+    generated code operates on are all per-back-end members allocated out of
+    the cache it was handed, so sharing one would have the two code streams
+    writing over each other's register file.
+
+    One drcuml_block is fed to both, which the tree permits: a back-end's
+    generate() reads nothing from the block but invariant(), and uses it only
+    as the channel for abort(). Neither the back-ends nor the drcbeut
+    bookkeeping asserts inuse(), so the block does not have to be re-begun --
+    and deliberately no block.end() is called, since end() would route
+    generation through the state's own back-end, which is neither of the two
+    under test.
+
+    ---------------
+    How a case reports
+    ---------------
+
+    UML has SAVE and RESTORE, which move the whole drcuml_machine_state to and
+    from memory in one opcode. So a case is
+
+        HANDLE h / RESTORE seed / <body> / SAVE out / EXIT imm
+
+    and the diff is over every I register, every F register, exp, fmod and
+    flags without a line of per-opcode readout plumbing. The cost is that SAVE
+    and RESTORE are themselves lowered code: until a back-end has them, every
+    case reports unimplemented. They are therefore the two opcodes worth
+    lowering first, because they unlock the rest of the corpus.
+
+    An opcode a back-end has not lowered yet raises emu_fatalerror by design.
+    That is caught here per case and reported as UNIMPL rather than allowed to
+    take down the run, so the harness is useful as a coverage report from the
+    first day of lowering rather than only after the last.
+
+***************************************************************************/
+
+#include "emu.h"
+#include "drc_diff.h"
+
+#include "drcbec.h"
+#include "drccache.h"
+#include "drcuml.h"
+#include "uml.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
+
+
+// Mirrors drcuml.cpp's NATIVE_DRC chain. Kept as a copy rather than shared
+// because that chain is a private macro of drcuml.cpp, and because the harness
+// wants the native back-end BY NAME -- make_drcbe_native resolves to
+// make_drcbe_c on a host with no native back-end, which would silently turn
+// this into drcbe_c against itself and pass.
+#if !defined(MAME_NOASM) && (defined(__x86_64__) || defined(_M_X64))
+#include "drcbex64.h"
+#define DIFF_NATIVE_NAME    "drcbe_x64"
+#define DIFF_MAKE_NATIVE    drc::make_drcbe_x64
+#elif !defined(MAME_NOASM) && (defined(__aarch64__) || defined(_M_ARM64))
+#include "drcbearm64.h"
+#define DIFF_NATIVE_NAME    "drcbe_arm64"
+#define DIFF_MAKE_NATIVE    drc::make_drcbe_arm64
+#elif !defined(MAME_NOASM) && defined(__arm__)
+#include "drcbearm32.h"
+#define DIFF_NATIVE_NAME    "drcbe_arm32"
+#define DIFF_MAKE_NATIVE    drc::make_drcbe_arm32
+#else
+#define DIFF_NO_NATIVE      1
+#endif
+
+
+namespace drc {
+
+namespace {
+
+using namespace uml;
+
+
+//**************************************************************************
+//  CONFIGURATION
+//**************************************************************************
+
+// Comfortably over drc_cache's 128 KB near reservation, and small enough that
+// allocating a fresh pair per case costs nothing measurable.
+constexpr size_t CACHE_BYTES = 1 * 1024 * 1024;
+
+// Matches the SH cores' drcuml_state parameters, since the SH-2/SH-3 boards
+// are the drivers this back-end exists to recover.
+constexpr int MODES       = 1;
+constexpr int ADDRBITS    = 32;
+constexpr int IGNOREBITS  = 1;
+constexpr u32 MAX_SEQ_LEN = 128;
+
+constexpr u32 MAXINST = 64;
+
+
+//**************************************************************************
+//  THE SEED STATE
+//**************************************************************************
+
+// Every case starts from this, so an opcode that fails to write its
+// destination is caught rather than reading back whatever happened to be
+// there. The values are deliberately awkward -- both halves of each 64-bit
+// register distinct and non-zero, so a back-end that synthesises a 64-bit
+// operation out of two 32-bit ones cannot pass by getting one half right and
+// leaving the other untouched.
+drcuml_machine_state make_seed()
+{
+	drcuml_machine_state s;
+	std::memset(&s, 0, sizeof(s));
+
+	for (int i = 0; i < REG_I_COUNT; i++)
+		s.r[i].d = 0x0123456789abcdefULL ^ (u64(i + 1) * 0x1111111111111111ULL);
+	for (int i = 0; i < REG_F_COUNT; i++)
+		s.f[i].d = -1.5 * double(i + 1);
+
+	s.exp = 0xdeadbeef;
+
+	// Not ROUND_DEFAULT. drcbec masks fmod to two bits on the way in
+	// (m_state.fmod = PARAM0 & 0x03), so ROUND_DEFAULT (4) does not survive a
+	// round trip through it, and a native back-end that stores the value
+	// as-written would differ over what is a UML grey area rather than a
+	// lowering bug. The corpus stays inside the four modes both agree on.
+	s.fmod  = ROUND_TRUNC;
+	s.flags = 0;
+	return s;
+}
+
+
+//**************************************************************************
+//  THE CORPUS
+//**************************************************************************
+
+using builder = void (*)(std::vector<instruction> &);
+
+struct testcase
+{
+	char const *group;  // the REMAINING WORK group this belongs to
+	char const *name;
+	builder     build;
+};
+
+// Shorthand: b.emplace_back() returns the new instruction, so a case body
+// reads as one UML mnemonic per line.
+instruction &ins(std::vector<instruction> &b)
+{
+	return b.emplace_back();
+}
+
+// Every instruction is asked for every flag its opcode defines, applied to the
+// whole block after it is built.
+//
+// Normally drcuml_block::optimize() decides this, and it is skipped here on
+// purpose: the point is to test the lowering of exactly the opcode written,
+// not of whatever the optimiser rewrote it into. Something still has to set
+// the field, though, and asking each opcode for its own output_flags() is both
+// the most demanding choice -- flags are extra observable state on every
+// case -- and the only one that cannot ask an opcode for a flag it does not
+// define, which back-ends assert on.
+void request_all_flags(std::vector<instruction> &b)
+{
+	for (instruction &i : b)
+		i.set_flags(i.output_flags());
+}
+
+testcase const CORPUS[] =
+{
+// ---- the empty case: proves the entry/exit/nocode stub contract alone -----
+{ "control", "empty", [] (std::vector<instruction> &b) { } },
+
+{ "control", "nop", [] (std::vector<instruction> &b) {
+	ins(b).nop();
+} },
+
+// ---- MOV -----------------------------------------------------------------
+{ "mov", "mov.reg.imm", [] (std::vector<instruction> &b) {
+	ins(b).mov(I0, 0x12345678);
+	ins(b).mov(I1, 0);
+	ins(b).mov(I2, 0xffffffff);
+} },
+
+{ "mov", "mov.reg.reg", [] (std::vector<instruction> &b) {
+	ins(b).mov(I0, I5);
+	ins(b).mov(I1, I0);
+} },
+
+{ "mov", "dmov.reg.imm", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I0, 0x0123456789abcdefULL);
+	ins(b).dmov(I1, 0);
+	ins(b).dmov(I2, 0xffffffffffffffffULL);
+} },
+
+{ "mov", "dmov.reg.reg", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I0, I7);
+} },
+
+// A 32-bit MOV into a 64-bit register: the upper half must be zeroed, and
+// getting that wrong is invisible until a later 64-bit read.
+{ "mov", "mov.zeroes.upper", [] (std::vector<instruction> &b) {
+	ins(b).mov(I0, 0xffffffff);
+	ins(b).mov(I1, I2);
+} },
+
+{ "mov", "mov.cond", [] (std::vector<instruction> &b) {
+	ins(b).cmp(I0, I0);
+	ins(b).mov(COND_Z,  I1, 0x11111111);
+	ins(b).mov(COND_NZ, I2, 0x22222222);
+} },
+
+// ---- SEXT ----------------------------------------------------------------
+{ "sext", "sext", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0x000000ff);
+	ins(b).sext(I0, I9, SIZE_BYTE);
+	ins(b).sext(I1, I9, SIZE_WORD);
+	ins(b).mov(I9, 0x0000ffff);
+	ins(b).sext(I2, I9, SIZE_WORD);
+} },
+
+{ "sext", "dsext", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0x80000000);
+	ins(b).dsext(I0, I9, SIZE_DWORD);
+	ins(b).dsext(I1, I9, SIZE_BYTE);
+	ins(b).dsext(I2, I9, SIZE_WORD);
+} },
+
+// ---- ROLAND / ROLINS -----------------------------------------------------
+{ "rol", "roland", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0x89abcdef);
+	ins(b).roland(I0, I9, 0,  0xffffffff);
+	ins(b).roland(I1, I9, 8,  0x0000ffff);
+	ins(b).roland(I2, I9, 31, 0xf0f0f0f0);
+} },
+
+{ "rol", "rolins", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0x89abcdef);
+	ins(b).rolins(I0, I9, 4, 0x0000ff00);
+	ins(b).rolins(I1, I9, 0, 0xffffffff);
+} },
+
+// ---- the integer ALU -----------------------------------------------------
+{ "alu", "add", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x7fffffff);
+	ins(b).mov(I9, 1);
+	ins(b).add(I0, I8, I9);          // signed overflow
+	ins(b).add(I1, I8, 0);           // no flags set
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).add(I2, I8, I9);          // carry out, zero result
+} },
+
+{ "alu", "dadd", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0xffffffffffffffffULL);
+	ins(b).dmov(I9, 1);
+	ins(b).dadd(I0, I8, I9);
+	ins(b).dmov(I8, 0x00000000ffffffffULL);
+	ins(b).dadd(I1, I8, I9);         // carry across the 32-bit seam
+} },
+
+{ "alu", "addc", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).mov(I9, 1);
+	ins(b).add(I0, I8, I9);          // sets C
+	ins(b).addc(I1, I9, I9);         // consumes it
+} },
+
+{ "alu", "sub", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0);
+	ins(b).mov(I9, 1);
+	ins(b).sub(I0, I8, I9);          // borrow
+	ins(b).sub(I1, I9, I9);          // zero
+	ins(b).mov(I8, 0x80000000);
+	ins(b).sub(I2, I8, I9);          // signed overflow
+} },
+
+{ "alu", "subb", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0);
+	ins(b).mov(I9, 1);
+	ins(b).sub(I0, I8, I9);
+	ins(b).subb(I1, I9, I9);
+} },
+
+{ "alu", "cmp", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 5);
+	ins(b).mov(I9, 7);
+	ins(b).cmp(I8, I9);
+	ins(b).set(COND_B,  I0);
+	ins(b).set(COND_L,  I1);
+	ins(b).set(COND_E,  I2);
+	ins(b).cmp(I8, I8);
+	ins(b).set(COND_E,  I3);
+} },
+
+{ "alu", "dcmp", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0x0000000100000000ULL);
+	ins(b).dmov(I9, 0x00000000ffffffffULL);
+	ins(b).dcmp(I8, I9);
+	ins(b).set(COND_A, I0);
+	ins(b).set(COND_B, I1);
+} },
+
+{ "alu", "mulu", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x00010001);
+	ins(b).mov(I9, 0x00010001);
+	ins(b).mulu(I0, I1, I8, I9);
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).mulu(I2, I3, I8, I8);
+} },
+
+{ "alu", "muls", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xffffffff);                  // -1
+	ins(b).mov(I9, 2);
+	ins(b).muls(I0, I1, I8, I9);
+} },
+
+// The A9 has no integer divide, so DIVU/DIVS must lower to a call. That is
+// exactly the kind of thing that is easy to get subtly wrong.
+{ "alu", "divu", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 100);
+	ins(b).mov(I9, 7);
+	ins(b).divu(I0, I1, I8, I9);
+} },
+
+{ "alu", "divs", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xffffff9c);                  // -100
+	ins(b).mov(I9, 7);
+	ins(b).divs(I0, I1, I8, I9);
+} },
+
+{ "alu", "logic", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xf0f0f0f0);
+	ins(b).mov(I9, 0x0ff00ff0);
+	ins(b)._and(I0, I8, I9);
+	ins(b)._or (I1, I8, I9);
+	ins(b)._xor(I2, I8, I9);
+	ins(b)._and(I3, I8, 0);    // zero flag
+} },
+
+{ "alu", "dlogic", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0xf0f0f0f0f0f0f0f0ULL);
+	ins(b).dmov(I9, 0x0ff00ff00ff00ff0ULL);
+	ins(b).dand(I0, I8, I9);
+	ins(b).dor (I1, I8, I9);
+	ins(b).dxor(I2, I8, I9);
+} },
+
+{ "alu", "test", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xf0f0f0f0);
+	ins(b).test(I8, 0x0f0f0f0f);
+	ins(b).set(COND_Z, I0);
+	ins(b).test(I8, 0x80000000);
+	ins(b).set(COND_S, I1);
+} },
+
+{ "alu", "lzcnt.tzcnt.bswap", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x00010000);
+	ins(b).lzcnt(I0, I8);
+	ins(b).tzcnt(I1, I8);
+	ins(b).bswap(I2, I8);
+	ins(b).mov(I8, 0);
+	ins(b).lzcnt(I3, I8);      // the all-zero edge
+	ins(b).tzcnt(I4, I8);
+} },
+
+{ "alu", "dlzcnt.dtzcnt.dbswap", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0x0000000100000000ULL);
+	ins(b).dlzcnt(I0, I8);
+	ins(b).dtzcnt(I1, I8);
+	ins(b).dbswap(I2, I8);
+} },
+
+// ---- shifts --------------------------------------------------------------
+//
+// Shift by 0 and shift by the full width are the two amounts that break
+// hosts, and on ARM they are the same encoding problem that
+// tests/a32-asmjit/ already caught once in the encoder.
+{ "shift", "shl.shr.sar", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x89abcdef);
+	ins(b).shl(I0, I8, 1);
+	ins(b).shr(I1, I8, 1);
+	ins(b).sar(I2, I8, 1);
+	ins(b).shl(I3, I8, 0);
+	ins(b).shr(I4, I8, 31);
+	ins(b).sar(I5, I8, 31);
+} },
+
+{ "shift", "shift.by.reg", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x89abcdef);
+	ins(b).mov(I9, 12);
+	ins(b).shl(I0, I8, I9);
+	ins(b).shr(I1, I8, I9);
+	ins(b).sar(I2, I8, I9);
+} },
+
+{ "shift", "rol.ror", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x89abcdef);
+	ins(b).rol(I0, I8, 4);
+	ins(b).ror(I1, I8, 4);
+} },
+
+{ "shift", "rolc.rorc", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).mov(I9, 1);
+	ins(b).add(I7, I8, I9);          // sets C
+	ins(b).rolc(I0, I8, 1);
+	ins(b).rorc(I1, I8, 1);
+} },
+
+// 64-bit shifts on a 32-bit host are synthesised, and the amounts either side
+// of the seam are where that synthesis fails.
+{ "shift", "dshift", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0x0123456789abcdefULL);
+	ins(b).dshl(I0, I8, 1);
+	ins(b).dshl(I1, I8, 31);
+	ins(b).dshl(I2, I8, 32);
+	ins(b).dshl(I3, I8, 33);
+	ins(b).dshr(I4, I8, 32);
+	ins(b).dsar(I5, I8, 32);
+	ins(b).dshl(I6, I8, 0);
+} },
+
+// ---- LOAD / STORE --------------------------------------------------------
+//
+// Host memory, not an address space: the harness runs on a machine started
+// with no content, whose root device has no memory interface, so m_space is
+// empty and READ/WRITE have nothing to talk to. LOAD/STORE is the part of the
+// memory lowering that can be tested here, and READ/WRITE needs a driver.
+{ "loadstore", "load", [] (std::vector<instruction> &b) {
+	static u32 const src[4] = { 0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00 };
+	ins(b).mov(I9, 1);
+	ins(b).load(I0, src, 0,  SIZE_DWORD, SCALE_x4);
+	ins(b).load(I1, src, I9, SIZE_DWORD, SCALE_x4);
+	ins(b).load(I2, src, 0,  SIZE_BYTE,  SCALE_x1);
+	ins(b).load(I3, src, 0,  SIZE_WORD,  SCALE_x2);
+	ins(b).loads(I4, src, 0, SIZE_BYTE,  SCALE_x1);
+} },
+
+{ "loadstore", "store", [] (std::vector<instruction> &b) {
+	static u32 dst[4];
+	ins(b).mov(I8, 0xa5a5a5a5);
+	ins(b).mov(I9, 1);
+	ins(b).store(dst, 0,  I8, SIZE_DWORD, SCALE_x4);
+	ins(b).store(dst, I9, I8, SIZE_DWORD, SCALE_x4);
+	ins(b).load(I0, dst, 0,  SIZE_DWORD, SCALE_x4);
+	ins(b).load(I1, dst, I9, SIZE_DWORD, SCALE_x4);
+} },
+
+// ---- flag ops ------------------------------------------------------------
+{ "flags", "getflgs", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).mov(I9, 1);
+	ins(b).add(I7, I8, I9);
+	ins(b).getflgs(I0, FLAGS_ALL);
+	ins(b).getflgs(I1, FLAG_C);
+	ins(b).getflgs(I2, FLAG_Z);
+} },
+
+{ "flags", "setflgs", [] (std::vector<instruction> &b) {
+	ins(b).setflgs(FLAG_C | FLAG_Z);
+	ins(b).getflgs(I0, FLAGS_ALL);
+	ins(b).setflgs(0);
+	ins(b).getflgs(I1, FLAGS_ALL);
+} },
+
+{ "flags", "carry", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x00000100);
+	ins(b).carry(I8, 8);                         // bit 8 is set -> C
+	ins(b).getflgs(I0, FLAG_C);
+	ins(b).carry(I8, 7);                         // bit 7 is clear -> no C
+	ins(b).getflgs(I1, FLAG_C);
+} },
+
+{ "flags", "set", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 1);
+	ins(b).mov(I9, 2);
+	ins(b).cmp(I8, I9);
+	ins(b).set(COND_Z,  I0);
+	ins(b).set(COND_NZ, I1);
+	ins(b).set(COND_S,  I2);
+	ins(b).set(COND_B,  I3);
+	ins(b).set(COND_A,  I4);
+	ins(b).set(COND_L,  I5);
+	ins(b).set(COND_G,  I6);
+} },
+
+// ---- control flow --------------------------------------------------------
+{ "control", "jmp.label", [] (std::vector<instruction> &b) {
+	ins(b).mov(I0, 0x11111111);
+	ins(b).jmp(1);
+	ins(b).mov(I0, 0x22222222);                  // skipped
+	ins(b).label(1);
+	ins(b).mov(I1, 0x33333333);
+} },
+
+{ "control", "jmp.cond", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 1);
+	ins(b).mov(I9, 1);
+	ins(b).cmp(I8, I9);
+	ins(b).jmp(COND_NZ, 1);
+	ins(b).mov(I0, 0x44444444);                  // taken
+	ins(b).label(1);
+	ins(b).mov(I1, 0x55555555);
+} },
+
+// ---- floating point ------------------------------------------------------
+{ "float", "fmov", [] (std::vector<instruction> &b) {
+	ins(b).fdmov(F0, F3);
+	ins(b).fsmov(F1, F4);
+} },
+
+{ "float", "fdarith", [] (std::vector<instruction> &b) {
+	ins(b).fdadd(F0, F1, F2);
+	ins(b).fdsub(F1, F1, F2);
+	ins(b).fdmul(F2, F3, F4);
+	ins(b).fddiv(F3, F4, F5);
+	ins(b).fdneg(F4, F5);
+	ins(b).fdabs(F5, F6);
+} },
+
+{ "float", "fsarith", [] (std::vector<instruction> &b) {
+	ins(b).fssub(F1, F1, F2);
+	ins(b).fsmul(F2, F3, F4);
+	ins(b).fsneg(F4, F5);
+} },
+
+{ "float", "fdcmp", [] (std::vector<instruction> &b) {
+	ins(b).fdcmp(F1, F2);
+	ins(b).set(COND_B, I0);
+	ins(b).set(COND_E, I1);
+	ins(b).fdcmp(F1, F1);
+	ins(b).set(COND_E, I2);
+} },
+
+{ "float", "fdtoint", [] (std::vector<instruction> &b) {
+	ins(b).fdtoint(I0, F1, SIZE_DWORD, ROUND_TRUNC);
+	ins(b).fdtoint(I1, F1, SIZE_DWORD, ROUND_ROUND);
+	ins(b).fdtoint(I2, F1, SIZE_QWORD, ROUND_TRUNC);
+} },
+
+{ "float", "ffrint.ffrflt", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0xfffffff0);
+	ins(b).fdfrint(F0, I9, SIZE_DWORD);
+	ins(b).fdfrflt(F1, F2, SIZE_QWORD);
+	ins(b).fsfrint(F2, I9, SIZE_DWORD);
+} },
+
+{ "float", "setfmod.getfmod", [] (std::vector<instruction> &b) {
+	ins(b).setfmod(ROUND_TRUNC);
+	ins(b).getfmod(I0);
+	ins(b).setfmod(ROUND_CEIL);
+	ins(b).getfmod(I1);
+	ins(b).setfmod(ROUND_FLOOR);
+	ins(b).getfmod(I2);
+} },
+};
+
+
+//**************************************************************************
+//  RUNNING ONE CASE ON ONE BACK-END
+//**************************************************************************
+
+enum backend_kind { BE_C, BE_NATIVE };
+
+struct outcome
+{
+	bool                    ran = false;        // false => the back-end refused
+	std::string             err;                // why, if it refused
+	int                     exitcode = 0;       // what EXIT returned
+	drcuml_machine_state    state;              // what SAVE wrote
+};
+
+// A full, isolated run: its own caches, its own drcuml_state, its own
+// back-end. Isolation per case rather than per corpus is what lets an
+// unimplemented opcode be caught and reported instead of poisoning the
+// bookkeeping for everything after it -- generate() raises from the middle of
+// a block, so block_end() never runs, and the cheapest way to be certain that
+// leaves nothing behind is to throw the whole back-end away.
+outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
+{
+	outcome result;
+	std::memset(&result.state, 0, sizeof(result.state));
+
+	try
+	{
+		drc_cache umlcache(CACHE_BYTES);
+		drc_cache becache(CACHE_BYTES);
+
+		// This state constructs a back-end of its own, per drc_use_c(), which
+		// is neither of the two under test and is never asked to do anything.
+		// It is here for the block, handle and symbol bookkeeping.
+		drcuml_state uml(device, umlcache, 0, MODES, ADDRBITS, IGNOREBITS, MAX_SEQ_LEN);
+
+		std::unique_ptr<drcbe_interface> be;
+		if (kind == BE_C)
+			be = drc::make_drcbe_c(uml, device, becache, 0, MODES, ADDRBITS, IGNOREBITS);
+#if !defined(DIFF_NO_NATIVE)
+		else
+			be = DIFF_MAKE_NATIVE(uml, device, becache, 0, MODES, ADDRBITS, IGNOREBITS);
+#else
+		else
+			{ result.err = "no native back-end on this host"; return result; }
+#endif
+
+		be->reset();
+
+		drcuml_machine_state seed = make_seed();
+
+		code_handle *const entry = uml.handle_alloc("diff_entry");
+
+		std::vector<instruction> block;
+		block.reserve(MAXINST);
+		ins(block).handle(*entry);
+		ins(block).restore(&seed);
+		tc.build(block);
+		ins(block).save(&result.state);
+		ins(block).exit(0x600d600d);
+		request_all_flags(block);
+
+		if (block.size() > MAXINST)
+			throw emu_fatalerror("drc-diff: case '%s' is %u instructions, over MAXINST", tc.name, unsigned(block.size()));
+
+		// No block.end(): end() would route generation through the state's own
+		// back-end. begin_block() is called only to get a block object, which
+		// generate() reads nothing from but invariant().
+		drcuml_block &blk = uml.begin_block(MAXINST);
+		be->generate(blk, block.data(), u32(block.size()));
+
+		result.exitcode = be->execute(*entry);
+		result.ran = true;
+	}
+	catch (emu_fatalerror const &e)
+	{
+		// The expected path for an opcode that is not lowered yet.
+		result.err = e.what();
+	}
+	catch (drcuml_block::abort_compilation const &)
+	{
+		result.err = "out of cache space";
+	}
+	catch (std::exception const &e)
+	{
+		result.err = e.what();
+	}
+
+	return result;
+}
+
+
+//**************************************************************************
+//  DIFFING
+//**************************************************************************
+
+// Field by field rather than memcmp, for two reasons: drcuml_machine_state has
+// tail padding that no back-end writes, so a memcmp would compare uninitialised
+// bytes; and a failing case has to name what disagreed to be worth anything.
+unsigned diff_state(char const *name, outcome const &c, outcome const &n)
+{
+	unsigned bad = 0;
+	auto report = [&] (char const *field, u64 cv, u64 nv)
+	{
+		std::fprintf(stderr, "  %-20s c=%016llx  " DIFF_NATIVE_NAME "=%016llx\n",
+				field, (unsigned long long)cv, (unsigned long long)nv);
+		bad++;
+	};
+
+	for (int i = 0; i < REG_I_COUNT; i++)
+	{
+		if (c.state.r[i].d != n.state.r[i].d)
+		{
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "i%d", i);
+			report(buf, c.state.r[i].d, n.state.r[i].d);
+		}
+	}
+
+	// Floats compared as their bit patterns: this is a bit-exactness test, and
+	// comparing as doubles would call two NaNs unequal and two differently
+	// encoded zeroes equal, both of which are the wrong answer here.
+	for (int i = 0; i < REG_F_COUNT; i++)
+	{
+		u64 cv, nv;
+		std::memcpy(&cv, &c.state.f[i].d, sizeof(cv));
+		std::memcpy(&nv, &n.state.f[i].d, sizeof(nv));
+		if (cv != nv)
+		{
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "f%d", i);
+			report(buf, cv, nv);
+		}
+	}
+
+	if (c.state.exp != n.state.exp)
+		report("exp", c.state.exp, n.state.exp);
+	if (c.state.fmod != n.state.fmod)
+		report("fmod", c.state.fmod, n.state.fmod);
+	if (c.state.flags != n.state.flags)
+		report("flags", c.state.flags, n.state.flags);
+	if (c.exitcode != n.exitcode)
+		report("exitcode", u32(c.exitcode), u32(n.exitcode));
+
+	return bad;
+}
+
+} // anonymous namespace
+
+
+//**************************************************************************
+//  ENTRY POINT
+//**************************************************************************
+
+void diff_run_once(device_t &device)
+{
+	static bool done = false;
+	if (done || !std::getenv("MAMESTER_DRC_DIFF"))
+		return;
+	done = true;
+
+	// Optional filter: MAMESTER_DRC_DIFF=alu runs only the alu group, so a
+	// lowering session can iterate on one group without reading past it.
+	char const *const filter = std::getenv("MAMESTER_DRC_DIFF");
+	bool const all = !std::strcmp(filter, "1") || !std::strcmp(filter, "all");
+
+#if defined(DIFF_NO_NATIVE)
+	std::fprintf(stderr, "DRC-DIFF: no native back-end is compiled in on this host -- nothing to diff\n");
+	std::fflush(nullptr);
+	std::_Exit(2);
+#else
+	std::fprintf(stderr, "DRC-DIFF: drcbe_c vs " DIFF_NATIVE_NAME "\n");
+
+	unsigned pass = 0, fail = 0, unimpl = 0, skipped = 0;
+
+	for (testcase const &tc : CORPUS)
+	{
+		if (!all && std::strcmp(filter, tc.group) && std::strcmp(filter, tc.name))
+		{
+			skipped++;
+			continue;
+		}
+
+		outcome const c = run_case(device, BE_C,      tc);
+		outcome const n = run_case(device, BE_NATIVE, tc);
+
+		// drcbe_c is the oracle. If IT cannot run a case, the case is wrong,
+		// not the back-end, and saying so is the difference between a corpus
+		// bug and a lowering bug.
+		if (!c.ran)
+		{
+			std::fprintf(stderr, "BAD-CASE %-24s the C back-end refused it: %s\n", tc.name, c.err.c_str());
+			fail++;
+			continue;
+		}
+
+		if (!n.ran)
+		{
+			std::fprintf(stderr, "UNIMPL   %-24s %s", tc.name, n.err.c_str());
+			unimpl++;
+			continue;
+		}
+
+		unsigned const bad = diff_state(tc.name, c, n);
+		if (bad)
+		{
+			std::fprintf(stderr, "FAIL     %-24s %u field(s) disagree\n", tc.name, bad);
+			fail++;
+		}
+		else
+		{
+			std::fprintf(stderr, "ok       %-24s\n", tc.name);
+			pass++;
+		}
+	}
+
+	std::fprintf(stderr, "DRC-DIFF: pass=%u fail=%u unimpl=%u skipped=%u\n",
+			pass, fail, unimpl, skipped);
+
+	// _Exit rather than a return: the harness has just left a drcuml_state and
+	// two back-ends in whatever condition the last case put them, and MAME's
+	// orderly shutdown has no reason to survive that. The exit status is the
+	// test result, and unimplemented opcodes are not failures -- they are the
+	// work queue.
+	std::fflush(nullptr);
+	std::_Exit(fail ? 1 : 0);
+#endif
+}
+
+} // namespace drc

@@ -7,6 +7,18 @@
 #   M16B=1 tools/build-lrmame.sh                   # RGB565 output instead of XRGB8888
 #   SUBTARGET=lrmame-gate tools/build-lrmame.sh    # name the build
 #   DRC=0 tools/build-lrmame.sh                    # UML interpreter, no ARM32 JIT
+#   HOST=1 tools/build-lrmame.sh                   # x86_64 host build, native DRC
+#
+# HOST=1 is not a way to run games -- it is what tests/drc-diff/ needs. The
+# differential harness compares drcbe_c against whatever native back-end the
+# host has, and on x86_64 that is drcbe_x64: a back-end two decades of drivers
+# have already qualified. Running the harness there first is what separates
+# "the harness is wrong" from "the back-end is wrong", and a differential test
+# that has not been calibrated that way proves only that two things disagree.
+#
+# It gets its own BUILDDIR, so the two builds do not clean each other out. The
+# cost of that separation is a second run of the layout codegen; the cost of
+# not having it is a full rebuild every time you alternate.
 #
 # Output: vendor/lrmame/libretro/mame_<SUBTARGET>_libretro.so, linked later by
 # tools/mame-frontend/libretro-host/.
@@ -112,7 +124,35 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
 #                        the whole time.
 #
 # See docs/superpowers/specs/2026-08-05-drcbearm32-design.md.
-if [ "${DRC:-1}" = "1" ]; then
+HOST="${HOST:-0}"
+BUILDDIR="${BUILDDIR:-$([ "$HOST" = "1" ] && echo build-host || echo build)}"
+
+# The differential harness is injected for every configuration. It compiles into
+# the core unconditionally and does nothing unless MAMESTER_DRC_DIFF is set in
+# the environment, so this does not make a shipped core a test core.
+"$REPO/tests/drc-diff/inject.sh" >/dev/null
+
+if [ "$HOST" = "1" ]; then
+    # No PLATFORM, no ARCHITECTURE=, no cross toolchain -- and critically none
+    # of NOASM/FORCE_DRC_C_BACKEND, because the whole point is to get the host's
+    # NATIVE back-end compiled in for the harness to diff against.
+    echo "# HOST=1: x86_64 build with the host's native DRC back-end"
+    "$REPO/tools/mame-drc-arm32/inject.sh" --revert >/dev/null 2>&1 || true
+    MAKE_VARS=(
+        CONFIG=libretro
+        OSD=retro
+        TARGET=mame
+        "SUBTARGET=$SUBTARGET"
+        "SOURCES=$SOURCES"
+        "BUILDDIR=$BUILDDIR"
+        PTR64=1
+        NO_USE_PORTAUDIO=1
+        NO_USE_MIDI=1
+        PYTHON_EXECUTABLE=python3
+        REGENIE=1
+        NOWERROR=1
+    )
+elif [ "${DRC:-1}" = "1" ]; then
     echo "# DRC on: injecting the ARM32 back-end into vendor/lrmame"
     "$REPO/tools/mame-drc-arm32/inject.sh"
     echo "#   NOTE: only structural opcodes are lowered — a driver on a DRC-backed"
@@ -124,12 +164,14 @@ else
     DRC_VARS=(NOASM=1 FORCE_DRC_C_BACKEND=1)
 fi
 
+if [ "$HOST" != "1" ]; then
 MAKE_VARS=(
     CONFIG=libretro
     OSD=retro
     TARGET=mame
     "SUBTARGET=$SUBTARGET"
     "SOURCES=$SOURCES"
+    "BUILDDIR=$BUILDDIR"
     PLATFORM=arm
     PTR64=0
     ARCHITECTURE=
@@ -146,6 +188,7 @@ MAKE_VARS=(
     REGENIE=1
     NOWERROR=1
 )
+fi
 
 # OpenGL must stay absent. With HAVE_OPENGL or HAVE_OPENGLES defined the core
 # issues SET_HW_RENDER and RETURNS FALSE FROM retro_load_game when the frontend
@@ -153,7 +196,11 @@ MAKE_VARS=(
 # back to software, it fails to load every game. Nothing here defines them; this
 # comment is the guard against someone adding one.
 if [ "${M16B:-0}" = "1" ]; then
-    MAKE_VARS+=("ARCHOPTS=$ARCHOPTS -DM16B")
+    if [ "$HOST" = "1" ]; then
+        MAKE_VARS+=("ARCHOPTS=-DM16B")
+    else
+        MAKE_VARS+=("ARCHOPTS=$ARCHOPTS -DM16B")
+    fi
     echo "# M16B: core will report RGB565 (no per-frame convert)"
 fi
 
@@ -162,11 +209,18 @@ fi
 # built under the old one. Same trap tools/build-m2003p.sh documents, same fix:
 # stamp the configuration and force a clean when it moves. The stamp is written
 # only on success, so an interrupted build re-cleans.
+#
+# The stamp is per-BUILDDIR, so alternating between the armhf and host builds
+# does not read as a configuration change and force a clean of the one you are
+# not building. That is the whole reason the two have separate build dirs.
 SIG=$(printf '%s\n' "${MAKE_VARS[@]}")
-STAMP="$SRC/.mister-build-config"
+STAMP="$SRC/.mister-build-config-$BUILDDIR"
 
 run() {
-    if command -v arm-linux-gnueabihf-g++ >/dev/null 2>&1; then
+    # A host build is native by definition -- never the armhf container.
+    if [ "$HOST" = "1" ]; then
+        ( cd "$SRC" && "$@" )
+    elif command -v arm-linux-gnueabihf-g++ >/dev/null 2>&1; then
         ( cd "$SRC" && "$@" )
     else
         docker image inspect "$IMAGE" >/dev/null 2>&1 || {
@@ -186,8 +240,8 @@ if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$SIG" ]; then
     fi
 fi
 
-echo "# building mame_${SUBTARGET} for armhf, -j$JOBS"
-echo "#   SOURCES=$SOURCES"
+echo "# building mame_${SUBTARGET} for $([ "$HOST" = "1" ] && echo "the host" || echo armhf), -j$JOBS"
+echo "#   SOURCES=$SOURCES  BUILDDIR=$BUILDDIR"
 run nice make -f makefile "${MAKE_VARS[@]}" -j"$JOBS"
 
 printf '%s\n' "$SIG" > "$STAMP"
