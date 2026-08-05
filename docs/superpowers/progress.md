@@ -491,3 +491,78 @@ the source: run the binary from its own directory (MAME `chdir()`s to
 reports every ROM missing), and pick a frame where the driver animates — attract
 modes hold still (gng 899–902 are byte-identical), and it has already caught
 three would-be false passes.
+
+## Stage 10 — libretro's current MAME (0.289) as a third engine (in progress)
+
+Design: [`specs/2026-08-05-lrmame-engine-design.md`](specs/2026-08-05-lrmame-engine-design.md).
+Branch `claude/libretro-mame-engine-target-u14ehm`. Submodule `vendor/lrmame` =
+[`libretro/mame`](https://github.com/libretro/mame) `85eaed9c` (upstream MAME
+**0.289**, 2026-08-04).
+
+**This is the first engine whose feasibility is genuinely in doubt, so the plan
+is one kill decision rather than a schedule.** MAME 0.289's device model,
+`emumem` dispatch and scheduler are built for 64-bit desktop silicon; this is an
+800 MHz Cortex-A9 on a 32-bit ABI, and **ARM32 has no DRC backend in MAME**
+(`FORCE_DRC_C_BACKEND=1` is mandatory), so every recompiler-backed CPU runs its C
+interpreter. **Gate: build `SOURCES=pacman`, bench it on the device with sound and
+the core loaded. Below 60 fps → stop and write it up.** Everything past the gate
+is deliberately unbuilt.
+
+**The 2003-plus work paid off — the engine is mostly a build problem, not a port.**
+Verified by reading the core, not assumed:
+- `need_fullpath = true`, `valid_extensions = "cmd|zip|7z"` (`libretro.cpp:718`) —
+  so `host_main.c`'s setname → `<rompath>/<setname>.zip` contract is unchanged.
+- `SET_HW_RENDER` is inside `#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)`
+  (`libretro.cpp:938`), so a no-GL build never issues it and renders purely into a
+  software framebuffer. **Its failure path returns false from `retro_load_game`**,
+  so an accidental GL build does not degrade — it fails to load every game.
+- genie links the target with `--version-script=link.T` (exports `retro_*`, hides
+  everything else) and `--no-undefined`. That is exactly the frontend contract, so
+  the host **links against the `.so` directly** — no `dlopen`, no host source
+  change, no libretro-common obligation.
+- `nv_present.c` already carries both formats this core can emit.
+
+**What was actually new, and done:**
+1. **Toolchain.** 0.289 is `-std=c++20` (`genie.lua:774`); the bullseye/gcc-10.2.1
+   cross container cannot build it. New container
+   `tools/mister/Dockerfile.cross-armhf-cxx20` (trixie/gcc-14). The old one is
+   **kept, not upgraded** — `docs/bench-results.md`'s engine comparison rests on
+   mame4all and 2003-plus sharing a compiler.
+2. **`tools/build-lrmame.sh`.** Six load-bearing flags, documented in the script.
+   The one that is not guessable: **`ARCHITECTURE=` (empty) is mandatory.**
+   `PTR64=0` sets `ARCHITECTURE:=_x86` regardless of `PLATFORM` (`makefile:364`),
+   which routes the build to the `linux_x86` target and puts `-m32` on an ARM
+   compiler. Upstream's own `android-arm` block clears it the same way.
+   Also required: `OSD=retro` — `CONFIG=libretro` does **not** imply it (the OSD
+   default is `sdl`, `makefile:455`), and without it there are no `retro_*` entry
+   points at all.
+3. **Engine seam in the host.** `make ENGINE=lrmame`; default unchanged.
+   Per-engine library, include path, container and link flags.
+4. **`host_env.c` gains the commands 0.289 issues and 0.78 did not.**
+   `SET_SYSTEM_AV_INFO` is the load-bearing one — it carries a timing block, so
+   unlike `SET_GEOMETRY` it can change the refresh rate, and the modeline is
+   derived from that rate. Every new case is `#ifdef`'d on the constant so one
+   shared source compiles against either engine's `libretro.h`.
+
+**Verified this far:** genie generates all 27 projects for the armhf
+configuration; the emu core cross-compiles; all six host sources compile clean
+against 0.289's `libretro.h` with `-DMAMESTER_ENGINE_LRMAME`; the Makefile
+resolves both engines' link lines.
+
+**Not verified — needs the operator's machine:** the gate itself. This session's
+container has **no `ssh`**, so `.81` was unreachable and nothing was benched. The
+full `SOURCES=pacman` link had not finished when the session ended either — it is
+a multi-hour build on 4 cores, dominated by MAME's own emu core rather than by
+the driver.
+
+**Open, deliberately deferred to after the gate:** `M16B`. Defining it makes the
+core report RGB565 (`libretro.cpp:771`) — already the DDR format, skipping a
+per-frame convert — but `libretro_shared.h:10` defines `HAVE_RGB32`
+unconditionally beside a `FIXME: re-add way to handle 16/32 bit`, so the 16-bit
+path is plausibly bit-rotted. Treat it as a measured arm (`MISTER_FRAME_HASH`
+both ways), not a free win.
+
+**Licensing changes with this engine.** MAME has been **GPL-2.0-or-later /
+BSD-3-Clause since 0.172**, not the pre-2016 non-commercial licence that governs
+mame4all and 2003-plus. Less restrictive, but different obligations —
+`CLAUDE.md`'s licensing note describes only the old one and needs updating.
