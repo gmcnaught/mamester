@@ -30,9 +30,13 @@ MAME 0.289's per-frame cost is not comparable to 0.78's. Its device model,
 `emumem` address-space dispatch and scheduler are built for correctness on
 64-bit desktop silicon; the DE10-Nano's HPS is a **dual Cortex-A9 at 800 MHz** with
 a 32-bit ABI, and Stage 8 established that on this hardware even 0.78 needed the
-present-path fix to bring `atarisy2` from 44 to 80 fps. On top of that, ARM32 has
-**no DRC backend** in MAME — `FORCE_DRC_C_BACKEND=1` is mandatory — so every
-recompiler-backed CPU falls back to the C interpreter.
+present-path fix to bring `atarisy2` from 44 to 80 fps.
+
+The missing ARM32 DRC backend is a *separate and much smaller* issue — 3.2% of
+driver files, none of them in the target library — and it is measured and
+descoped below. It is deliberately not part of the gate: Pac-Man is a Z80 and
+never touches `drcuml`, so the gate measures 0.289's core overhead, which is the
+thing genuinely in question.
 
 **Gate: build the smallest possible subset, run `pacman` on the device, read
 `MISTER-BENCH fps=`.** Pac-Man is a Z80 and a 2-bit-per-pixel tilemap: if 0.289
@@ -175,15 +179,58 @@ addition is an `$ORIGIN` rpath so the `.so` deploys beside the binary.
    standards, and the FPGA owns half the DDR. Measure the deployed `.so` and the
    RSS of a running game, not just the fps.
 3. **ARM32 maturity.** 32-bit is a lightly-tested upstream configuration:
-   `PTR64=0`, no DRC backend, `-Wno-cast-align` applied wholesale for
-   `PLATFORM=arm` (`genie.lua:1143`). Expect to fix build breakage that upstream
-   CI never sees.
+   `PTR64=0`, `-Wno-cast-align` applied wholesale for `PLATFORM=arm`
+   (`genie.lua:1143`). Expect to fix build breakage that upstream CI never sees.
+   The DRC half of this risk was measured and descoped — see below.
 4. **`M16B` bit-rot** — see §3.
 5. **Licensing.** MAME has been **GPL-2.0-or-later / BSD-3-Clause since 0.172**,
    not the pre-2016 non-commercial licence that governs the other two engines.
    That is *less* restrictive for redistribution, but it is a different licence
    with different obligations, and `CLAUDE.md`'s licensing note currently
    describes only the old one. It needs updating rather than assuming carry-over.
+
+## The DRC gap, measured — and descoped
+
+**Operator decision, 2026-08-05: descope rather than chase.**
+
+0.289 ships three DRC backends — `drcbex64`, `drcbearm64`, `drcbec` — and
+`scripts/src/cpu.lua:24` gates the two native ones to `PLATFORM` x86 or arm64.
+There is **no 32-bit native backend of any architecture**; x86-32's was retired
+too, which is the useful signal: upstream has consolidated on 64-bit natives, so
+an ARM32 backend would be swimming against that rather than filling a gap they
+want filled. And `drcbearm64` can never apply here — the Cyclone V HPS is a
+Cortex-A9, ARMv7-A, with no 64-bit mode. So everything DRC-backed runs `drcbec`,
+a portable UML interpreter.
+
+**The affected set is 147 of 4652 driver files — 3.2%**
+(`tools/lrmame-drc-scan.sh --summary`). Z80, 6502, 6809, 68000/68020 and V60
+never touch `drcuml`, so `FORCE_DRC_C_BACKEND` costs the drivers this port
+targets exactly nothing. Verified against four Stage-8 gap families — `taito_f3`,
+`konamigx`, `segas24`, `kaneko16` — none of which include a DRC CPU.
+
+Most of the 147 is out of scope anyway: SGI workstations, Apple Macs, skeleton
+drivers, Jaguar. **What is genuinely given up is the SH-2/SH-3 arcade boards
+that would otherwise have been borderline: `psikyosh`, `stv`, `feversoc`,
+`cv1000`.** `psikyosh` is the one that stings — it is a named gap target in
+`CLAUDE.md` — but it is SH-2 at 28 MHz plus a heavy sprite chip, so it was
+unlikely to clear 60 fps on this silicon with a perfect recompiler either.
+
+Rejected: **writing `drcbearm32`.** It is a ~5,700-line project by
+`drcbearm64.cpp`'s measure, and ARMv7 makes it *harder* than the arm64 one —
+~14 usable GPRs against 31, and UML is a 64-bit-register IR, so every 64-bit
+operation needs register pairs and explicit carry handling. That is why it has
+never existed. Out of proportion to a 3% slice that is mostly unreachable here
+for unrelated reasons. Optimising `drcbec` (2,607 lines of dispatch loop) was
+also rejected: modest gains, shared code so regressions hit every platform, and
+it changes no verdict.
+
+**Consequence for Stage 5:** the driver subset is chosen from the non-DRC
+majority, and `tools/lrmame-drc-scan.sh` produces the exclusion list mechanically
+so this stays true as MAME moves rather than depending on anyone remembering it.
+
+Incidental: `genie.lua:457` makes `NOASM=1` imply `FORCE_DRC_C_BACKEND`, so
+`tools/build-lrmame.sh` sets it twice over. Harmless, and it means a native
+backend cannot be selected on this target even by accident.
 
 ## Staged plan
 
@@ -194,7 +241,7 @@ addition is an `$ORIGIN` rpath so the `.so` deploys beside the binary.
 | 2 | Engine seam in the host; link and run `pacman` | binary runs off-device, `retro_load_game` succeeds |
 | **3** | **Device bench: `pacman`, sound on, core loaded** | **fps ≥ 60 → continue; below → stop and write it up** |
 | 4 | `M16B` vs XRGB8888 arm; `MISTER_FRAME_HASH` equality | format chosen on measurement |
-| 5 | Coverage diff vs the other two engines + MRAs | the driver subset that justifies the build |
+| 5 | Coverage diff vs the other two engines + MRAs, **minus `lrmame-drc-scan.sh`** | the driver subset that justifies the build |
 | 6 | Subset build, launch harness, per-game opts | games launch from the OSD as the other engines do |
 
 Stages 4–6 are contingent on 3 and are deliberately left thin here; they get their

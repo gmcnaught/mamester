@@ -582,6 +582,24 @@ container has **no `ssh`**, so `.81` was unreachable and nothing was benched, an
 no ROMs exist here to run. The fps number is the whole decision and it does not
 exist yet.
 
+**DRC on ARM32: measured, then descoped (operator, 2026-08-05).** 0.289 has no
+32-bit native DRC backend for ANY architecture (x86-32's went too), and
+`drcbearm64` cannot apply — the A9 is ARMv7-A with no 64-bit mode — so everything
+DRC-backed runs `drcbec`, the portable UML interpreter. **This is narrower than it
+sounds: 147 of 4652 driver files, 3.2%** (`tools/lrmame-drc-scan.sh --summary`).
+Z80/6502/6809/68000/68020/V60 never touch `drcuml`, and none of the Stage-8 gap
+families checked (`taito_f3`, `konamigx`, `segas24`, `kaneko16`) include a DRC
+CPU. Most of the 147 is out of scope regardless (SGI, Mac, skeletons, Jaguar);
+the real loss is the borderline SH-2/SH-3 boards — **`psikyosh`** (a named gap
+target), `stv`, `feversoc`, `cv1000`. Writing `drcbearm32` was rejected: ~5,700
+lines by `drcbearm64.cpp`'s measure, and harder on ARMv7 (~14 GPRs vs 31, and a
+64-bit-register IR needing register pairs). Stage 5 picks the subset from the
+non-DRC majority, with the exclusion list generated rather than remembered.
+
+**This does not move the gate.** Pac-Man is a Z80 and never sees the DRC, so the
+fps number measures 0.289's core overhead — device model, `emumem` dispatch,
+scheduler — which is the thing actually in question.
+
 **Open, deliberately deferred to after the gate:** `M16B`. Defining it makes the
 core report RGB565 (`libretro.cpp:771`) — already the DDR format, skipping a
 per-frame convert — but `libretro_shared.h:10` defines `HAVE_RGB32`
