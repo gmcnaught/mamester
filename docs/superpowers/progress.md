@@ -578,6 +578,26 @@ toolchain recipe are all proven; what is untested is pixels, sound and speed.
    to be closed over parents, or accept that those clones are unrunnable. Worth
    settling when the subset is chosen (Stage 5 of the design doc).
 
+**Launch integration done (2026-08-05).** `deploy.py` had claimed since the
+2003-plus work that "the per-driver choice is made at launch time
+(`game_manager.sh`)" — **it was not**: `MAME_BIN` was a single fixed path, so
+every game launched mame4all and the deployed `mame2003` binary was never used
+by anything. An `engine <name>` line in `games/mame/opts/<setname>.opt` now
+selects the binary (`game_engine()` reads it; `game_opts()` deletes it, since
+`engine lrmame` on MAME's command line is an unknown-option error). Unknown names
+and un-deployed engines fall back to the default and say why in the game log —
+loud but not fatal, because a device with no console is a bad place to fail
+silently. **The default stays mame4all**: `deploy.py` calls 2003-plus primary,
+but flipping it here would silently re-point every already-deployed game, so
+`engine mame2003` in `default.opt` is left as an operator decision and the
+mismatch is documented at `engine_bin()`.
+
+`deploy.py` also pushes **`lrmame_libretro.so`**, paired with its binary rather
+than listed separately — lrmame is the only engine that is not self-contained
+(the host resolves MAME through an `$ORIGIN` RUNPATH), and a missing `.so` fails
+in the dynamic loader before `main()`, which looks nothing like a missing engine.
+Tests 31 → 46.
+
 **Not verified — needs the operator's machine:** the gate itself. This session's
 container has **no `ssh`**, so `.81` was unreachable and nothing was benched, and
 no ROMs exist here to run. The fps number is the whole decision and it does not
