@@ -66,7 +66,7 @@ case "$MODE" in
 --revert)
     rm -f "$CPUDIR/arm32emit.h" "$CPUDIR/drcbearm32.h" "$CPUDIR/drcbearm32.cpp"
     # asmjit is upstream's tree with edits on top, so git restores it exactly
-    git -C "$SRC" checkout -- 3rdparty/asmjit 2>/dev/null || true
+    git -C "$SRC" checkout -- 3rdparty/asmjit scripts/src/3rdparty.lua 2>/dev/null || true
     git -C "$SRC" clean -qfd 3rdparty/asmjit 2>/dev/null || true
     python3 - "$DRCUML" "$CPULUA" "$SENTINEL" <<'PY'
 import re, sys
