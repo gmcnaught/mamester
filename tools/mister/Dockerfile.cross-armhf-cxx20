@@ -1,0 +1,41 @@
+# Cross-compile container for the CURRENT libretro MAME (0.289), armhf/Cortex-A9.
+#
+# Why this exists beside Dockerfile.cross-armhf rather than replacing it:
+# MAME 0.289 compiles with -std=c++20 (scripts/genie.lua:774,778,1174). The
+# existing cross container is Debian bullseye / gcc 10.2.1, which has only
+# partial C++20 and cannot build it. The two older engines (mame4all, 2003-plus)
+# are C++98-era code whose measured figures belong to gcc 10.2.1, and
+# docs/bench-results.md's engine comparison rests on both of them being built by
+# the SAME compiler -- so bumping the shared container would silently invalidate
+# that comparison. New compiler, new file.
+#
+# Debian trixie = gcc 14, comfortably past MAME's C++20 requirement.
+#
+# MAME cross-builds need BOTH toolchains at once: genie emits host-native build
+# tools (verinfo, png2bdc, makedep) and cross-compiles the emulator itself, which
+# is what makefile:361's CROSS_BUILD:=1 plus OVERRIDE_CC/OVERRIDE_CXX select.
+# g++ (native) and arm-linux-gnueabihf-g++ therefore both have to be present.
+#
+# python3 is not optional: the build runs scripts/build/verinfo.py and the
+# genie-driven code generators through it (makefile:1000 PYTHON_AVAILABLE).
+FROM debian:trixie
+
+RUN dpkg --add-architecture armhf \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        crossbuild-essential-armhf \
+        build-essential \
+        make \
+        python3 \
+        git \
+        ca-certificates \
+        libasound2-dev:armhf \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# MAME's makefile runs `git describe` for the version string it stamps into the
+# binary. The bind-mounted checkout is owned by the host uid, and git refuses to
+# read a repo it does not own, which makes the version come out empty rather
+# than failing the build -- so the ownership check is waived here.
+RUN git config --global --add safe.directory '*'
+
+WORKDIR /src

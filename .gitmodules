@@ -4,3 +4,6 @@
 [submodule "vendor/mame2003-plus"]
 	path = vendor/mame2003-plus
 	url = https://github.com/libretro/mame2003-plus-libretro.git
+[submodule "vendor/lrmame"]
+	path = vendor/lrmame
+	url = https://github.com/libretro/mame.git
