@@ -813,3 +813,54 @@ installed. Scope is unchanged and still small: structural opcodes only,
 everything else `fatalerror`. `arm32emit.h` and `tests/arm32emit/` stay as the
 fallback and as the oracle the a32 corpus was built from — 391 instructions,
 still passing, still the thing that would catch a32 regressing.
+
+### The differential harness exists (`tests/drc-diff/`)
+
+Nothing in the lowering was verified by anything, which is why this came before
+more lowering. `tests/drc-diff/README.md` carries the detail; the findings worth
+keeping in the ledger:
+
+**One `drcuml_block` can be generated twice, and that was the open question.**
+A back-end's `generate()` reads nothing from the block but `invariant()` and
+uses it only as the channel for `abort()` — three appearances each in
+`drcbec.cpp` and `drcbearm64.cpp`, and the `drcbeut` bookkeeping is the same
+shape. **Nothing anywhere asserts `inuse()`**, so the block needs no second
+`begin()` and the harness needs no second `drcuml_state`. `block.end()` is
+never called, because `end()` routes generation through the state's own
+back-end — which is neither of the two under test.
+
+**Two back-ends in one process, but not via `drc_use_c()`.** That option is
+read once in `drcuml_state`'s constructor and selects the single back-end that
+state will own. The factories are exported, so the harness calls
+`make_drcbe_c` and `make_drcbe_<native>` itself, **each over its own
+`drc_cache`** — the hash table, label list, map variables and the
+`drcuml_machine_state` the generated code operates on are all per-back-end
+members allocated out of the cache the back-end was handed, so one shared cache
+would have the two code streams overwriting each other's register file.
+
+**`SAVE`/`RESTORE` are the readout.** They move a whole `drcuml_machine_state`
+in one opcode, so a case is `HANDLE / RESTORE seed / body / SAVE out / EXIT`
+and the diff covers all ten I registers, all ten F registers, `exp`, `fmod` and
+`flags` with no per-opcode plumbing. The cost: a back-end without those two
+reports *every* case unimplemented, which is precisely why they are the first
+two to lower. Comparison is field-by-field, not `memcmp` — the struct has tail
+padding no back-end writes — and floats compare as bit patterns, since
+comparing as `double` calls two NaNs unequal and two encodings of zero equal.
+
+**An unlowered opcode is a report, not a crash.** The deliberate `fatalerror`
+is caught per case and reported as `UNIMPL`, so the harness is a coverage
+report from the first day of lowering rather than only after the last. Each
+case gets a fresh `drcuml_state` and cache pair, because `generate()` raises
+from mid-block and `block_end()` never runs. `drcbec` is the oracle: if *it*
+refuses a case the harness says `BAD-CASE`, which is the difference between a
+corpus bug and a lowering bug.
+
+**`HOST=1 tools/build-lrmame.sh`** builds x86_64 natively into its own
+`BUILDDIR` (`build-host`, so the two configurations do not clean each other
+out), with neither `NOASM` nor `FORCE_DRC_C_BACKEND`, so the host's native
+back-end is compiled in. `run.sh --host` then diffs `drcbe_c` against
+`drcbe_x64`. **That run is the calibration and it comes first**: a differential
+test proves that two things disagree and never whose fault it is, and
+`tests/a32-asmjit/` already paid for that lesson once — six disagreements in a
+pattern that read exactly like an asmjit defect, and the bug was in the calling
+code.
