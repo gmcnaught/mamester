@@ -6,20 +6,27 @@ name: ARM32 DRC
 # qemu-arm-static, which is exactly how it was developed — no MiSTer, no ARM
 # runner and no romset is involved at any point.
 #
-#   push/PR touching the DRC or engine paths -> run
-#   workflow_dispatch                        -> manual run
+# Two jobs, split by cost, because they differ by a factor of about fifty --
+# and, since they differ that much, by TRIGGER as well:
 #
-# Two jobs, split by cost, because they differ by a factor of about fifty:
+#   encoder   ~2 min, on every push and PR touching these paths. No MAME
+#             checkout at all: the asmjit a32 corpus diffs against
+#             arm-linux-gnueabihf-as and the launch-harness tests are plain
+#             POSIX sh. This is the job that gates a PR.
 #
-#   encoder   ~2 min.  No MAME checkout at all. The asmjit a32 corpus diffs
-#             against arm-linux-gnueabihf-as, and the launch-harness tests are
-#             plain POSIX sh. This is the job that should gate a PR.
+#   drc-diff  ~40-60 min COLD, and NOT on push/PR -- nightly and on demand
+#             only. It fetches vendor/lrmame (~1.2 GB even shallow),
+#             cross-builds a MAME core and runs the no-content probe under
+#             qemu. Warm, ccache and the codegen cache take it to a few
+#             minutes; the floor is the link, a 40 MB shared object either way.
 #
-#   drc-diff  ~40-60 min COLD. Checks out vendor/lrmame (a ~1.2 GB shallow
-#             submodule), cross-builds a MAME core and runs the no-content
-#             probe under qemu. Warm, ccache and the codegen cache take it to a
-#             few minutes; the floor is the link, which is a 40 MB shared
-#             object either way.
+# The nightly is what keeps the caches warm, which is most of why the on-demand
+# run is ever fast: GitHub lets a branch read the default branch's caches, so a
+# manual run after a nightly starts from a populated ccache rather than cold.
+#
+# NOTE that scheduled workflows only run on the DEFAULT branch. Until this lands
+# on main the nightly will not fire at all, and drc-diff is workflow_dispatch
+# only -- run it by hand from the Actions tab against this branch.
 #
 # THE TRAP THIS JOB EXISTS TO CATCH, and the reason SOURCES names an SH-2
 # driver rather than the cheaper pacman: CPU_INCLUDE_DRC is false when no
@@ -44,6 +51,10 @@ on:
       - 'tests/a32-asmjit/**'
       - 'tests/drc-diff/**'
       - '.github/workflows/drc-arm32.yml'
+  schedule:
+    # 04:31 UTC. Off the hour deliberately: GitHub's scheduler is heavily
+    # oversubscribed at :00 and a job queued there can be delayed or dropped.
+    - cron: '31 4 * * *'
   workflow_dispatch: {}
 
 concurrency:
@@ -74,6 +85,10 @@ jobs:
 
   drc-diff:
     name: cross-build a DRC core + qemu probe
+    # Nightly and on-demand only. The `on:` block still lists push and PR
+    # because `encoder` needs them, so this job has to opt out of them here --
+    # a workflow-level trigger fires every job in the file.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
