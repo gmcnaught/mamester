@@ -44,30 +44,80 @@ absorb is:
 That is the honest size of "port to current MAME". The work is not the port; it
 is the instruction emitter, discussed next.
 
-## Why this is still real work: asmjit has no AArch32
+## The encoder: asmjit's vendored copy has no AArch32, but upstream has a branch
 
-`drcbex86` @ 0.287 no longer carries its own encoder — the old `x86emit.h` is
-gone and it emits through `asmjit::x86::Assembler`. `drcbearm64` likewise uses
-`asmjit::a64::Assembler`. The natural assumption is that asmjit covers ARM32 too.
-It does not:
+**Corrected 2026-08-05, after the operator pointed at
+[`asmjit/asmjit@a32_port`](https://github.com/asmjit/asmjit/tree/a32_port).**
+This section previously said flatly that asmjit has no AArch32 back-end. That
+is true of the copy MAME vendors and false of asmjit upstream, and the
+difference matters enough to restate carefully.
 
-```
-3rdparty/asmjit/asmjit/arm/   →  a64assembler, a64builder, a64compiler,
-                                 a64emitter, a64instdb, a64operand, …
-                                 (nothing a32, nothing thumb)
-```
-
-`core/archtraits.h` *enumerates* `kARM = 5` and `kThumb = 7` in `Arch`, which is
+**What MAME vendors** (`3rdparty/asmjit/asmjit/arm/`) is `a64*` and nothing
+else. `core/archtraits.h` *enumerates* `kARM = 5` and `kThumb = 7`, which is
 what makes this easy to get wrong — the enumerator exists, the back-end behind
-it does not. There is no `a32::Assembler` to target.
+it does not.
 
-So this project is two pieces, and the second is the one with genuine risk:
+**What upstream has** is a real AArch32 port on an unmerged branch: one WIP
+commit (`594cb9e`, 2025-11-29, by asmjit's author) adding **21,406 lines** —
+`a32assembler.cpp` alone is 11,016 — with Assembler, Builder, Compiler, A32
+*and* Thumb, 1,342 emitter entries, an instruction DB and a tablegen. It is
+not a stub.
 
-- **`arm32emit.h`** — an A32 instruction encoder written for this back-end,
-  covering the subset the UML lowering needs. New code, but bounded and, more
-  importantly, *mechanically verifiable* (see "Verification").
-- **`drcbearm32.cpp`** — the UML lowering, structurally `drcbex86` with its
-  x86 emission retargeted and its flag handling replaced with ARM's.
+Three things make it a serious candidate rather than a curiosity:
+
+1. **It is the same asmjit version line MAME vendors** — both report
+   `ASMJIT_LIBRARY_VERSION 1.21.0`, and only 16 shared files differ. The
+   branch's own changes to `core/` are ~70 lines across five files, so the
+   `a32*` sources plausibly drop into the vendored tree.
+2. **It is correct where we need it.** `tests/a32-asmjit/` diffs its output
+   against `arm-linux-gnueabihf-as` over the subset the lowering needs — data
+   processing with every shift form, both load/store families, `ldrd`/`strd`,
+   multiplies, the bitfield ops, VFP: **85 of 85 encodings match exactly.**
+3. **`drcbex86` is written against asmjit.** Retargeting it inside the same
+   framework — same `CodeHolder`, `Label`, `Mem`, relocation and
+   buffer-growth machinery — is far more mechanical than retargeting it onto a
+   bespoke encoder, and that lowering is ~7,700 lines, i.e. the dominant
+   remaining cost of this whole project.
+
+Two defects found, both small and both localised:
+
+- **`lsr #32` / `asr #32` are rejected** (`kInvalidInstruction`). These are
+  legal A32 — for LSR and ASR an encoded amount of 0 *means* 32 — and they are
+  not exotic here: synthesising 64-bit shifts on a 32-bit host reaches for
+  shift-by-32 constantly.
+- **The rejection path segfaults.** `EmitterUtils::log_instruction_failed()`
+  calls `self->_funcs.format_instruction(...)`, which the a32 emitter never
+  installs, so a refused instruction dereferences null instead of returning its
+  error. For a DRC that turns an unsupported operand combination into a crash
+  with no diagnostic.
+
+**A trap worth recording, because it cost real time and produced a false bug
+report before it was caught:** the shift operation lives in the predicate of
+the **last** operand, not on the shifted register —
+`a32assembler.cpp:972,986` reads `o3.predicate()`. So it is
+`add(rd, rn, rm, lsr(16))`, never `add(rd, rn, lsr(rm), imm(16))`. The wrong
+form encodes silently as **LSL**, because LSL is predicate 0. That reads
+exactly like "asmjit ignores the shift type" — six cases disagreed with the
+assembler in precisely that pattern — and it is a call-site bug. The lesson is
+the harness's, not asmjit's: a differential test tells you *that* something
+disagrees, never *whose fault it is*, and the encoder is not guilty until the
+call site is cleared.
+
+### Which encoder, then
+
+`tools/mame-drc-arm32/arm32emit.h` (391 instructions, all matching the
+assembler) is kept, but its role changes: it is the **fallback and the oracle**,
+not necessarily the production path. The recommendation is
+**qualify-then-adopt** — widen `tests/a32-asmjit/` toward the full set the
+lowering ends up using, fix the two defects locally, offer them upstream, and
+adopt a32 as the encoder if it keeps passing. Deciding this before the lowering
+is written is the point: the two choices produce very different lowering code,
+and switching later is a rewrite.
+
+The residual risk with a32 is not correctness-so-far but **staleness and
+churn**: the branch is unmerged, four months behind master, and its API may
+move under us. Vendoring 21k lines of WIP into a submodule we do not control is
+a maintenance position, not a free win.
 
 ## Target and its consequences
 

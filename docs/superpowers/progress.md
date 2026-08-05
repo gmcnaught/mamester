@@ -702,3 +702,52 @@ scheduler hold 60 fps on an 800 MHz A9 — is untouched by any of this and still
 unmeasured. If that gate fails, this back-end has no engine to live in. It is
 being built gate-independent (it is tied to MAME's UML, not to the libretro
 host) but the ordering risk is real and deliberate.
+
+### Correction (same day): asmjit *does* have an AArch32 port
+
+The entry above says asmjit ships `a64*` and nothing else. That is true of the
+copy **MAME vendors** and false of asmjit **upstream**, which has an unmerged
+[`a32_port`](https://github.com/asmjit/asmjit/tree/a32_port) branch — flagged by
+the operator, and it materially changes the encoder decision.
+
+It is not a stub: one WIP commit (`594cb9e`, 2025-11-29, by asmjit's author),
+**21,406 lines**, `a32assembler.cpp` alone 11,016, Assembler/Builder/Compiler,
+A32 *and* Thumb, 1,342 emitter entries. It is on the **same version line MAME
+vendors** (both `ASMJIT_LIBRARY_VERSION 1.21.0`, 16 shared files differing), and
+its own `core/` changes are ~70 lines across five files — so the `a32*` sources
+plausibly drop into the vendored tree.
+
+`tests/a32-asmjit/` qualifies it the same way `tests/arm32emit/` qualifies our
+own encoder — diff against `arm-linux-gnueabihf-as`, over the subset the
+lowering needs rather than a survey of all 1,342 entries. Result: **85 of 85
+encodings match exactly.** Two defects, both small and localised:
+
+- **`lsr #32` / `asr #32` rejected** (`kInvalidInstruction`). Legal A32 — an
+  encoded amount of 0 *means* 32 for those two — and not exotic here, since
+  synthesising 64-bit shifts on a 32-bit host reaches for shift-by-32 constantly.
+- **The rejection path segfaults**: `EmitterUtils::log_instruction_failed()`
+  calls `_funcs.format_instruction`, which the a32 emitter never installs. A
+  refused instruction is a null-pointer crash with no diagnostic instead of an
+  error return. `run.sh` patches this to run at all.
+
+**A false bug report, caught before it went anywhere, and worth recording as a
+method failure rather than a code one.** The first run showed six disagreements
+in a damning pattern — every non-LSL shift encoded as LSL — which reads exactly
+like "a32 drops the shift type". It was **our call-site bug**: the shift op
+lives in the predicate of the *last* operand (`a32assembler.cpp:972,986` reads
+`o3.predicate()`), so it is `add(rd, rn, rm, lsr(16))`, never
+`add(rd, rn, lsr(rm), imm(16))` — and the wrong form encodes silently as LSL
+because LSL is predicate 0. Corrected usage: 85/85. **A differential test proves
+that something disagrees, never whose fault it is**, and the fact that the wrong
+answer was *plausible* is what made it dangerous.
+
+**Recommendation: qualify-then-adopt, and decide before the lowering is
+written.** `arm32emit.h` stays as fallback and oracle. The case for adopting a32
+is not its coverage but that **`drcbex86.cpp` is written against asmjit** —
+retargeting it inside the same `CodeHolder`/`Label`/`Mem`/relocation machinery
+is far more mechanical than retargeting onto a bespoke encoder, and that
+lowering is ~7,700 lines, the dominant remaining cost. The residual risk is not
+correctness-so-far but **staleness**: the branch is unmerged and four months
+behind master, and vendoring 21k WIP lines into a submodule we do not control is
+a maintenance position, not a free win. Switching encoders after the lowering
+exists is a rewrite, which is why this is a decision and not a preference.
