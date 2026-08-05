@@ -118,6 +118,52 @@ is "falls back to default.opt" "-norotate " "$(game_opts "$G" "gng")"
 printf -- '# real cabinet signal\n-ror\n' > "$G/opts/gng.opt"
 is "per-game file wins, comments stripped" " -ror " "$(game_opts "$G" "gng")"
 
+echo "game_engine"
+E="$TMP/enginedir"; mkdir -p "$E/opts"
+is "no opts files means default engine" "" "$(game_engine "$E" "gng")"
+printf -- '-norotate\n' > "$E/opts/gng.opt"
+is "opts without a directive means default" "" "$(game_engine "$E" "gng")"
+
+# The directive and the flags come out of ONE file, and each side has to ignore
+# the other: MAME would reject `engine` as an unknown option, and a stray -flag
+# must not be read as an engine name.
+printf -- 'engine lrmame\n-norotate\n' > "$E/opts/gng.opt"
+is "directive is read"                "lrmame"     "$(game_engine "$E" "gng")"
+# No leading space: the directive line is DELETED, whereas a comment line is
+# merely blanked and still contributes its separator (see the -ror case above).
+is "directive is stripped from opts"  "-norotate " "$(game_opts "$E" "gng")"
+
+printf -- '# engine mame2003\nengine lrmame\n' > "$E/opts/gng.opt"
+is "commented-out directive ignored"  "lrmame" "$(game_engine "$E" "gng")"
+
+printf -- '  engine   mame2003  \n' > "$E/opts/gng.opt"
+is "leading/inner whitespace tolerated" "mame2003" "$(game_engine "$E" "gng")"
+is "whitespace directive still stripped" "" "$(game_opts "$E" "gng" | tr -d ' ')"
+
+# default.opt can set a house engine; a per-game file overrides it wholesale,
+# because game_optfile picks ONE file rather than merging them.
+printf -- 'engine mame2003\n' > "$E/opts/default.opt"
+rm -f "$E/opts/gng.opt"
+is "default.opt supplies the engine" "mame2003" "$(game_engine "$E" "gng")"
+printf -- 'engine lrmame\n' > "$E/opts/gng.opt"
+is "per-game overrides default.opt"  "lrmame"   "$(game_engine "$E" "gng")"
+
+printf -- 'engine mame2003\nengine lrmame\n' > "$E/opts/gng.opt"
+is "last directive wins" "lrmame" "$(game_engine "$E" "gng")"
+
+echo "engine_bin"
+# engine_bin lives in game_manager.sh, which runs a lifecycle loop when sourced,
+# so it is extracted rather than sourced.
+sed -n '/^engine_bin() {/,/^}/p' "$MGR" > "$TMP/engine_bin.sh"
+# shellcheck disable=SC1090
+MAME_BIN="/g/mame" GAMEDIR="/g" . "$TMP/engine_bin.sh"
+is "no directive means the historical binary" "/g/mame" "$(engine_bin "")"
+is "mame4all names it explicitly"             "/g/mame" "$(engine_bin "mame4all")"
+is "mame2003"                             "/g/mame2003" "$(engine_bin "mame2003")"
+is "lrmame"                                 "/g/lrmame" "$(engine_bin "lrmame")"
+engine_bin "nosuch" >/dev/null 2>&1
+is "unknown engine is a nonzero return" "1" "$?"
+
 echo "game_manager lifecycle"
 
 # A stand-in for MAME: records its argument and sleeps until killed.
