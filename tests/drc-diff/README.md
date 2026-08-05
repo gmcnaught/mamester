@@ -16,6 +16,33 @@ tests/drc-diff/run.sh --probe      # just the no-content probe, no diff
 `drcbe_x64`.** The ARM32 run has not been done yet; with only the structural
 opcodes lowered it will report `UNIMPL` for everything, `SAVE`/`RESTORE` first.
 
+## Baseline, 2026-08-05
+
+```
+--host (drcbe_c vs drcbe_x64)      pass=48 fail=0 unimpl=0  skipped=0
+--arm  (drcbe_c vs drcbe_arm32)    pass=0  fail=0 unimpl=48 skipped=0
+```
+
+The ARM run is the loop working, not the back-end working: 48 clean `UNIMPL`
+reports, no crash, no hang, exit 0. From here every opcode lowered turns one or
+more of those into `PASS` or `FAIL`, which is the whole point of building this
+before writing the lowering.
+
+**All 48 name the same opcode, and it is not any of the opcodes the cases are
+about.** Every one reports UML opcode 23 — `OP_RESTORE` — including `fmov`,
+`getflgs` and `jmp.label`. That is the harness's own prologue: a case begins by
+`RESTORE`-ing its input machine state and ends with `SAVE` + `EXIT`, so
+`RESTORE` is the first instruction in every block and nothing downstream of it
+is ever reached.
+
+So the corpus is currently measuring exactly one missing opcode 48 times, and
+the first slice of lowering is **not a matter of preference — it is
+`RESTORE`, `SAVE` and `EXIT`.** Until all three exist no case can report
+anything else, and the moment they do, all 48 start reporting on the opcode they
+are actually named for. That is a much better first target than "control flow"
+in the abstract: three opcodes, and the corpus goes from one bit of information
+to forty-eight.
+
 ## Run `--host` first, and believe nothing until it is clean
 
 `--host` diffs `drcbe_c` against **`drcbe_x64`** — a back-end with two decades
