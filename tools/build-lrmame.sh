@@ -154,4 +154,9 @@ echo "#   SOURCES=$SOURCES"
 run nice make -f makefile "${MAKE_VARS[@]}" -j"$JOBS"
 
 printf '%s\n' "$SIG" > "$STAMP"
-find "$SRC/libretro" -maxdepth 1 -name "*.so" -exec ls -lh {} +
+
+# genie writes `<SUBTARGET>_libretro.so` into the SOURCE ROOT. libretro/bin/
+# looks like the output directory in the generated makefiles but is only a -L
+# search path, and there is no `mame_` prefix -- both worth stating because the
+# host Makefile has to name this file exactly.
+ls -lh "$SRC/${SUBTARGET}_libretro.so"

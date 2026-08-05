@@ -45,8 +45,14 @@ ENGINE ?= m2003p
 ifeq ($(ENGINE),lrmame)
 CORE       := $(REPO)/vendor/lrmame
 BIN        ?= lrmame
-# Named by tools/build-lrmame.sh's SUBTARGET.
-ENGINE_LIB ?= $(CORE)/libretro/mame_lrmame_libretro.so
+# genie names the artefact `<SUBTARGET>_libretro.so` and drops it in the SOURCE
+# ROOT, not under libretro/bin/ (that is only a -L search path). Read out of the
+# generated build/projects/retro/mame<SUBTARGET>/gmake-linux/<SUBTARGET>.make,
+# `config=libretro` block, rather than guessed -- the same file also defines a
+# `libretro32` config that builds `-m32` and would be the one selected if
+# ARCHITECTURE= were ever dropped from tools/build-lrmame.sh.
+LRMAME_SUBTARGET ?= lrmame
+ENGINE_LIB ?= $(CORE)/$(LRMAME_SUBTARGET)_libretro.so
 # MAME vendors its own libretro.h under the OSD rather than in a
 # libretro-common tree, and it is a NEWER vintage than 2003-plus's. host_env.c
 # is #ifdef-guarded per command so that one source compiles against either.
