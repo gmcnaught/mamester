@@ -62,7 +62,20 @@ ENGINE_CPPFLAGS := -I$(CORE)/src/osd/libretro/libretro-internal \
 # together into games/mame/ and the runtime path has to be relative to the
 # binary. The $$ survives make's expansion so the linker sees a literal
 # $ORIGIN, which is resolved at load time and not by the shell.
-ENGINE_LDFLAGS  := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath-link,$(dir $(ENGINE_LIB))
+ENGINE_LDFLAGS  := -Wl,-rpath,'$$ORIGIN'
+# NAMING THE .so ON THE LINK LINE BY PATH IS WRONG, and it links cleanly either
+# way -- so this is only visible with objdump or on the device.
+#
+# genie builds the .so WITHOUT an -soname (verified: objdump -p shows none), so
+# ld records whatever it was given. Hand it a path and the DT_NEEDED entry
+# becomes the absolute BUILD-HOST path:
+#     NEEDED  /home/.../vendor/lrmame/lrmame_libretro.so
+# which does not exist on the MiSTer, so the binary dies at exec with a loader
+# error and never reaches main(). `-L<dir> -l:<file>` records the bare filename
+# instead, which RUNPATH=$ORIGIN then resolves beside the binary:
+#     NEEDED  lrmame_libretro.so
+#     RUNPATH $ORIGIN
+ENGINE_LINK      = -L$(dir $(ARCHIVE)) -l:$(notdir $(ARCHIVE))
 ENGINE_HINT     := run tools/build-lrmame.sh
 else
 CORE       := $(REPO)/vendor/mame2003-plus
@@ -70,6 +83,8 @@ BIN        ?= mame2003
 ENGINE_LIB ?= $(CORE)/mame2003_plus_libretro.a
 ENGINE_CPPFLAGS := -I$(CORE)/src/libretro-common/include
 ENGINE_LDFLAGS  :=
+# A static archive is named by path, as before.
+ENGINE_LINK      = $(ARCHIVE)
 ENGINE_HINT     := run tools/build-m2003p.sh
 endif
 
@@ -196,7 +211,7 @@ OBJS := host_main.o host_env.o host_video.o host_present.o host_input.o \
 all: $(BIN)
 
 $(BIN): $(OBJS) $(LRC_OBJ) $(ARCHIVE)
-	$(CC) $(CFLAGS) $(ENGINE_LDFLAGS) -o $@ $(OBJS) $(LRC_OBJ) $(ARCHIVE) $(LDLIBS)
+	$(CC) $(CFLAGS) $(ENGINE_LDFLAGS) -o $@ $(OBJS) $(LRC_OBJ) $(ENGINE_LINK) $(LDLIBS)
 	@echo "# $@: $$($(CROSS_PREFIX)size -d $@ | tail -1)"
 
 %.o: %.c host.h
