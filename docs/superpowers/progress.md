@@ -951,7 +951,8 @@ corpus of straight-line arithmetic.
 
 **`MAMESTER_DRC_SEED` varies the state the corpus starts from**, and CI sweeps
 eight seeds. One fixed seed tests one set of values, and flag reconstruction is
-exactly the code that is right for the values it was written against.
+exactly the code that is right for the values it was written against. A forty
+seed soak of the ARM back-end is clean.
 
 **Four places where the two REFERENCES disagree**, all found by the calibration
 and sweep runs, all recorded in the corpus rather than worked around silently.
