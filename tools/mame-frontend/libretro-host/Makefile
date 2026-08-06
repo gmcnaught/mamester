@@ -205,7 +205,7 @@ LRC_CFLAGS   := $(CFLAGS) -fsigned-char -Wno-unused-parameter
 LRC_OBJ := $(addprefix lrc/,$(notdir $(LRC_SRC:.c=.o)))
 
 OBJS := host_main.o host_env.o host_video.o host_present.o host_input.o \
-        host_audio.o host_throttle.o nv_present.o
+        host_audio.o host_throttle.o nv_present.o mister_profile.o
 
 .PHONY: all clean
 all: $(BIN)
@@ -218,8 +218,26 @@ $(BIN): $(OBJS) $(LRC_OBJ) $(ARCHIVE)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # The present path is shared with mame4all rather than copied; see nv_present.h.
+#
+# -O3 here, against the -O2 the rest of this Makefile uses, and the reason is
+# the opposite of the archive's. docs/bench-results-2003plus.md measured -O3 as
+# worth nothing on the ARCHIVE because its hot code is CPU-emulation
+# interpreters -- dependent chains of loads, table lookups and unpredictable
+# branches, which the vectoriser cannot touch. nv_convert_1555_to_565 and
+# nv_convert_8888_to_565 are the exact opposite: countable, independent,
+# contiguous loops writing to CACHED staging. gcc 10.2.1 only turns
+# -ftree-loop-vectorize on at -O3, so at -O2 the -mfpu=neon above buys them
+# nothing. This is the one file in the binary where NEON applies.
 nv_present.o: $(BACKEND)/nv_present.c $(BACKEND)/nv_present.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -O3 $(CPPFLAGS) -c -o $@ $<
+
+# The SIGPROF sampler is shared with mame4all too. Its .cpp extension is
+# historical -- the source is plain C99 with no C++ construct in it -- so it is
+# compiled with -x c rather than dragging g++ and libstdc++ into this link.
+# -g so the symbol table survives for tools/symbolize-prof.py; the archive's own
+# objects keep their .symtab regardless because nothing strips them.
+mister_profile.o: $(BACKEND)/mister_profile.cpp $(BACKEND)/mister_profile.h
+	$(CC) $(CFLAGS) $(CPPFLAGS) -x c -c -o $@ $<
 
 # One rule per source directory, because the file names are unique but the
 # directories are not on the include path.

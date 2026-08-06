@@ -29,13 +29,17 @@
  * gap-triage.sh's parser works unchanged for both engines.
  */
 
+#define _GNU_SOURCE
 #include <errno.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 
 #include "host.h"
+#include "mister_profile.h"
 #include "nv_present.h"
 
 /* --- helpers ------------------------------------------------------------- */
@@ -47,6 +51,61 @@ static int64_t now_ns(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+}
+
+/* Scheduling arms for the emulation thread.
+ *
+ * host_present_init() pins this thread to cpu0 only when the present worker
+ * exists (host_present.c:204). In the shipped configuration -- threading off --
+ * nothing is pinned and nothing is prioritised, so the emulator migrates
+ * between the two A9s and is preempted by Main_MiSTer, the Master_Daemon shell
+ * loop and the game manager's poll loop, all of which are SCHED_OTHER too.
+ *
+ *   MISTER_EMU_CPU=<n>   pin this thread to core n. Ignored when the present
+ *                        worker is running, which already owns the placement.
+ *   MISTER_SCHED_RT=<p>  SCHED_FIFO at priority p (clamped 1..10) plus
+ *                        mlockall(MCL_CURRENT|MCL_FUTURE).
+ *
+ * RT is opt-in, not default. On a two-core box one SCHED_FIFO thread still
+ * leaves a core for sshd, but a driver that wedges inside retro_run() at real
+ * time priority is materially harder to get out of than one that does not, and
+ * roughly 40% of drivers in this build have not been triaged yet. It ships off
+ * until there is a measured reason to turn it on. */
+static void host_sched_setup(int present_threaded)
+{
+    const char *e;
+
+    if ((e = getenv("MISTER_EMU_CPU")) != NULL && !present_threaded) {
+        int cpu = atoi(e);
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(cpu, &set);
+        if (sched_setaffinity(0, sizeof set, &set) != 0)
+            fprintf(stderr, "MISTER-HOST: WARNING pin to cpu%d failed: %s\n",
+                    cpu, strerror(errno));
+        else
+            fprintf(stderr, "MISTER-HOST: emulation pinned to cpu%d\n", cpu);
+    }
+
+    if ((e = getenv("MISTER_SCHED_RT")) != NULL && e[0] && e[0] != '0') {
+        struct sched_param sp;
+        int prio = atoi(e);
+        if (prio < 1)  prio = 1;
+        if (prio > 10) prio = 10;
+        memset(&sp, 0, sizeof sp);
+        sp.sched_priority = prio;
+        if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0) {
+            fprintf(stderr, "MISTER-HOST: WARNING SCHED_FIFO(%d) failed: %s\n",
+                    prio, strerror(errno));
+        } else {
+            /* Paging the 20 MB text back in mid-frame is exactly the stall RT
+             * priority was bought to avoid. */
+            if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0)
+                fprintf(stderr, "MISTER-HOST: WARNING mlockall failed: %s\n",
+                        strerror(errno));
+            fprintf(stderr, "MISTER-HOST: SCHED_FIFO priority %d\n", prio);
+        }
+    }
 }
 
 static void usage(const char *argv0)
@@ -117,6 +176,12 @@ int main(int argc, char **argv)
 
     if (!setname) { usage(argv[0]); return 1; }
 
+    /* MISTER_PROFILE=<hz> arms the SIGPROF PC sampler; unset it is a getenv and
+     * nothing else. Armed here rather than at the top of main so that ROM load
+     * and driver init are inside the profile -- they are not free, and a run
+     * that is 30% init is a different answer from one that is 3%. */
+    mister_profile_init();
+
     /* MISTER_BENCH_FRAMES is what the existing triage scripts set. -frames
      * wins when both are given. */
     if (!frame_limit && (env_frames = getenv("MISTER_BENCH_FRAMES")) != NULL)
@@ -164,6 +229,10 @@ int main(int argc, char **argv)
      * Off by default, and it must be started here: the core is allowed to
      * present its first frame from inside retro_load_game(). */
     host_present_init();
+
+    /* After host_present_init(), because that is what decides whether the
+     * placement of this thread is already owned by the worker arm. */
+    host_sched_setup(host_present_on);
 
     retro_set_environment(host_environment);
     retro_set_video_refresh(host_video_refresh);
