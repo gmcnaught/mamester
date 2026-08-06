@@ -18,6 +18,34 @@
 #
 # python3 is not optional: the build runs scripts/build/verinfo.py and the
 # genie-driven code generators through it (makefile:1000 PYTHON_AVAILABLE).
+#
+# BUT THE COMPILER'S DEBIAN RELEASE AND THE TARGET'S GLIBC ARE TWO SEPARATE
+# CHOICES, and conflating them produced a binary that could not load on the
+# device at all:
+#
+#     ./lrmame: /lib/libc.so.6: version `GLIBC_2.38' not found
+#     ./lrmame: /lib/libc.so.6: version `GLIBC_2.34' not found (x4 more)
+#
+# The MiSTer rootfs is glibc **2.31** (`/lib/libc-2.31.so`, Debian bullseye
+# vintage); trixie's armhf libc is 2.41. Link against 2.41 and the binary
+# carries versioned references — GLIBC_2.34 alone is unavoidable, since that is
+# where libpthread and libdl were folded into libc — that a 2.31 loader refuses.
+# Nothing catches this before the device: it builds clean, and it RUNS clean
+# under qemu-arm, because qemu is pointed at the container's own 2.41 libs.
+#
+# So: gcc-14 from trixie for the C++20 requirement, glibc 2.31 from bullseye for
+# the target. The bullseye stage supplies only the target sysroot (headers and
+# armhf libraries); no compiler comes from it. This is also why the two older
+# engines never hit this — their container IS bullseye.
+FROM debian:bullseye AS sysroot
+
+RUN dpkg --add-architecture armhf \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        libc6-dev:armhf \
+        libasound2-dev:armhf \
+        linux-libc-dev:armhf \
+    && rm -rf /var/lib/apt/lists/*
+
 FROM debian:trixie
 
 RUN dpkg --add-architecture armhf \
@@ -31,6 +59,38 @@ RUN dpkg --add-architecture armhf \
         libasound2-dev:armhf \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# The target glibc is replaced IN PLACE rather than supplied as a separate
+# --sysroot, because --sysroot does not reach it. Debian's cross gcc resolves
+# crt1.o and libc.so through its own prefix:
+#
+#     $ arm-linux-gnueabihf-gcc --sysroot=/sysroot -print-file-name=crt1.o
+#     /usr/lib/gcc-cross/arm-linux-gnueabihf/14/../../../../arm-linux-gnueabihf/lib/crt1.o
+#
+# — a compiler-prefix path that --sysroot leaves alone, so a sysroot flag builds
+# a binary that still references GLIBC_2.34. Overwriting the toolchain's own
+# target tree is what actually takes effect.
+#
+# Debian is multiarch on the bullseye side, so glibc arrives from three places
+# and lands merged in the two the cross compiler reads. gcc's own target
+# libraries (libstdc++, libgcc, libatomic) live in the same lib directory and are
+# NOT overwritten: nothing bullseye installs is named like them.
+COPY --from=sysroot /usr/include/ /usr/arm-linux-gnueabihf/include/
+COPY --from=sysroot /usr/include/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/include/
+COPY --from=sysroot /usr/lib/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/lib/
+COPY --from=sysroot /lib/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/lib/
+
+# And again into the multiarch path, because glibc's libc.so is a LINKER SCRIPT
+# holding absolute paths:
+#
+#     GROUP ( libc.so.6 libc_nonshared.a AS_NEEDED ( ld-linux-armhf.so.3 ) )
+#     ... /usr/lib/arm-linux-gnueabihf/libc_nonshared.a
+#
+# so a bullseye libc.so placed only in the toolchain tree fails the link with
+# "cannot find /usr/lib/arm-linux-gnueabihf/libc_nonshared.a". Both locations
+# have to be the same glibc.
+COPY --from=sysroot /usr/lib/arm-linux-gnueabihf/ /usr/lib/arm-linux-gnueabihf/
+COPY --from=sysroot /lib/arm-linux-gnueabihf/ /usr/lib/arm-linux-gnueabihf/
 
 # MAME's makefile runs `git describe` for the version string it stamps into the
 # binary. The bind-mounted checkout is owned by the host uid, and git refuses to
