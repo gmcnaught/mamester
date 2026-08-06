@@ -12,6 +12,12 @@
  *   2. RGB565 sources write DDR DIRECTLY, with no staging copy. Staging a frame
  *      that is already in the destination format is pure loss without a worker
  *      thread to overlap it -- it cost mk 74.1 -> 72.3 fps.
+ *
+ * Note that (1) stays true under the write-combining mapping below. WC makes
+ * the ONE linear crossing cheap; it does not make scattered read-modify-write
+ * cheap, and a MAME driver's rasterizer read-modify-writes its own bitmap all
+ * frame. Converting straight into DDR would trade a fast streaming write for
+ * uncached reads. See docs/dreamster-ddr-channel-review.md, section 4.
  */
 
 #include "nv_present.h"
@@ -45,7 +51,71 @@
 /* Joystick writeback words, one per player. */
 static const size_t NV_JOY_OFF[4] = { 0x08, 0x18, 0x20, 0x28 };
 
+/* ---- write-combining overlay ---------------------------------------------
+ * The whole region maps Strongly-Ordered through /dev/mem, because ARM's
+ * phys_mem_access_prot() returns pgprot_noncached() for any pfn outside the
+ * kernel's memblock and 0x3A000000 is in the fabric's 512 MB. SO stores cannot
+ * merge, so the frame memcpy runs at 89.5 MB/s -- 4.19 ms at 512x384.
+ *
+ * tools/mister/mem_wc/ is a small driver that maps the same physical pages
+ * Normal Non-Cacheable (write-combining) instead. When it is loaded we overlay
+ * it, with MAP_FIXED, over the PIXEL PAGES ONLY:
+ *
+ *   0x000000..0x001000   control word + joystick words   Strongly-Ordered
+ *   0x001000..0x300000   BUF0 / BUF1                     write-combining
+ *   0x300000..0x400000   timing registers                Strongly-Ordered
+ *
+ * Two reasons the split is page-exact rather than "map it all WC":
+ *
+ *   - The doorbell must not be write-combined. It is one 32-bit store with no
+ *     traffic behind it to force a drain, so a WC doorbell can sit in the write
+ *     buffer while the reader's ST_CHECK_CTRL polls a stale counter. Its
+ *     transaction cost is irrelevant; its ordering is not.
+ *   - Two mappings of the SAME physical page with different memory types is a
+ *     mismatched alias, architecturally unpredictable on ARMv7. MAP_FIXED
+ *     replaces the SO pages rather than aliasing them, so no page is ever
+ *     mapped both ways.
+ *
+ * BUF0 starts 0x40 into page 0, so its first 4032 bytes stay Strongly-Ordered:
+ * ~4 lines of a 512-wide frame, at 89 MB/s, ~45 us. MEASURED COST, 512x384:
+ * 0.506 ms per present against 0.440 ms into a destination that is WC all the
+ * way down -- so the straddle is ~13 % of the present, not the ~1 % this comment
+ * first claimed (that figure divided the same 45 us by a 700 us estimate for the
+ * rest of the copy, which is 6 % even on its own numbers, and the real WC copy
+ * is faster than 700 us, which makes the share larger still).
+ *
+ * It buys a single linear pointer for the whole window instead of a straddling
+ * special case in nv_frame(). Buying it back needs the RTL: page 0 holds the
+ * control word AND BUF0's first 4032 bytes, so no split of THIS layout can put
+ * all of BUF0 on WC pages. Moving BUF0 from 0x40 to 0x1000 in the reader would
+ * recover the whole ~66 us. Worth doing next time the reader is touched; not
+ * worth an RTL revision on its own against a 3.7 ms/frame win.
+ *
+ * See docs/dreamster-ddr-channel-review.md and tools/mister/mem_wc/README.md.
+ */
+#define NV_WC_OFF      0x00001000u                      /* first page past ctrl */
+#define NV_WC_LEN      (NV_TIMING_OFFSET - NV_WC_OFF)   /* up to the timing regs */
+
+/* Drain to the point of coherency for the WHOLE SYSTEM, then order.
+ *
+ * NOT __sync_synchronize(): GCC lowers that to `dmb ish` on ARMv7, which orders
+ * only within the inner-shareable domain. The FPGA reaches DDR through the f2h
+ * SDRAM ports, outside that domain, so `dmb ish` does not guarantee it can see
+ * the pixels. Under the old all-Strongly-Ordered mapping this did not matter --
+ * the memory type ordered the stores by itself -- but with the pixel pages
+ * write-combined the barrier is load-bearing, and an SO doorbell store is NOT
+ * ordered against earlier Normal-NC stores either.
+ *
+ * Unconditional, not gated on which mapping we got: correct under both, and a
+ * few cycles a frame on the fallback path is not worth a branch to save. */
+#if defined(__arm__) || defined(__aarch64__)
+#  define NV_FENCE() __asm__ __volatile__("dsb sy" ::: "memory")
+#else
+#  define NV_FENCE() __sync_synchronize()
+#endif
+
 static int                 nv_fd      = -1;
+static int                 nv_wc      = 0;   /* pixel pages are write-combined */
 static volatile uint8_t   *nv_base    = 0;
 static volatile uint32_t  *nv_ctrl    = 0;
 static uint16_t           *nv_buf[2]  = { 0, 0 };
@@ -136,6 +206,43 @@ uint64_t nv_hash_pixels(const uint16_t *buf, size_t px)
 
 int nv_is_enabled(void)          { return nv_enabled; }
 unsigned long nv_frame_count(void) { return nv_frames; }
+int nv_is_write_combined(void)   { return nv_wc; }
+
+#ifndef NV_HOST_TEST
+/* Overlay the pixel pages with a write-combining mapping, if tools/mister/
+ * mem_wc/ is loaded. Returns 1 on success; on any failure the Strongly-Ordered
+ * mapping nv_open() already made is left exactly as it was, and the present
+ * runs at the old 89.5 MB/s. The module is a PERFORMANCE dependency only -- a
+ * MiSTer kernel bump invalidates its vermagic and insmod starts failing in the
+ * field, which must cost frame rate, not boot. (Fallback pattern from
+ * minicast's _vmem.cpp:22-38.) */
+static int nv_map_wc(void)
+{
+    int fd;
+    void *probe, *m;
+
+    if (getenv("MISTER_NO_WC")) return 0;
+
+    fd = open("/dev/mem_wc", O_RDWR | O_CLOEXEC);
+    if (fd < 0) return 0;
+
+    /* Probe at a scratch address BEFORE the MAP_FIXED overlay. MAP_FIXED
+     * unmaps its target range before the driver's .mmap runs, so a mapping the
+     * driver then rejects -- mem_wc loaded with an allowlist that does not
+     * cover our window returns -EPERM -- would leave a HOLE in the middle of
+     * the DDR region rather than the SO mapping we started with, and the next
+     * present would take SIGSEGV. Probe, unmap, then overlay. */
+    probe = mmap(NULL, NV_WC_LEN, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+                 (off_t)(NV_BASE + NV_WC_OFF));
+    if (probe == MAP_FAILED) { close(fd); return 0; }
+    munmap(probe, NV_WC_LEN);
+
+    m = mmap((void *)(nv_base + NV_WC_OFF), NV_WC_LEN, PROT_READ | PROT_WRITE,
+             MAP_SHARED | MAP_FIXED, fd, (off_t)(NV_BASE + NV_WC_OFF));
+    close(fd);
+    return m != MAP_FAILED;
+}
+#endif
 
 int nv_open(void)
 {
@@ -157,6 +264,7 @@ int nv_open(void)
         if (m == MAP_FAILED) { close(nv_fd); nv_fd = -1; return 0; }
         nv_base = (volatile uint8_t *)m;
     }
+    nv_wc     = nv_map_wc();
     nv_ctrl   = (volatile uint32_t *)(nv_base);
     nv_buf[0] = (uint16_t *)(nv_base + NV_BUF0);
     nv_buf[1] = (uint16_t *)(nv_base + NV_BUF1);
@@ -166,6 +274,17 @@ int nv_open(void)
     nv_enabled = 1;
     fprintf(stderr, "nv_present: native video DDR @ 0x%08lx\n",
             (unsigned long)NV_BASE);
+    if (nv_wc)
+        fprintf(stderr, "nv_present: pixel buffers write-combined via "
+                        "/dev/mem_wc\n");
+    else
+        /* Say WHICH fallback this is. The forced arm is the A/B, and an A/B
+         * whose two logs read the same is the thing present= exists to stop. */
+        fprintf(stderr, "nv_present: pixel buffers strongly-ordered (%s) — "
+                        "expect ~4.2 ms/frame at 512x384; see "
+                        "tools/mister/mem_wc/README.md\n",
+                getenv("MISTER_NO_WC") ? "MISTER_NO_WC=1"
+                                       : "/dev/mem_wc unavailable");
 #endif
     return nv_enabled;
 }
@@ -173,10 +292,12 @@ int nv_open(void)
 void nv_close(void)
 {
 #ifndef NV_HOST_TEST
+    /* One munmap covers the whole window even though the WC overlay split it
+     * into three vmas -- munmap takes a range, not a mapping. */
     if (nv_base) munmap((void *)nv_base, NV_REGION);
     if (nv_fd >= 0) close(nv_fd);
 #endif
-    nv_base = 0; nv_fd = -1; nv_enabled = 0;
+    nv_base = 0; nv_fd = -1; nv_enabled = 0; nv_wc = 0;
     free(nv_stage); nv_stage = 0; nv_stage_bytes = 0;
 }
 
@@ -225,6 +346,7 @@ void nv_set_mode(int width, int height, double refresh_hz, int rot, nv_format fm
     frame_bytes = (size_t)nv_pitch * nv_view_h * 2;
     memset((void *)nv_buf[0], 0, frame_bytes);
     memset((void *)nv_buf[1], 0, frame_bytes);
+    NV_FENCE();   /* write-combined: the clears are posted until drained */
 
     if (nv_stage_bytes < frame_bytes) {
         free(nv_stage);
@@ -306,7 +428,7 @@ void nv_frame(const void *src, int pitch_bytes, int src_w, int src_h)
         return;
     }
 
-    __sync_synchronize();
+    NV_FENCE();
     nv_frames++;
     *nv_ctrl = ((uint32_t)nv_frames << 2) | (uint32_t)nv_active;
     nv_last_pub = nv_active;
@@ -331,9 +453,14 @@ void nv_frame_repeat(void)
 {
     if (!nv_enabled) return;
 
-    /* No barrier and no pixel traffic: the buffer's contents were already
-     * published and fenced by the nv_frame() that filled it. Only the counter
-     * moves, which is all the watchdog is watching. */
+    /* No pixel traffic: the buffer's contents were already published and fenced
+     * by the nv_frame() that filled it, and the doorbell page is never
+     * write-combined. The fence is kept anyway so the invariant is uniform and
+     * auditable -- EVERY doorbell store in this file is preceded by NV_FENCE()
+     * -- rather than depending on a reader reconstructing the argument above.
+     * It costs a drain of an already-empty write buffer, on frameskipped
+     * frames only. */
+    NV_FENCE();
     nv_frames++;
     *nv_ctrl = ((uint32_t)nv_frames << 2) | (uint32_t)nv_last_pub;
 }

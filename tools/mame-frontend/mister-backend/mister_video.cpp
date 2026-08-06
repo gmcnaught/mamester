@@ -224,9 +224,14 @@ static void bench_tick(void)
     }
     if (bench_limit && bench_frames >= bench_limit) {
         double dt = (now - bench_t0_us) / 1e6;
-        fprintf(stderr, "MISTER-BENCH DONE fps=%.2f frames=%llu elapsed=%.1fs\n",
+        /* present= records which DDR mapping the run measured; a WC/SO A/B is
+         * unreadable without it. The trailing field is safe for
+         * tools/gap-triage.sh, which greps `fps=\([0-9.]*\)`. */
+        fprintf(stderr,
+                "MISTER-BENCH DONE fps=%.2f frames=%llu elapsed=%.1fs present=%s\n",
                 dt > 0 ? bench_frames / dt : 0.0,
-                (unsigned long long)bench_frames, dt);
+                (unsigned long long)bench_frames, dt,
+                nv_is_write_combined() ? "write-combined" : "strongly-ordered");
         gp2x_deinit();
         deinit_SDL();
         exit(0);

@@ -52,6 +52,15 @@ tools/mister/test_frame_writer
 # Local build of the DDR write microbenchmark (tools/mister/ddr-write-bench.c)
 tools/mister/ddr-write-bench
 
+# Out-of-tree kernel module build output (tools/mister/mem_wc/). The .ko is
+# kernel-version-specific — built per device, never committed.
+tools/mister/mem_wc/*.ko
+tools/mister/mem_wc/*.mod
+tools/mister/mem_wc/*.mod.c
+tools/mister/mem_wc/.*.cmd
+tools/mister/mem_wc/Module.symvers
+tools/mister/mem_wc/modules.order
+
 # libretro host binary and its libretro-common objects (both are build output;
 # *.o already covers lrc/, this catches the extensionless ELF)
 tools/mame-frontend/libretro-host/mame2003

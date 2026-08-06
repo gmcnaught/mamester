@@ -266,10 +266,13 @@ int main(int argc, char **argv)
     fprintf(stderr,
             "MISTER-HOST: %lu frames in %.2fs, %lu presented, %lu duped, "
             "%lu published, %lu present-dropped, %lu audio frames, "
-            "%lu underruns, %lu dropped, %lu late\n",
+            "%lu underruns, %lu dropped, %lu late, present=%s\n",
             f, secs, host_video_shown(), host_video_duped(), nv_frame_count(),
             host_present_drops(), host_audio_frames(), host_audio_underruns(),
-            host_audio_dropped(), host_throttle_late());
+            host_audio_dropped(), host_throttle_late(),
+            /* Which DDR mapping this run measured. A/B tables that do not
+             * record this are unreadable a week later. */
+            nv_is_write_combined() ? "write-combined" : "strongly-ordered");
     fflush(stdout);
 
     retro_unload_game();
