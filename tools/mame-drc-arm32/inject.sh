@@ -137,10 +137,17 @@ if sentinel not in text:
     # the i386 disassembler at the bottom of this file, which arm64 already
     # pulls in. A parallel variable would have had to be added to each of those
     # conditions by hand, and any future one would silently miss arm32.
+    # ADDITIVE, and that is not a style preference. --revert deletes whatever
+    # the sentinel fences, so anything upstream that ends up INSIDE a fence is
+    # deleted rather than restored -- which is exactly how an earlier version
+    # of this script left cpu.lua without its x86-64 back-end after a revert,
+    # and the host build then failed to link make_drcbe_x64. Upstream's own
+    # line stays untouched and is widened by a following assignment.
     text = text.replace(
         anchor,
+        anchor +
         '-- %s BEGIN\n'
-        'CPU_INCLUDE_DRC_NATIVE = CPU_INCLUDE_DRC and (not _OPTIONS["FORCE_DRC_C_BACKEND"]) and ((_OPTIONS["PLATFORM"] == "x86") or (_OPTIONS["PLATFORM"] == "arm64") or (_OPTIONS["PLATFORM"] == "arm"))\n'
+        'CPU_INCLUDE_DRC_NATIVE = CPU_INCLUDE_DRC_NATIVE or (CPU_INCLUDE_DRC and (not _OPTIONS["FORCE_DRC_C_BACKEND"]) and (_OPTIONS["PLATFORM"] == "arm"))\n'
         'CPU_INCLUDE_DRC_ARM32 = CPU_INCLUDE_DRC_NATIVE and (_OPTIONS["PLATFORM"] == "arm")\n'
         '-- %s END\n' % (sentinel, sentinel),
         1)
@@ -158,17 +165,13 @@ if sentinel not in text:
     # The FILES stay architecture-split even though the flag is now shared:
     # drcbex64.cpp and drcbearm64.cpp do not compile for a 32-bit ARM target, so
     # "enabled in the same places" must not mean "same source list".
+    # Additive again, for the same reason -- upstream's block is wrapped, never
+    # rewritten. It gates on CPU_INCLUDE_DRC_NATIVE, which is now true for arm
+    # too, so the flag is hidden from it and handed back afterwards rather than
+    # its condition being edited.
     text = text.replace(
         anchor,
-        '-- %s BEGIN\n'
-        'if CPU_INCLUDE_DRC_NATIVE and not CPU_INCLUDE_DRC_ARM32 then\n'
-        '\tfiles {\n'
-        '\t\tMAME_DIR .. "src/devices/cpu/drcbearm64.cpp",\n'
-        '\t\tMAME_DIR .. "src/devices/cpu/drcbearm64.h",\n'
-        '\t\tMAME_DIR .. "src/devices/cpu/drcbex64.cpp",\n'
-        '\t\tMAME_DIR .. "src/devices/cpu/drcbex64.h",\n'
-        '\t}\n'
-        'end\n'
+        ('-- %s BEGIN\n'
         'if CPU_INCLUDE_DRC_ARM32 then\n'
         '\tfiles {\n'
         '\t\tMAME_DIR .. "src/devices/cpu/arm32emit.h",\n'
@@ -176,7 +179,13 @@ if sentinel not in text:
         '\t\tMAME_DIR .. "src/devices/cpu/drcbearm32.h",\n'
         '\t}\n'
         'end\n'
-        '-- %s END\n' % (sentinel, sentinel),
+        'MAMESTER_DRC_NATIVE_SAVED = CPU_INCLUDE_DRC_NATIVE\n'
+        'if CPU_INCLUDE_DRC_ARM32 then CPU_INCLUDE_DRC_NATIVE = false end\n'
+        '-- %s END\n'
+        + anchor +
+        '-- %s BEGIN\n'
+        'CPU_INCLUDE_DRC_NATIVE = MAMESTER_DRC_NATIVE_SAVED\n'
+        '-- %s END\n') % (sentinel, sentinel, sentinel, sentinel),
         1)
     open(cpulua_path, 'w').write(text)
     print("patched scripts/src/cpu.lua")

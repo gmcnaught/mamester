@@ -188,6 +188,66 @@ int main()
 	add("vmov d5, r6, r7",       [](Assembler &a){ return a.vmov(d5, r6, r7); });
 	add("vmov r6, r7, d5",       [](Assembler &a){ return a.vmov(r6, r7, d5); });
 
+
+	// ---- APSR access: the whole flag model stands on these four ----
+	// UML carries five flags and ARM has four, so C and U live in a software
+	// register and N/Z/V live in APSR. Every transfer between the two goes
+	// through mrs/msr, which makes their encodings load-bearing.
+	add("mrs r0, apsr",        [](Assembler &a){ return a.mrs(r0, imm(0)); });
+	add("msr APSR_nzcvq, r0",  [](Assembler &a){ return a.msr(imm(2), r0); });
+	add("mrs r8, apsr",        [](Assembler &a){ return a.mrs(r8, imm(0)); });
+	add("msr APSR_nzcvq, r8",  [](Assembler &a){ return a.msr(imm(2), r8); });
+
+	// ---- predicated data processing: how carry is captured without a branch ----
+	add("orrcs r10, r10, #1",  [](Assembler &a){ return a.orr(CondCode::kCS, r10, r10, imm(1)); });
+	add("orrcc r10, r10, #1",  [](Assembler &a){ return a.orr(CondCode::kCC, r10, r10, imm(1)); });
+	add("orreq r8, r8, #0x40000000", [](Assembler &a){ return a.orr(CondCode::kEQ, r8, r8, imm(0x40000000)); });
+	add("bic r8, r8, #0x40000000",   [](Assembler &a){ return a.bic(r8, r8, imm(0x40000000)); });
+	add("eor r8, r8, #0x20000000",   [](Assembler &a){ return a.eor(r8, r8, imm(0x20000000)); });
+	add("bfi r10, r8, #0, #1",       [](Assembler &a){ return a.bfi(r10, r8, imm(0), imm(1)); });
+	add("bfi r8, r10, #29, #1",      [](Assembler &a){ return a.bfi(r8, r10, imm(29), imm(1)); });
+	add("ubfx r0, r10, #4, #1",      [](Assembler &a){ return a.ubfx(r0, r10, imm(4), imm(1)); });
+	add("movne r0, #1",              [](Assembler &a){ return a.mov(CondCode::kNE, r0, imm(1)); });
+	add("asrge r0, r1, r2",          [](Assembler &a){ return a.asr(CondCode::kGE, r0, r1, r2); });
+
+	// ---- 64-bit synthesis: register-amount shifts and the seam terms ----
+	add("orr r0, r0, r1, lsl r8",    [](Assembler &a){ return a.orr(r0, r0, r1, lsl(r8)); });
+	add("orr r0, r0, r1, lsr r8",    [](Assembler &a){ return a.orr(r0, r0, r1, lsr(r8)); });
+	add("lsl r0, r1, r2",            [](Assembler &a){ return a.lsl(r0, r1, r2); });
+	add("lsr r0, r1, r2",            [](Assembler &a){ return a.lsr(r0, r1, r2); });
+	add("asr r0, r1, r2",            [](Assembler &a){ return a.asr(r0, r1, r2); });
+	add("ror r0, r1, r2",            [](Assembler &a){ return a.ror(r0, r1, r2); });
+	add("rsb r8, r2, #32",           [](Assembler &a){ return a.rsb(r8, r2, imm(32)); });
+	add("mls r0, r1, r2, r3",        [](Assembler &a){ return a.mls(r0, r1, r2, r3); });
+	add("cmp r1, r0, asr #31",       [](Assembler &a){ return a.cmp(r1, r0, asr(31)); });
+
+	// ---- VFP: the pieces the float lowering needs beyond the earlier corpus ----
+	add("vldr s0, [r1, #8]",         [](Assembler &a){ return a.vldr_32(s0, ptr(r1, 8)); });
+	add("vstr s1, [r2, #16]",        [](Assembler &a){ return a.vstr_32(s1, ptr(r2, 16)); });
+	add("vmov.f64 d0, d1",           [](Assembler &a){ return a.vmov_f64(d0, d1); });
+	add("vmov.f32 s0, s1",           [](Assembler &a){ return a.vmov_f32(s0, s1); });
+	add("vcvt.f64.f32 d0, s1",       [](Assembler &a){ return a.vcvt_f64_f32(d0, s1); });
+	add("vcvt.f32.f64 s0, d1",       [](Assembler &a){ return a.vcvt_f32_f64(s0, d1); });
+	add("vcvt.f64.s32 d0, s1",       [](Assembler &a){ return a.vcvt_f64_s32(d0, s1); });
+	add("vcvt.f32.s32 s0, s1",       [](Assembler &a){ return a.vcvt_f32_s32(s0, s1); });
+	add("vcvtr.s32.f64 s0, d1",      [](Assembler &a){ return a.vcvtr_s32_f64(s0, d1); });
+	add("vcvtr.s32.f32 s0, s1",      [](Assembler &a){ return a.vcvtr_s32_f32(s0, s1); });
+	add("vcmp.f32 s3, s4",           [](Assembler &a){ return a.vcmp_f32(s3, s4); });
+	add("vdiv.f32 s0, s1, s2",       [](Assembler &a){ return a.vdiv_f32(s0, s1, s2); });
+	add("vsqrt.f32 s0, s1",          [](Assembler &a){ return a.vsqrt_f32(s0, s1); });
+	add("vneg.f32 s0, s1",           [](Assembler &a){ return a.vneg_f32(s0, s1); });
+	add("vabs.f32 s0, s1",           [](Assembler &a){ return a.vabs_f32(s0, s1); });
+
+	// ---- raw words: FPSCR access, which a32 has no emitter entry for ----
+	// vmrs/vmsr are MRC/MCR to coprocessor 10, and a32's mrc takes a kOpRegC
+	// operand type it never constructs, so the lowering embeds the word. That
+	// makes these three constants exactly the kind of thing a differential
+	// test exists for.
+	add("vmrs r0, fpscr",            [](Assembler &a){ return a.embed_uint32(0xEEF10A10u | (0u << 12)); });
+	add("vmrs r8, fpscr",            [](Assembler &a){ return a.embed_uint32(0xEEF10A10u | (8u << 12)); });
+	add("vmsr fpscr, r0",            [](Assembler &a){ return a.embed_uint32(0xEEE10A10u | (0u << 12)); });
+	add("vmrs APSR_nzcv, fpscr",     [](Assembler &a){ return a.embed_uint32(0xEEF1FA10u); });
+
 	// ---- must be REFUSED ----
 	// There is no LSR #0 or ASR #0 in A32: an encoded amount of 0 means 32.
 	// Upstream a32_port accepts these and silently emits shift-by-32 -- the

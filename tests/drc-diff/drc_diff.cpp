@@ -344,7 +344,30 @@ compare_masks masks_for(std::vector<instruction> const &b)
 // back whatever the host left in it.
 constexpr u8 IFLAGS = FLAG_C | FLAG_V | FLAG_Z | FLAG_S;
 
+
+// CALLC's target, and the one thing in the corpus that observes the world
+// outside the machine state. The ARM lowering brackets a C call with an FPSCR
+// save and restore -- C code is entitled to the host's rounding mode, not
+// whatever SETFMOD last asked for -- so the case sets a rounding mode across
+// the call and reads it back afterwards.
+u32 g_callc_seen;
+
+void diff_cfunc(void *param)
+{
+	g_callc_seen = u32(uintptr_t(param)) ^ 0xa5a5a5a5;
+}
+
 using builder = void (*)(std::vector<instruction> &);
+
+// The control-flow cases need code handles, and a handle belongs to the
+// drcuml_state the case is running under -- so the state is published for the
+// duration of the build rather than threaded through every case's signature.
+drcuml_state *g_uml = nullptr;
+
+code_handle &hnd(char const *name)
+{
+	return *g_uml->handle_alloc(name);
+}
 
 struct testcase
 {
@@ -375,6 +398,21 @@ void request_all_flags(std::vector<instruction> &b)
 	for (instruction &i : b)
 		i.set_flags(i.output_flags());
 }
+
+// TWO PLACES WHERE THERE IS NO ORACLE, both found by the calibration run and
+// both worth stating rather than quietly avoiding:
+//
+//   * A 64-bit ROLC/RORC by more than 32. drcbec computes the carry's
+//     contribution as `(flags & FLAG_C) << (shift - 1)` with `flags` a 32-bit
+//     int, so a shift of 33 or more is undefined and comes out zero on x86;
+//     drcbe_x64 gives the mathematically right answer. drcbearm32 agrees with
+//     drcbe_x64 (its helper does the shift in 64 bits), so the corpus stops at
+//     32 rather than asserting one of the two references is authoritative.
+//   * BFXU/BFXS with a width equal to the register width. drcbec returns the
+//     whole value; drcbe_x64 returns zero. UML front-ends emit MOV for that,
+//     so neither behaviour is exercised in anger.
+//
+// Where the two references disagree, a differential test has nothing to say.
 
 testcase const CORPUS[] =
 {
@@ -769,7 +807,373 @@ testcase const CORPUS[] =
 	ins(b).setfmod(ROUND_FLOOR);
 	ins(b).getfmod(I2);
 } },
+
+// ---- the second wave -------------------------------------------------------
+//
+// Everything above was written before any of the ARM32 lowering existed, and
+// it passed on the first run once the lowering did. That is a suspicious
+// result, not a happy one: a corpus that passes immediately is more likely to
+// be missing the hard cases than to have found a flawless back-end. These are
+// the opcodes and widths it was NOT covering -- the ones a back-end is most
+// likely to get wrong precisely because nothing was asking.
+
+{ "bfx", "bfxu.bfxs", [] (std::vector<instruction> &b) {
+	ins(b).mov(I9, 0x89abcdef);
+	ins(b).bfxu(I0, I9, 4, 8);
+	ins(b).bfxs(I1, I9, 4, 8);
+	// NOT width 32: drcbe_c and drcbe_x64 disagree there -- see the note above
+	// the corpus -- so there is no oracle for a full-width extract.
+	ins(b).bfxu(I2, I9, 16, 16);
+	ins(b).bfxs(I3, I9, 28, 4);
+	ins(b).bfxu(I4, I9, 24, 8);
+} },
+
+{ "bfx", "dbfx", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I9, 0x0123456789abcdefULL);
+	ins(b).dbfxu(I0, I9, 8, 16);
+	ins(b).dbfxs(I1, I9, 60, 4);
+	ins(b).dbfxu(I2, I9, 16, 32);   // not width 64: no oracle, as above
+} },
+
+// The narrow multiplies keep the low half but take overflow from the wide
+// product, which is the part a back-end forgets.
+{ "alu", "mululw.mulslw", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x00010001);
+	ins(b).mov(I9, 0x00010001);
+	ins(b).mululw(I0, I8, I9);       // fits
+	ins(b).mov(I8, 0xffffffff);
+	ins(b).mululw(I1, I8, I8);       // overflows
+	ins(b).mov(I8, 0xffffffff);      // -1
+	ins(b).mov(I9, 2);
+	ins(b).mulslw(I2, I8, I9);
+} },
+
+{ "alu", "dmul", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0x0000000100000001ULL);
+	ins(b).dmov(I9, 0x0000000100000001ULL);
+	ins(b).dmulu(I0, I1, I8, I9);
+	ins(b).dmov(I8, 0xffffffffffffffffULL);
+	ins(b).dmulu(I2, I3, I8, I8);    // the full 128-bit product
+	ins(b).dmuls(I4, I5, I8, I8);    // -1 * -1
+	ins(b).dmululw(I6, I8, I8);
+} },
+
+{ "alu", "ddiv", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 1000000);
+	ins(b).dmov(I9, 7);
+	ins(b).ddivu(I0, I1, I8, I9);
+	ins(b).dmov(I8, 0xfffffffffffffff0ULL);
+	ins(b).ddivs(I2, I3, I8, I9);
+} },
+
+// Divide by zero writes neither destination and reports overflow. A back-end
+// that computes into the destination first gets the flags right and the
+// registers wrong.
+{ "alu", "div.by.zero", [] (std::vector<instruction> &b) {
+	ins(b).mov(I0, 0x11111111);
+	ins(b).mov(I1, 0x22222222);
+	ins(b).mov(I8, 100);
+	ins(b).mov(I9, 0);
+	ins(b).divu(I0, I1, I8, I9);
+	ins(b).divs(I0, I1, I8, I9);
+} },
+
+{ "alu", "daddc.dsubb", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0xffffffffffffffffULL);
+	ins(b).dmov(I9, 1);
+	ins(b).dadd(I0, I8, I9);         // carry out of the top
+	ins(b).daddc(I1, I9, I9);        // consumes it
+	ins(b).dmov(I8, 0);
+	ins(b).dsub(I2, I8, I9);         // borrow
+	ins(b).dsubb(I3, I9, I9);        // consumes it
+} },
+
+{ "alu", "dtest.dcarry", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0xf0f0f0f000000000ULL);
+	ins(b).dtest(I8, 0x0f0f0f0f00000000ULL);
+	ins(b).dset(COND_Z, I0);
+	ins(b).dcarry(I8, 60);           // a bit in the high half
+	ins(b).getflgs(I1, FLAG_C);
+	ins(b).dcarry(I8, 3);            // and one in the low half
+	ins(b).getflgs(I2, FLAG_C);
+} },
+
+{ "shift", "dshift.by.reg", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0x0123456789abcdefULL);
+	ins(b).mov(I9, 40);
+	ins(b).dshl(I0, I8, I9);
+	ins(b).dshr(I1, I8, I9);
+	ins(b).dsar(I2, I8, I9);
+	ins(b).drol(I3, I8, I9);
+	ins(b).dror(I4, I8, I9);
+} },
+
+{ "shift", "drolc.drorc", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I8, 0xffffffffffffffffULL);
+	ins(b).dmov(I9, 1);
+	ins(b).dadd(I7, I8, I9);         // sets C
+	ins(b).drolc(I0, I8, 1);
+	ins(b).drorc(I1, I8, 1);
+	ins(b).drolc(I2, I8, 32);        // across the 32-bit seam, but see the
+	                                 // note above the corpus about shift > 32
+} },
+
+// A rotate through carry by a register amount is the one shift form the ARM
+// lowering hands to a helper in both widths, so it needs its own case.
+{ "shift", "rolc.by.reg", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x89abcdef);
+	ins(b).mov(I9, 5);
+	ins(b).mov(I7, 0xffffffff);
+	ins(b).add(I6, I7, 1);           // sets C
+	ins(b).rolc(I0, I8, I9);
+	ins(b).rorc(I1, I8, I9);
+	ins(b).rolc(I2, I8, 0);          // zero preserves the carry
+} },
+
+{ "loadstore", "dloadstore", [] (std::vector<instruction> &b) {
+	static u64 dst[2];
+	static u32 const src[4] = { 0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00 };
+	ins(b).dmov(I8, 0x0123456789abcdefULL);
+	ins(b).dstore(dst, 0, I8, SIZE_QWORD, SCALE_x8);
+	ins(b).dload(I0, dst, 0, SIZE_QWORD, SCALE_x8);
+	ins(b).dload(I1, src, 0, SIZE_DWORD, SCALE_x4);   // zero extended
+	ins(b).dloads(I2, src, 0, SIZE_DWORD, SCALE_x4);  // sign extended
+	ins(b).dloads(I3, src, 2, SIZE_BYTE, SCALE_x1);
+} },
+
+{ "flags", "getflgs.dsize", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0);
+	ins(b).mov(I9, 1);
+	ins(b).sub(I7, I8, I9);          // borrow and sign
+	ins(b).getflgs(I0, IFLAGS);
+	ins(b).getflgs(I1, FLAG_S);
+	ins(b).getflgs(I2, FLAG_V);
+} },
+
+// SET over every condition the integer flags can express, from one compare, so
+// a mis-mapped condition code cannot hide behind a lucky value.
+{ "flags", "set.all.conds", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x80000000);
+	ins(b).mov(I9, 1);
+	ins(b).cmp(I8, I9);
+	ins(b).set(COND_Z,  I0);
+	ins(b).set(COND_NZ, I1);
+	ins(b).set(COND_S,  I2);
+	ins(b).set(COND_NS, I3);
+	ins(b).set(COND_C,  I4);
+	ins(b).set(COND_NC, I5);
+	ins(b).set(COND_V,  I6);
+	ins(b).set(COND_NV, I7);
+} },
+
+{ "flags", "set.all.conds2", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 0x80000000);
+	ins(b).mov(I9, 1);
+	ins(b).cmp(I8, I9);
+	ins(b).set(COND_A,  I0);
+	ins(b).set(COND_BE, I1);
+	ins(b).set(COND_G,  I2);
+	ins(b).set(COND_LE, I3);
+	ins(b).set(COND_L,  I4);
+	ins(b).set(COND_GE, I5);
+} },
+
+{ "mov", "mov.cond.all", [] (std::vector<instruction> &b) {
+	ins(b).mov(I8, 5);
+	ins(b).mov(I9, 5);
+	ins(b).cmp(I8, I9);
+	ins(b).mov(COND_E,  I0, 0x11111111);
+	ins(b).mov(COND_NE, I1, 0x22222222);
+	ins(b).mov(COND_A,  I2, 0x33333333);
+	ins(b).mov(COND_BE, I3, 0x44444444);
+	ins(b).dmov(COND_GE, I4, 0x5555555555555555ULL);
+} },
+
+{ "float", "fscmp", [] (std::vector<instruction> &b) {
+	ins(b).fscmp(F1, F2);
+	ins(b).set(COND_B, I0);
+	ins(b).set(COND_E, I1);
+	ins(b).fscmp(F1, F1);
+	ins(b).set(COND_E, I2);
+} },
+
+{ "float", "fsqrt.frecip", [] (std::vector<instruction> &b) {
+	ins(b).fdsqrt(F0, F1);
+	ins(b).fdrecip(F1, F2);
+	ins(b).fdrsqrt(F2, F3);
+	ins(b).fssqrt(F3, F4);
+	ins(b).fsrecip(F4, F5);
+} },
+
+{ "float", "frnds.copy", [] (std::vector<instruction> &b) {
+	ins(b).fdrnds(F0, F1);
+	ins(b).mov(I9, 0x40490fdb);
+	ins(b).fscopyi(F1, I9);
+	ins(b).icopyfs(I0, F1);
+	ins(b).dmov(I9, 0x400921fb54442d18ULL);
+	ins(b).fdcopyi(F2, I9);
+	ins(b).icopyfd(I1, F2);
+} },
+
+{ "float", "fstoint", [] (std::vector<instruction> &b) {
+	ins(b).fstoint(I0, F1, SIZE_DWORD, ROUND_TRUNC);
+	ins(b).fstoint(I1, F1, SIZE_QWORD, ROUND_TRUNC);
+	ins(b).fdtoint(I2, F1, SIZE_QWORD, ROUND_ROUND);
+	ins(b).fdtoint(I3, F1, SIZE_DWORD, ROUND_CEIL);
+	ins(b).fdtoint(I4, F1, SIZE_DWORD, ROUND_FLOOR);
+} },
+
+{ "float", "ffri8", [] (std::vector<instruction> &b) {
+	ins(b).dmov(I9, 0xfffffffffffffff0ULL);
+	ins(b).fdfrint(F0, I9, SIZE_QWORD);
+	ins(b).fsfrint(F1, I9, SIZE_QWORD);
+	ins(b).fsfrflt(F2, F3, SIZE_QWORD);
+} },
+
+// ---- the call contract -----------------------------------------------------
+//
+// Nothing above this point calls anything. On a host with a link register
+// rather than a pushed return address, that is the whole of the remaining
+// risk: a handle's code pointer has to be a call target, a RET has to undo
+// exactly what entering through that pointer did, and a HASHJMP has to unwind
+// a call chain it is abandoning. None of it is visible in a corpus of straight
+// line arithmetic, and all of it is on the path of every real driver.
+
+{ "control", "callh.ret", [] (std::vector<instruction> &b) {
+	code_handle &sub = hnd("diff_sub");
+	ins(b).mov(I0, 0x11111111);
+	ins(b).callh(sub);
+	ins(b).mov(I2, 0x33333333);
+	ins(b).jmp(9);
+	ins(b).handle(sub);
+	ins(b).mov(I1, 0x22222222);
+	ins(b).ret();
+	ins(b).label(9);
+} },
+
+// Two levels, because a link register makes one level look like it works
+// whether or not the return address is being saved at all.
+{ "control", "callh.nested", [] (std::vector<instruction> &b) {
+	code_handle &outer = hnd("diff_outer");
+	code_handle &inner = hnd("diff_inner");
+	ins(b).mov(I0, 1);
+	ins(b).callh(outer);
+	ins(b).mov(I3, 4);
+	ins(b).jmp(9);
+	ins(b).handle(outer);
+	ins(b).mov(I1, 2);
+	ins(b).callh(inner);
+	ins(b).ret();
+	ins(b).handle(inner);
+	ins(b).mov(I2, 3);
+	ins(b).ret();
+	ins(b).label(9);
+} },
+
+{ "control", "callh.cond", [] (std::vector<instruction> &b) {
+	code_handle &taken = hnd("diff_taken");
+	code_handle &nottaken = hnd("diff_nottaken");
+	ins(b).mov(I8, 5);
+	ins(b).mov(I9, 5);
+	ins(b).cmp(I8, I9);
+	ins(b).callh(COND_E, taken);
+	ins(b).callh(COND_NE, nottaken);
+	ins(b).jmp(9);
+	ins(b).handle(taken);
+	ins(b).mov(I0, 0x11111111);
+	ins(b).ret();
+	ins(b).handle(nottaken);
+	ins(b).mov(I1, 0x22222222);
+	ins(b).ret();
+	ins(b).label(9);
+} },
+
+// A conditional RET returns down one path and falls through on the other, so
+// it exercises the un-taken side of the same stack adjustment.
+{ "control", "ret.cond", [] (std::vector<instruction> &b) {
+	code_handle &sub = hnd("diff_sub");
+	ins(b).mov(I0, 0);
+	ins(b).callh(sub);
+	ins(b).jmp(9);
+	ins(b).handle(sub);
+	ins(b).mov(I8, 1);
+	ins(b).mov(I9, 2);
+	ins(b).cmp(I8, I9);
+	ins(b).ret(COND_E);          // not taken
+	ins(b).mov(I0, 0x12345678);
+	ins(b).ret(COND_NE);         // taken
+	ins(b).mov(I0, 0xdeadbeef);  // must not run
+	ins(b).ret();
+	ins(b).label(9);
+} },
+
+// An exception handler does not come back, and that is not a simplification
+// of the case -- it is the contract. drcbec's EXH pushes the EXH instruction
+// itself where CALLH pushes the one after it (drcbec.cpp:846 against :819), so
+// a RET out of an EXH handler re-executes the EXH forever. Real CPU cores end
+// an exception handler in HASHJMP or EXIT, never RET, which is why nothing has
+// ever tripped over it.
+{ "control", "exh", [] (std::vector<instruction> &b) {
+	code_handle &handler = hnd("diff_handler");
+	code_handle &skipped = hnd("diff_skipped");
+	ins(b).mov(I8, 5);
+	ins(b).mov(I9, 6);
+	ins(b).cmp(I8, I9);
+	ins(b).exh(COND_E, skipped, 0xdead);   // condition fails, falls through
+	ins(b).mov(I0, 0x11111111);
+	ins(b).exh(handler, 0x5150);
+	ins(b).mov(I2, 0xbadbad);              // must not run
+	ins(b).handle(skipped);
+	ins(b).mov(I3, 0xbadbad);              // must not run
+	ins(b).handle(handler);
+	ins(b).getexp(I1);
+} },
+
+// A hash jump that HITS. The target is reached through the hash table rather
+// than by a branch, and the jump abandons whatever call depth it was at.
+{ "control", "hashjmp.hit", [] (std::vector<instruction> &b) {
+	code_handle &handler = hnd("diff_handler");
+	code_handle &sub = hnd("diff_sub");
+	ins(b).jmp(1);
+	ins(b).hash(0, 0x2000);
+	ins(b).mov(I1, 0x77777777);
+	ins(b).jmp(2);
+	ins(b).handle(sub);
+	ins(b).mov(I0, 0x55555555);
+	ins(b).hashjmp(0, 0x2000, handler);   // jumps out of a call, never returns
+	ins(b).label(1);
+	ins(b).callh(sub);
+	ins(b).mov(I3, 0xbadbad);             // must not run
+	ins(b).label(2);
+} },
+
+// A hash jump that MISSES, which is the path through the nocode stub and into
+// the exception handle -- and the only way RECOVER's map lookup is reachable,
+// because the address it recovers from is the one the miss path returns to.
+{ "control", "hashjmp.recover", [] (std::vector<instruction> &b) {
+	code_handle &handler = hnd("diff_handler");
+	ins(b).mapvar(MAPVAR_M0, 0x1234abcd);
+	ins(b).mov(I0, 0x11111111);
+	ins(b).hashjmp(0, 0x3000, handler);   // nothing hashed at 0x3000
+	ins(b).handle(handler);
+	ins(b).getexp(I1);
+	ins(b).recover(I2, MAPVAR_M0);
+} },
+
+{ "control", "callc", [] (std::vector<instruction> &b) {
+	static u32 marker = 0x11111111;
+	ins(b).setfmod(ROUND_CEIL);
+	ins(b).callc(diff_cfunc, &marker);
+	ins(b).getfmod(I2);
+	ins(b).load(I0, &g_callc_seen, 0, SIZE_DWORD, SCALE_x4);
+	ins(b).mov(I8, 1);
+	ins(b).mov(I9, 1);
+	ins(b).cmp(I8, I9);
+	ins(b).callc(COND_NE, diff_cfunc, &marker);   // must not fire
+	ins(b).load(I1, &g_callc_seen, 0, SIZE_DWORD, SCALE_x4);
+} },
 };
+
 
 
 //**************************************************************************
@@ -839,6 +1243,7 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 		be->reset();
 
 		g_phase = "build";
+		g_uml = &uml;
 		drcuml_machine_state seed = make_seed();
 
 		code_handle *const entry = uml.handle_alloc("diff_entry");
@@ -881,6 +1286,7 @@ outcome run_case(device_t &device, backend_kind kind, testcase const &tc)
 		result.err = e.what();
 	}
 
+	g_uml = nullptr;
 	g_phase = "(between cases)";
 	return result;
 }
