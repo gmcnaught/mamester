@@ -122,6 +122,80 @@ is not faster. The 146 underruns in that run are not a threading cost either —
 the non-threaded baseline reports 142, and both are `s1945ii` running at half
 speed with the audio clock derived from the emulator.
 
+## Renice, and why Main_MiSTer does not need killing
+
+DreamSTer kills `Main_MiSTer` outright. That is not available to us —
+`fpga/MAME.sv:332` sources `joystick_0..3` from `hps_io` over `HPS_BUS`, which
+only Main_MiSTer drives, so `nv_pads()` would read frozen input; the OSD would
+go; and the launch path exists because Main_MiSTer writes the pick to
+`/media/fat/config/MAMESTer.s0`. It is also coupled to a decision we did not
+make: DreamSTer kills the process *because* it replaces the whole video
+pipeline (see `dreamster-ddr-channel-review.md:177-186`).
+
+The point is that we do not need to. There are **four** competitors, not the
+two the source comments assume — `/media/fat/MiSTer`, `Master_Daemon.sh`,
+`game_manager.sh`, and a `solarus_daemon.sh` left running by a sibling port —
+and simply deprioritising them recovers most of what killing them would:
+
+| arm | `pacman` | `s1945ii` |
+|---|---:|---:|
+| `renice 19` on all four competitors | **+6.5%** | **+6.1%** |
+| `MISTER_SCHED_RT=5` alone | +2.8% median | **+11.6%** |
+| renice **added on top of** `SCHED_RT` | +6.2% | −0.7% |
+
+**They do not stack**, and the −0.7% is the informative cell: both levers buy
+back the same contention, and RT already takes most of it on the heavy driver.
+Renice is the safer of the two — its arms are tight (under 1% spread in both
+games, against `SCHED_RT`'s bimodal `pacman`), and it carries none of
+`SCHED_FIFO`'s risk of an untriaged driver wedging inside `retro_run()` at real
+time priority.
+
+**One cell in the first renice run was contaminated by the measurer.** `pacman`
+rep 2 arm A came in at 46.7 fps against a 104 baseline because a 58 MB `scp` of
+the profiling `.so` was in flight at the time. The row was deleted and the rep
+re-run; the corrected figure is the +6.5% above (it was +6.6% with the bad row
+merely excluded, so nothing turned on it). Recorded because the failure is
+invisible in a summary — a mean over four reps would have reported +23.6%.
+
+## Profile: where `s1945ii`'s 34 fps goes
+
+`MISTER_PROFILE=1000`, 600 frames, 23,643 samples, symbolised against the
+`SYMBOLS=1` build. Needs an unstripped core — the shipped
+`lrmame_libretro.so` has no `.symtab` at all, so this had to wait for a build.
+
+**19% of the run is ROM load, not emulation.** `sha1_process` 14.8%,
+`inflate_fast` 2.3%, `read_rom_data` 1.2%, `sha1_creator::append` 1.0%. That is
+one-off checksum verification of the romset, and it is inside the profile on
+purpose (`host_main.c` arms the sampler before `retro_load_game` so init cost is
+visible rather than hidden). It is a launch-latency item, not an fps one.
+
+Excluding it, the steady state:
+
+| | share of steady state |
+|---|---:|
+| `[unmapped]` — the DRC code cache (JIT'd SH-2) | **34.1%** |
+| `software_renderer<uint32_t,…>::draw_quad_rgb32` | **8.8%** |
+| `psikyosh_state::drawgfxzoom` | 4.5% |
+| `ymfm::fm_engine_base<opl_registers_base<4>>::clock` | 3.7% |
+| `ymfm::pcm_channel::clock` | 1.6% |
+| `psikyosh_state::prelineblend` | 1.5% |
+
+The per-function figures cover the top 400 dumped PCs (70% of samples); the
+per-module totals are complete and are the check on them.
+
+**`[unmapped]` is the DRC code cache** — JIT-generated code belongs to no
+module, so the sampler cannot name it. At 34% it is the SH-2 itself, and it is
+already the 7.4× that `drcbearm32` bought over `drcbec`.
+
+**`draw_quad_rgb32` is what makes `M16B` worth a build.** That instantiation is
+`software_renderer<unsigned int, 0,0,0, 16,8,0, false, false>` — MAME's *32-bit*
+renderer, blitting the screen quad into an XRGB8888 buffer that
+`nv_convert_8888_to_565` then converts a second time on our side. `M16B` makes
+the core report RGB565 and selects the 16-bit instantiation instead, removing
+the wider blit and our convert together. Before this profile that lever was a
+speculative arm with a documented bit-rot risk; it now points at a measured
+8.8%.
+
 ## MAME's own SMP: already enabled, and capped at one worker here
 
 MAME's FAQ describes up to eight cores' worth of threads. Almost none of it can
@@ -164,9 +238,20 @@ discrete-sound driver before believing either sign.
 
 ## Where `s1945ii` stands
 
-34.3 fps against the 60 it needs. No lever on this page closes a 74% gap, and
-that is the point of measuring them: the remaining cost is emulation, not
-present, so the next question is a profile rather than another environment
-variable. `MISTER_PROFILE` needs an unstripped core — the shipped
-`lrmame_libretro.so` has no `.symtab` at all — which is why the profiling build
-carries `SYMBOLS=1`.
+34.3 fps baseline against the 60 it needs — a 75% gap. Best measured stack so
+far is write-combining + `SCHED_RT` + the salvaged host, and none of the
+remaining host-side levers stack with each other, so the ceiling from this page
+is roughly 38–39 fps. The profile says why: a third of the steady state is the
+JIT'd SH-2 and the rest is spread thin. Closing the gap needs either the
+renderer arm (`M16B`, 8.8%) landing well, or a different engine for this driver.
+
+## Open
+
+- **`M16B`** — building. The one lever with a measured target.
+- **ROM-load latency.** ~19% of a 21-second run is SHA-1 verification of the
+  romset. It costs no frames but it is seconds of launch delay on every start,
+  and nothing has looked at whether 0.289 can be told to skip it.
+- **`mame_thread_mode` / `OPENMP=1`** — blocked on a discrete-sound romset in
+  0.289 format.
+- **Compiler arms** — LTO, `-ffast-math`, PGO. Not `-O2`-vs-`-O3`; that is
+  already `-O3`.
