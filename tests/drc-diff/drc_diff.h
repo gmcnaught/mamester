@@ -28,7 +28,16 @@ namespace drc {
 // `device` only has to be a live device_t -- the harness needs it for
 // machine().options() and for a drc_cache owner, not for anything it emulates,
 // so the root device of a machine started with no content is enough.
-void diff_run_once(device_t &device);
+//
+// DECLARED WEAK, and the call site must null-check it. cpu.lua compiles
+// drc_diff.cpp inside the CPU_INCLUDE_DRC files block, which is false whenever
+// the SOURCES driver subset contains no DRC-backed CPU -- a pacman-only build,
+// for one, which is exactly the gate build in the design doc. The call in
+// retro_run() is unconditional, so without this the core links (a .so may carry
+// undefined symbols) and then the HOST link fails on
+// `undefined reference to drc::diff_run_once(device_t&)`, several minutes and
+// one build later, in a place that says nothing about the cause.
+[[gnu::weak]] void diff_run_once(device_t &device);
 
 } // namespace drc
 
