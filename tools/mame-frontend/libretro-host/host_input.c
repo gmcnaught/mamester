@@ -51,9 +51,14 @@ static const int pad_bit_to_retro[] = {
 #define PAD_BITS ((int)(sizeof pad_bit_to_retro / sizeof pad_bit_to_retro[0]))
 
 /* Reverse map, built once: retro id -> pad bit, or -1. */
+/* Built by a constructor rather than lazily. host_input_state() is called once
+ * per input code per player per frame -- hundreds of times -- and a lazy table
+ * puts a load-and-test of `reverse_built` in front of every one of them for a
+ * table that is fully determined at compile time. The constructor runs before
+ * main(), so there is no ordering hazard with the first poll. */
 static int8_t retro_to_pad_bit[RETRO_DEVICE_ID_JOYPAD_R3 + 1];
-static int    reverse_built;
 
+__attribute__((constructor))
 static void build_reverse(void)
 {
     int i;
@@ -61,14 +66,11 @@ static void build_reverse(void)
         retro_to_pad_bit[i] = -1;
     for (i = 0; i < PAD_BITS; i++)
         retro_to_pad_bit[pad_bit_to_retro[i]] = (int8_t)i;
-    reverse_built = 1;
 }
 
 void host_input_poll(void)
 {
     int p;
-
-    if (!reverse_built) build_reverse();
 
     for (p = 0; p < HOST_PADS; p++)
         pad_state[p] = nv_pads(p);
@@ -88,7 +90,6 @@ int16_t host_input_state(unsigned port, unsigned device, unsigned index,
     if (port >= HOST_PADS)             return 0;
     if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
 
-    if (!reverse_built) build_reverse();
     bit = retro_to_pad_bit[id];
     if (bit < 0) return 0;
 

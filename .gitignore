@@ -70,6 +70,11 @@ tools/mame-frontend/libretro-host/lrc/
 
 # A/B host binaries built against a non-default archive (mame2003-o2, -o3)
 tools/mame-frontend/libretro-host/mame2003-*
+# lrmame host binaries: the default target plus the per-arm names an A/B uses
+# (lrmame-base, lrmame-lev, lrmame-prof, lrmame-16, lrmame-fast, ...). They are
+# cross-built armhf ELFs, not source.
+tools/mame-frontend/libretro-host/lrmame
+tools/mame-frontend/libretro-host/lrmame-*
 
 # Host-native test binary (tests/Makefile builds it; it is macOS-native, not armhf)
 tests/nv_present_test

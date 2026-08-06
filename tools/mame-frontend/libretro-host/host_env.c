@@ -88,6 +88,26 @@ static const struct { const char *key; const char *value; } host_options[] = {
     { "mame2003-plus_use_samples",      "disabled" },
     { "mame2003-plus_autosave_hiscore", "disabled" },
     { "mame2003-plus_nvram_bootstraps", "disabled" },
+
+    /* The next two are not preferences, they are statements about what this
+     * host HAS. Left at their core defaults the core polls devices that cannot
+     * exist here, once per input code per frame:
+     *
+     *   input_interface defaults to "simultaneous", which makes every
+     *   osd_is_key_pressed() an input_cb(RETRO_DEVICE_KEYBOARD) round trip
+     *   (mame2003.c:1467). "retropad" returns 0 before the call. There is no
+     *   keyboard on the MiSTer pad path, so both answers are 0 and only the
+     *   pinned one is free.
+     *
+     *   xy_device defaults to "mouse", so every joycode that is not a retropad
+     *   code falls through to a "mouse" then a "lightgun" get_retro_code()
+     *   lookup plus their input_cb calls (mame2003.c:1224-1246). nv_pads()
+     *   serves twelve digital bits and nothing else; "disabled" skips the
+     *   block. Crosshair drawing is untouched -- that is crosshair_enabled,
+     *   which is deliberately NOT pinned because it changes what is on screen.
+     */
+    { "mame2003-plus_input_interface",  "retropad" },
+    { "mame2003-plus_xy_device",        "disabled" },
 #endif
     { NULL, NULL }
 };
