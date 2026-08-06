@@ -367,15 +367,49 @@ the emulation is:
   `namconb1`, `pacman`
 - mixed: `kaneko16`
 
+### Implemented for the `rgb32` half: +7.1%
+
+`mamester_try_direct_blit()` in `drawretro.cpp` recognises the trivial case and
+`memcpy`s instead of calling `draw_primitives`. Measured, 4 reps, interleaved:
+
+| game | `draw_primitives` | direct blit | delta |
+|---|---:|---:|---:|
+| `s1945ii` (rgb32) | 36.2 | 38.8 | **+7.1%** |
+| `pacman` (ind16) | 110.5 | 110.1 | −0.3% |
+
+The `s1945ii` arms are nearly noise-free — 38.8 four times against 36.2, 36.2,
+36.2, 36.3 — and the screenshot is **MD5-identical** to the `draw_primitives`
+output. `pacman`'s −0.3% is the per-frame predicate check on a driver where the
+fast path correctly never fires.
+
+**The predicate engages 297 of 300 frames on `s1945ii` and 0 of 300 on
+`pacman`**, which is exactly the designed behaviour: `pacman` is `PALETTE16`,
+where the blit is a palette lookup rather than a copy. The three `s1945ii`
+misses are startup frames.
+
+Predicted 12.5%, delivered 7.1%. The difference is that this removes the
+texture-coordinate stepping but still performs a full-frame `memcpy`. Handing
+the driver's bitmap pointer to the host so `nv_present` reads it directly would
+remove the copy as well — the remaining half of the estimate.
+
+**Two instrumentation lessons, both of which produced a wrong answer first.**
+The fast path initially reported `declined` on *both* drivers, and the reason
+was that the report and the primitive dump both fired on frame 1 — which is
+MAME's own startup UI, not the game. For `s1945ii` that frame holds 28
+primitives of background rects, box lines and 2x7 font glyphs with **no screen
+quad in the list at all**. A verdict taken there says nothing about the frames
+that cost time. Both now sample frame 300 and the report is an aggregate
+(`297/300`) rather than a single-frame verdict. Second: a predicate that
+silently never matches is indistinguishable from a lever that did not work, so
+the miss is reported as loudly as the hit.
+
 ### The fix is different for each half
 
-**`rgb32`: bypass the render pipeline in software, no RTL.** For these drivers
-the screen bitmap *is* the finished image. MAME steps texture coordinates
-across a 1:1 unscaled, unrotated quad to produce a copy. Handing
-`screen_device`'s bitmap straight to `nv_present` deletes the whole 12.5%, and
-the libretro OSD is ours to modify. This is the bigger and cheaper win, and it
-should come first because it establishes whether the pipeline can be sidestepped
-at all before any RTL is committed.
+**`rgb32`: bypass the render pipeline in software, no RTL.** DONE, +7.1% --
+see above. What remains of the estimate is the `memcpy` the fast path still
+does; removing that means handing the driver's bitmap pointer to the host so
+`nv_present` converts straight from it, which touches what `retro_video_refresh`
+passes and is the more invasive change.
 
 **`ind16`: FPGA palette lookup at scanout.** Here a per-pixel palette lookup
 genuinely has to happen somewhere. Keeping palette RAM in the FPGA and 16-bit

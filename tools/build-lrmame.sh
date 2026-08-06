@@ -124,6 +124,14 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
 HOST="${HOST:-0}"
 BUILDDIR="${BUILDDIR:-$([ "$HOST" = "1" ] && echo build-host || echo build)}"
 
+# Upstream bug fixes, applied to every configuration including HOST=1. These are
+# defects in 0.289 rather than anything this port wants, so they live as patches
+# and are meant to disappear when they go upstream. Fatal on conflict on
+# purpose: a patch that stops applying after a submodule bump must not become a
+# silent build without it, because that is precisely how the M16B stride bug
+# produced a fast binary that drew garbage.
+"$REPO/tools/lrmame-patches/apply.sh"
+
 # The differential harness is injected for every configuration. It compiles into
 # the core unconditionally and does nothing unless MAMESTER_DRC_DIFF is set in
 # the environment, so this does not make a shipped core a test core.

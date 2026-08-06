@@ -1,0 +1,177 @@
+diff --git a/src/osd/modules/render/drawretro.cpp b/src/osd/modules/render/drawretro.cpp
+index a305ec9c..678bf41a 100644
+--- a/src/osd/modules/render/drawretro.cpp
++++ b/src/osd/modules/render/drawretro.cpp
+@@ -12,6 +12,12 @@
+ #include "drawretro.h"
+ #include "rendersw.hxx"
+ 
++// MAMESTER: for the direct-blit fast path below.
++#include <cmath>
++#include <cstdio>
++#include <cstring>
++#include <cstdlib>
++
+ //============================================================
+ //  destructor
+ //============================================================
+@@ -58,6 +64,114 @@ int renderer_retro::xy_to_render_target(int x, int y, int *xt, int *yt)
+ 	return 1;
+ }
+ 
++//============================================================
++//  MAMESTER: direct blit fast path
++//============================================================
++//
++// draw_primitives() exists so MAME can scale, rotate, blend, overlay artwork
++// and draw its own UI. This port needs none of that: the render target is
++// exactly compute_minimum_size() (window.cpp), rotation is carried to the FPGA
++// through SET_ROTATION rather than applied here, and there is no artwork, no
++// bezel and no MAME UI. For a bitmap_rgb32 driver that leaves the texture and
++// the destination holding the same pixels in the same order -- and MAME was
++// spending a measured 21.7 cycles per pixel stepping texture coordinates to
++// produce that identity (docs/bench-results-lrmame.md), which is 12.5% of an
++// 800 MHz Cortex-A9 at 60 Hz on a 320x240 screen.
++//
++// So: recognise that exact case and memcpy instead. EVERY other case falls
++// through to draw_primitives() unchanged -- MAME UI, vector and SVG screens,
++// multi-screen, artwork, scaling, colour modulation. The predicate is
++// deliberately strict; a false negative costs the old speed, a false positive
++// draws the wrong thing.
++//
++// Not enabled for M16B: there the destination is RGB565 and the source is
++// XRGB8888, so it is a conversion rather than a copy, and M16B measured as a
++// net regression anyway once its stride bug was fixed.
++
++#ifndef M16B
++static unsigned long mamester_blit_direct   = 0;
++static unsigned long mamester_blit_calls    = 0;
++static bool          mamester_blit_reported = false;
++
++static bool mamester_try_direct_blit(
++		render_primitive_list const &primlist, void *dstdata, u32 width, u32 height, u32 pitch)
++{
++	// MAMESTER_BLIT_DEBUG=<frame> dumps the primitive list on that frame.
++	//
++	// It defaults to 300 rather than 1 ON PURPOSE. Dumping the first frame
++	// shows MAME's own startup UI -- for s1945ii that is 28 primitives of
++	// background rects, box lines and 2x7 font glyphs, with no screen quad in
++	// the list at all -- so a verdict taken there says nothing about the frames
++	// that actually cost time.
++	mamester_blit_calls++;
++	unsigned long dbg = 0;
++	if (char const *e = getenv("MAMESTER_BLIT_DEBUG"))
++		dbg = strtoul(e, nullptr, 10) ? strtoul(e, nullptr, 10) : 300;
++	if (dbg && mamester_blit_calls == dbg)
++	{
++		fprintf(stderr, "MISTER-BLIT: target %ux%u pitch %u\n", width, height, pitch);
++		int n = 0;
++		for (render_primitive const *p = primlist.first(); p != nullptr; p = p->next(), n++)
++			fprintf(stderr, "MISTER-BLIT: [%d] type=%d flags=%08x bounds=%.2f,%.2f..%.2f,%.2f "
++					"col=%.2f,%.2f,%.2f,%.2f tex=%p %ux%u rp=%u "
++					"uv tl=%.3f,%.3f tr=%.3f,%.3f bl=%.3f,%.3f\n",
++					n, int(p->type), p->flags,
++					p->bounds.x0, p->bounds.y0, p->bounds.x1, p->bounds.y1,
++					p->color.a, p->color.r, p->color.g, p->color.b,
++					p->texture.base, p->texture.width, p->texture.height, p->texture.rowpixels,
++					p->texcoords.tl.u, p->texcoords.tl.v, p->texcoords.tr.u, p->texcoords.tr.v,
++					p->texcoords.bl.u, p->texcoords.bl.v);
++		fprintf(stderr, "MISTER-BLIT: %d primitive(s); TEXFORMAT_RGB32=%08x "
++				"ARGB32=%08x BLENDMODE_NONE=%08x mask=%08x\n", n,
++				PRIMFLAG_TEXFORMAT(TEXFORMAT_RGB32), PRIMFLAG_TEXFORMAT(TEXFORMAT_ARGB32),
++				PRIMFLAG_BLENDMODE(BLENDMODE_NONE),
++				PRIMFLAG_TEXFORMAT_MASK | PRIMFLAG_BLENDMODE_MASK);
++	}
++
++	render_primitive const *const prim = primlist.first();
++	if (prim == nullptr || prim->next() != nullptr)
++		return false;                       // anything layered on top: bail
++	if (prim->type != render_primitive::QUAD || prim->texture.base == nullptr)
++		return false;
++
++	// RGB32/ARGB32 with no blending is the only format that is byte-identical
++	// to what this renderer would have written.
++	u32 const fmt = prim->flags & (PRIMFLAG_TEXFORMAT_MASK | PRIMFLAG_BLENDMODE_MASK);
++	if (fmt != (PRIMFLAG_TEXFORMAT(TEXFORMAT_RGB32) | PRIMFLAG_BLENDMODE(BLENDMODE_NONE))
++	 && fmt != (PRIMFLAG_TEXFORMAT(TEXFORMAT_ARGB32) | PRIMFLAG_BLENDMODE(BLENDMODE_NONE)))
++		return false;
++
++	// Any colour modulation means the texture is being tinted, not copied.
++	if (prim->color.a != 1.0F || prim->color.r != 1.0F
++	 || prim->color.g != 1.0F || prim->color.b != 1.0F)
++		return false;
++
++	// The quad must cover the whole target exactly, 1:1 with the texture.
++	auto const nearest = [] (float v) { return s32(floorf(v + 0.5F)); };
++	if (nearest(prim->bounds.x0) != 0 || nearest(prim->bounds.y0) != 0
++	 || nearest(prim->bounds.x1) != s32(width) || nearest(prim->bounds.y1) != s32(height))
++		return false;
++	if (prim->texture.width != width || prim->texture.height != height)
++		return false;
++
++	// Identity texture coordinates. This is what rules out flips and the
++	// swapped-axis orientations -- a rotated quad has tr.v or bl.u non-zero.
++	render_quad_texuv const &t = prim->texcoords;
++	if (t.tl.u != 0.0F || t.tl.v != 0.0F || t.tr.u != 1.0F || t.tr.v != 0.0F
++	 || t.bl.u != 0.0F || t.bl.v != 1.0F)
++		return false;
++
++	// rowpixels, not width: MAME bitmaps are routinely padded wider than the
++	// visible area, and treating the source as contiguous would shear it.
++	u32 const *src = reinterpret_cast<u32 const *>(prim->texture.base);
++	u32       *dst = reinterpret_cast<u32 *>(dstdata);
++	for (u32 y = 0; y < height; y++)
++		std::memcpy(dst + (size_t(y) * pitch), src + (size_t(y) * prim->texture.rowpixels),
++				size_t(width) * sizeof(u32));
++	return true;
++}
++#endif // !M16B
++
+ //============================================================
+ //  renderer_retro::draw
+ //============================================================
+@@ -73,11 +187,42 @@ int renderer_retro::draw(const int update)
+ 
+ 	m_bmdata = (uint8_t *)retro_get_fb_ptr();
+ 
+-	//FIXME retro handle 16/32 bits
++	// MAMESTER: this was the FIXME "retro handle 16/32 bits", and it was a real
++	// bug rather than a missing feature. M16B makes libretro.cpp declare
++	// videoBuffer as uint16_t and report RETRO_PIXEL_FORMAT_RGB565 (:64-70,
++	// :774), but the instantiation below was unconditionally 32-bit -- so the
++	// renderer wrote 4-byte pixels, with a pitch counted in uint32_t units,
++	// into a buffer the frontend then read as 2-byte RGB565. A 2:1 stride
++	// mismatch, which shows up as a skewed, wrongly-coloured picture rather
++	// than as anything that fails.
++	//
++	// The pitch argument is in PixelType units and the buffer is `width`
++	// pixels wide either way, so only the instantiation changes.
++	// <uint16_t, 3,2,3, 11,5,0> is MAME's own RGB565 form (drawsdl.cpp:446).
+ 
+ 	// draw the primitives to the bitmap
+ 	window().m_primlist->acquire_lock();
+-	software_renderer<uint32_t, 0,0,0, 16,8,0>::draw_primitives(*window().m_primlist, m_bmdata, width, height, width);
++#ifdef M16B
++	software_renderer<uint16_t, 3,2,3, 11,5,0>::draw_primitives(*window().m_primlist, m_bmdata, width, height, width);
++#else
++	if (!mamester_try_direct_blit(*window().m_primlist, m_bmdata, width, height, width))
++		software_renderer<uint32_t, 0,0,0, 16,8,0>::draw_primitives(*window().m_primlist, m_bmdata, width, height, width);
++	else
++		mamester_blit_direct++;
++	// Report an AGGREGATE, and not before the game is actually drawing. The
++	// first frames are MAME's own startup UI, where the fast path cannot apply
++	// and a verdict taken there is simply wrong -- which is exactly the mistake
++	// the first version of this made. Report the miss as loudly as the hit: a
++	// predicate that silently never matches looks like a lever that did nothing.
++	if (!mamester_blit_reported && mamester_blit_calls == 300)
++	{
++		mamester_blit_reported = true;
++		fprintf(stderr, "MISTER-HOST: render fast path %lu/%lu frames (%ux%u)%s\n",
++				mamester_blit_direct, mamester_blit_calls, width, height,
++				mamester_blit_direct ? "" : " -- always draw_primitives; "
++						"set MAMESTER_BLIT_DEBUG=<frame> to dump the primitive list");
++	}
++#endif
+ 	window().m_primlist->release_lock();
+ 
+ 	return 0;
