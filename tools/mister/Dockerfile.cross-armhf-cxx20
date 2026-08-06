@@ -9,7 +9,14 @@
 # the SAME compiler -- so bumping the shared container would silently invalidate
 # that comparison. New compiler, new file.
 #
-# Debian trixie = gcc 14, comfortably past MAME's C++20 requirement.
+# Debian BOOKWORM = gcc 12, past MAME's C++20 requirement (it wants 11 or
+# later). Trixie/gcc-14 was tried first and cannot be used at all, for a reason
+# that is not about C++: trixie IS Debian's armhf time64 transition, so its
+# libstdc++.a is built for 64-bit time_t and references __clock_gettime64,
+# __ioctl_time64, __fstat64_time64 and friends. The MiSTer's glibc 2.31 has none
+# of them, and no compiler flag or sysroot can change a prebuilt runtime
+# library's ABI. Bookworm's armhf is still the 32-bit time_t ABI, which is the
+# one the device runs.
 #
 # MAME cross-builds need BOTH toolchains at once: genie emits host-native build
 # tools (verinfo, png2bdc, makedep) and cross-compiles the emulator itself, which
@@ -33,11 +40,33 @@
 # Nothing catches this before the device: it builds clean, and it RUNS clean
 # under qemu-arm, because qemu is pointed at the container's own 2.41 libs.
 #
-# So: gcc-14 from trixie for the C++20 requirement, glibc 2.31 from bullseye for
-# the target. The bullseye stage supplies only the target sysroot (headers and
-# armhf libraries); no compiler comes from it. This is also why the two older
+# So: gcc-12 from bookworm for the C++20 requirement, glibc 2.31 from bullseye
+# for the target. The bullseye stage supplies only the target sysroot (headers
+# and armhf libraries); no compiler comes from it. This is also why the two older
 # engines never hit this — their container IS bullseye.
+#
+# Two residues remain after that split, and both are handled at link time by
+# tools/mister/glibc231-compat.c rather than here:
+#
+#   __libc_single_threaded  glibc 2.32. bookworm's libstdc++.a reads it in
+#                           __cxa_guard_acquire, locale init and the COW string
+#                           refcount, so essentially every C++ link needs it.
+#   arc4random              glibc 2.36.
+#   -lpthread               glibc 2.31 still has a separate libpthread, and a
+#                           libstdc++ built against 2.34+ does not ask for it.
+#
+# Verified end to end before this container was adopted: a C++20 program using
+# threads, chrono, locale, filesystem, random and iostreams builds this way and
+# RUNS on the device, requiring nothing later than GLIBC_2.25.
 FROM debian:bullseye AS sysroot
+
+# apt's download sandbox is switched off before anything is fetched. On Docker
+# for macOS the unprivileged _apt user cannot read what it just wrote into the
+# overlay, and apt reports that as "At least one invalid signature was
+# encountered" against every repository -- a signature error for a permission
+# problem, and it comes and goes with the storage driver's mood rather than
+# staying reproducible.
+RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/99-no-sandbox
 
 RUN dpkg --add-architecture armhf \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -46,7 +75,15 @@ RUN dpkg --add-architecture armhf \
         linux-libc-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
-FROM debian:trixie
+FROM debian:bookworm
+
+# apt's download sandbox is switched off before anything is fetched. On Docker
+# for macOS the unprivileged _apt user cannot read what it just wrote into the
+# overlay, and apt reports that as "At least one invalid signature was
+# encountered" against every repository -- a signature error for a permission
+# problem, and it comes and goes with the storage driver's mood rather than
+# staying reproducible.
+RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/99-no-sandbox
 
 RUN dpkg --add-architecture armhf \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -65,7 +102,7 @@ RUN dpkg --add-architecture armhf \
 # crt1.o and libc.so through its own prefix:
 #
 #     $ arm-linux-gnueabihf-gcc --sysroot=/sysroot -print-file-name=crt1.o
-#     /usr/lib/gcc-cross/arm-linux-gnueabihf/14/../../../../arm-linux-gnueabihf/lib/crt1.o
+#     /usr/lib/gcc-cross/arm-linux-gnueabihf/12/../../../../arm-linux-gnueabihf/lib/crt1.o
 #
 # — a compiler-prefix path that --sysroot leaves alone, so a sysroot flag builds
 # a binary that still references GLIBC_2.34. Overwriting the toolchain's own

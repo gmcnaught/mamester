@@ -201,6 +201,37 @@ if [ "${M16B:-0}" = "1" ]; then
     echo "# M16B: core will report RGB565 (no per-frame convert)"
 fi
 
+# The armhf link needs two things the compiler does not supply on its own, both
+# consequences of building C++ with bookworm's gcc-12 against the device's glibc
+# 2.31 (see tools/mister/Dockerfile.cross-armhf-cxx20):
+#
+#   glibc231-compat.o  defines __libc_single_threaded (glibc 2.32) and
+#                      arc4random (2.36), which bookworm's PREBUILT libstdc++.a
+#                      references and 2.31 does not have. No flag can fix that
+#                      one -- the runtime library was compiled long ago.
+#   -lpthread          2.31 still has a separate libpthread; a libstdc++ built
+#                      against 2.34+, where it was folded into libc, never asks
+#                      for it, so pthread_once comes up undefined.
+#
+# The source is copied into the MAME tree rather than referenced in place
+# because `run` bind-mounts only $SRC into the container. Set before SIG so a
+# change here counts as a configuration change like any other.
+#
+# The object is named by ABSOLUTE path: genie runs the link from
+# build/projects/retro/mamelrmame/gmake-linux/, not from the source root, so a
+# relative name fails with "cannot find .glibc231-compat.o". Which absolute path
+# depends on how the compiler is reached -- /src inside the container, $SRC when
+# a cross toolchain is already on PATH -- the same fork `run` makes below.
+if [ "$HOST" != "1" ]; then
+    install -m 644 "$REPO/tools/mister/glibc231-compat.c" "$SRC/.glibc231-compat.c"
+    if command -v arm-linux-gnueabihf-g++ >/dev/null 2>&1; then
+        COMPAT_DIR="$SRC"
+    else
+        COMPAT_DIR=/src
+    fi
+    MAKE_VARS+=("LDOPTS=$COMPAT_DIR/.glibc231-compat.o -lpthread")
+fi
+
 # The build configuration is not tracked by genie's dependency graph any better
 # than the other engines' were -- changing a flag does not invalidate objects
 # built under the old one. Same trap tools/build-m2003p.sh documents, same fix:
@@ -236,6 +267,9 @@ if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$SIG" ]; then
         run make -f makefile "${MAKE_VARS[@]}" clean >/dev/null || true
     fi
 fi
+
+[ "$HOST" = "1" ] || run arm-linux-gnueabihf-gcc -O2 -c \
+    -o .glibc231-compat.o .glibc231-compat.c
 
 echo "# building mame_${SUBTARGET} for $([ "$HOST" = "1" ] && echo "the host" || echo armhf), -j$JOBS"
 echo "#   SOURCES=$SOURCES  BUILDDIR=$BUILDDIR"
