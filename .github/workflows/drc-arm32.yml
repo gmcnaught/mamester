@@ -145,8 +145,19 @@ jobs:
           ccache --zero-stats >/dev/null
           tools/build-lrmame.sh
 
-      - name: no-content probe under qemu
-        run: bash tests/drc-diff/run.sh
+      # A sweep, not a single run. The corpus seeds the machine state, and one
+      # fixed seed tests one set of values -- flag reconstruction is exactly
+      # the code that is right for the values it was written against and wrong
+      # a little further along. The sweep costs a minute per seed and has
+      # already paid for itself once, on a case where the two REFERENCE
+      # back-ends disagreed.
+      - name: differential run under qemu, over several input states
+        run: |
+          for seed in 0 1 2 3 4 5 6 7; do
+              echo "::group::seed $seed"
+              MAMESTER_DRC_SEED=$seed bash tests/drc-diff/run.sh
+              echo "::endgroup::"
+          done
 
       - name: report
         if: always()

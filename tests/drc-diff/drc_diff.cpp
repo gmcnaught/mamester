@@ -221,6 +221,22 @@ void install_crash_handler()
 // register distinct and non-zero, so a back-end that synthesises a 64-bit
 // operation out of two 32-bit ones cannot pass by getting one half right and
 // leaving the other untouched.
+// MAMESTER_DRC_SEED varies the input state. A corpus with one fixed seed
+// tests one set of values, and the flag reconstruction is exactly the kind of
+// code that is right for the values it was written against and wrong a bit
+// further along -- an overflow bit that is really the sign bit agrees with the
+// oracle until the two differ. Seed 0 is the original fixed state, so the
+// default run is unchanged and a sweep is additional rather than instead.
+u64 g_seed = 0;
+
+u64 seed_mix(u64 x)
+{
+	x += 0x9e3779b97f4a7c15ULL;
+	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+	x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+	return x ^ (x >> 31);
+}
+
 drcuml_machine_state make_seed()
 {
 	drcuml_machine_state s;
@@ -230,6 +246,38 @@ drcuml_machine_state make_seed()
 		s.r[i].d = 0x0123456789abcdefULL ^ (u64(i + 1) * 0x1111111111111111ULL);
 	for (int i = 0; i < REG_F_COUNT; i++)
 		s.f[i].d = -1.5 * double(i + 1);
+
+	if (g_seed)
+	{
+		for (int i = 0; i < REG_I_COUNT; i++)
+			s.r[i].d = seed_mix(g_seed * 64 + i);
+
+		// Deliberately tame: finite, bounded, never NaN. Converting a NaN or
+		// an out-of-range float to an integer is undefined in C++ and
+		// saturating on VFP, so a wild float seed would make FTOINT disagree
+		// over something neither back-end is getting wrong.
+		//
+		// It has to be tame in BOTH views. A UML float register is eight
+		// bytes, and a single-precision op reads the low four of them -- so a
+		// seeded double whose mantissa happens to spell a NaN as a float makes
+		// the single-precision cases fail for a reason that has nothing to do
+		// with the lowering. That is what the first seed sweep found. The fix
+		// is to choose the double first and then plant a tame float in the low
+		// half, which only disturbs the double's least significant mantissa
+		// bits.
+		for (int i = 0; i < REG_F_COUNT; i++)
+		{
+			double const d = double(int32_t(u32(seed_mix(g_seed * 64 + 32 + i)))) / 65536.0;
+			float const f = float(int32_t(u32(seed_mix(g_seed * 64 + 48 + i)))) / 65536.0f;
+
+			u64 dbits;
+			u32 fbits;
+			std::memcpy(&dbits, &d, sizeof(dbits));
+			std::memcpy(&fbits, &f, sizeof(fbits));
+			dbits = (dbits & 0xffffffff00000000ULL) | fbits;
+			std::memcpy(&s.f[i].d, &dbits, sizeof(dbits));
+		}
+	}
 
 	s.exp = 0xdeadbeef;
 
@@ -411,6 +459,10 @@ void request_all_flags(std::vector<instruction> &b)
 //   * BFXU/BFXS with a width equal to the register width. drcbec returns the
 //     whole value; drcbe_x64 returns zero. UML front-ends emit MOV for that,
 //     so neither behaviour is exercised in anger.
+//   * FTOINT from single precision to a 64-bit integer, for a negative value.
+//     drcbec zero-extends the 32-bit answer where drcbe_x64 sign-extends the
+//     64-bit one. Found by the seed sweep rather than by the fixed state,
+//     which is the case for varying it.
 //
 // Where the two references disagree, a differential test has nothing to say.
 
@@ -1017,7 +1069,10 @@ testcase const CORPUS[] =
 
 { "float", "fstoint", [] (std::vector<instruction> &b) {
 	ins(b).fstoint(I0, F1, SIZE_DWORD, ROUND_TRUNC);
-	ins(b).fstoint(I1, F1, SIZE_QWORD, ROUND_TRUNC);
+	// NOT single-precision to a 64-bit integer: the seed sweep found drcbec
+	// and drcbe_x64 disagreeing over the sign extension of a negative result
+	// there, so it joins the list above of places with no oracle. The
+	// double-precision form of the same conversion is below and agrees.
 	ins(b).fdtoint(I2, F1, SIZE_QWORD, ROUND_ROUND);
 	ins(b).fdtoint(I3, F1, SIZE_DWORD, ROUND_CEIL);
 	ins(b).fdtoint(I4, F1, SIZE_DWORD, ROUND_FLOOR);
@@ -1369,12 +1424,15 @@ void diff_run_once(device_t &device)
 	char const *const filter = std::getenv("MAMESTER_DRC_DIFF");
 	bool const all = !std::strcmp(filter, "1") || !std::strcmp(filter, "all");
 
+	if (char const *const seedenv = std::getenv("MAMESTER_DRC_SEED"))
+		g_seed = std::strtoull(seedenv, nullptr, 0);
+
 #if defined(DIFF_NO_NATIVE)
 	std::fprintf(stderr, "DRC-DIFF: no native back-end is compiled in on this host -- nothing to diff\n");
 	std::fflush(nullptr);
 	std::_Exit(2);
 #else
-	std::fprintf(stderr, "DRC-DIFF: drcbe_c vs " DIFF_NATIVE_NAME "\n");
+	std::fprintf(stderr, "DRC-DIFF: drcbe_c vs " DIFF_NATIVE_NAME " (seed %llu)\n", (unsigned long long)g_seed);
 	install_crash_handler();
 
 	unsigned pass = 0, fail = 0, unimpl = 0, skipped = 0;

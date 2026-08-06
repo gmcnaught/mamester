@@ -5,6 +5,7 @@
 #   tests/drc-diff/run.sh --host       # run it against the HOST's back-end
 #   tests/drc-diff/run.sh alu          # one group (or one case) only
 #   tests/drc-diff/run.sh --probe      # just the no-content probe, no diff
+#   MAMESTER_DRC_SEED=3 tests/drc-diff/run.sh   # a different input state
 #
 # --host is the calibration run and it comes first. On x86_64 it diffs drcbe_c
 # against drcbe_x64, so every case that fails is the harness's or the corpus's
@@ -82,4 +83,7 @@ fi
 # MAMESTER_DRC_DIFF is both the switch and the filter: "all" runs everything, a
 # group or case name runs just that. The hook terminates the process with the
 # test result, so this script's own exit status is the corpus's.
-MAMESTER_DRC_DIFF="$FILTER" exec "${RUNNER[@]}" "$BIN"
+# MAMESTER_DRC_SEED varies the input state; run.sh just passes it through, and
+# a sweep over several seeds is what catches a flag reconstruction that happens
+# to be right for one set of values.
+MAMESTER_DRC_DIFF="$FILTER" MAMESTER_DRC_SEED="${MAMESTER_DRC_SEED:-0}" exec "${RUNNER[@]}" "$BIN"
