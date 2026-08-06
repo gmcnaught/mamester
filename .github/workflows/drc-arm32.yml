@@ -96,11 +96,21 @@ jobs:
         with:
           submodules: false   # fetched selectively below; the full set is large
 
-      # Only vendor/lrmame is needed, and only at depth 1. `submodules: true`
+      # Only vendor/lrmame and vendor/asmjit-a32 are needed. `submodules: true`
       # would also drag in mame4all-pi and mame2003-plus, neither of which this
       # job touches.
-      - name: fetch vendor/lrmame
-        run: git submodule update --init --depth 1 vendor/lrmame
+      #
+      # asmjit is NOT optional and its absence is a hard build failure, not a
+      # degraded build: tools/mame-drc-arm32/inject.sh copies the a32 sources
+      # into vendor/lrmame's 3rdparty tree and exits 1 when the submodule is
+      # empty -- after it has already patched drcuml.cpp and cpu.lua. It is not
+      # fetched shallow because .gitmodules pins it to the `a32_port` branch and
+      # `--depth 1` against a non-default branch is fragile; the whole clone is
+      # 11 MB.
+      - name: fetch vendor/lrmame and vendor/asmjit-a32
+        run: |
+          git submodule update --init --depth 1 vendor/lrmame
+          git submodule update --init vendor/asmjit-a32
 
       - name: install toolchain
         run: |
