@@ -296,13 +296,21 @@ Keep the frame size and the four store forms. Change:
    `phys_base`/`phys_size` module params to `[0x3A000000, +4 MB)` — that is the
    form we would actually ship, and it verifies the allowlist path at the same
    time.
-2. **Report NEON separately and expect the ranking to invert.** `docs/bench-results.md`
-   records hand-written NEON measuring *slower* than glibc `memcpy` under the SO
-   mapping (79.4 vs 89.5 MB/s) — the signature of a transaction-latency bound.
-   Under WC that bound is gone and 128-bit stores should merge into full bursts.
-   **If NEON does not overtake `memcpy` under `/dev/mem_wc`, the mapping did not
-   change** — that is a free built-in sanity check on the result, worth more than
-   the MB/s number alone.
+2. **Draw the verdict from the same store form on both mappings.** `memcpy` into
+   `/dev/mem_wc` against `memcpy` into `/dev/mem`: same physical bytes, same
+   instructions, only the page attribute differs, so a large ratio has nowhere
+   to come from except the memory type. `ddr-write-bench.c` wants ≥ 3×;
+   hardware measured **9.6× (858.5 vs 89.0 MB/s)**.
+
+   > This item originally proposed a different check — that hand-written NEON
+   > should *overtake* glibc `memcpy` under WC, on the theory that the
+   > transaction-latency bound was all that held 128-bit stores back. That is
+   > wrong. glibc's ARM `memcpy` is itself NEON with prefetch and better
+   > alignment handling than the bench's `store_neon()`, so it wins under both
+   > memory types (NEON/`memcpy` = 0.95 SO, 0.66 WC). Implemented as written, it
+   > printed "write-combining NOT confirmed" on a module running at 9.6×. Fixed
+   > in `ddr-write-bench.c`; the reasoning is kept in the comment above
+   > `verdict()` so it is not reinstated.
 3. **Time the doorbell too.** A separate micro-arm that stores the control word
    and `dsb sy`s, timed on its own, sizes whether §5.1(b)'s split mapping is
    necessary or merely tidy.
@@ -313,7 +321,7 @@ Keep the frame size and the four store forms. Change:
 
 | # | Item | Cost | Expected |
 |---|---|---|---|
-| 1 | Bench `/dev/mem_wc` (restricted) alongside `/dev/mem` and `/dev/fb0`, with the NEON-inversion check | one file, ~20 min + module build | decides everything below |
+| 1 | Bench `/dev/mem_wc` (restricted) alongside `/dev/mem` and `/dev/fb0`, verdict = WC/SO `memcpy` ratio | one file, ~20 min + module build | decides everything below |
 | 2 | `cat /proc/iomem` / `/proc/cmdline` on device | 30 s | closes §1.2's alias **[UNK]** and the doc's §6.2 |
 | 3 | If WC lands: the three ordering fixes (§5.1), unconditional | host only, small | correctness *precondition* for 4 |
 | 4 | Move the pixel buffers to `/dev/mem_wc`, doorbell stays SO, with `/dev/mem` fallback | host only | **~3.5 ms/frame, every driver** |
@@ -333,7 +341,7 @@ item 2 and every number in §7 are still open.
 | `tools/mister/mem_wc/` | the module, vendored from minicast (GPL-2.0), its Makefile and a build/install README. **Not compiled** — that needs a prepared MiSTer kernel tree, which this checkout does not have |
 | `nv_present.c` | the page-exact WC overlay (below), `NV_FENCE()` = `dsb sy` at all three doorbell sites, `MISTER_NO_WC=1` to force the fallback |
 | `nv_present.h` | `nv_is_write_combined()`, so a bench run can say which mapping it measured |
-| `ddr-write-bench.c` | a `/dev/mem_wc` arm, `/dev/fb0` relabelled as a probe, a doorbell micro-arm, and the NEON-inversion verdict |
+| `ddr-write-bench.c` | a `/dev/mem_wc` arm, `/dev/fb0` relabelled as a probe, a doorbell micro-arm, and a verdict that compares `memcpy` through `/dev/mem_wc` against `memcpy` through `/dev/mem` (≥ 3×) |
 | `_handler.sh` | `insmod … phys_base=0x3A000000 phys_size=0x00400000`, unconditional-failure-tolerant |
 | `deploy.py` | ships `mem_wc.ko` when built; warns and continues when not |
 | `mister_video.cpp`, `host_main.c` | `present=write-combined\|strongly-ordered` on the bench lines |

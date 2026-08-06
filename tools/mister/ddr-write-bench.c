@@ -53,6 +53,10 @@
 #define ITERS     200
 #define DOORBELLS 10000
 
+/* How much faster than the strongly-ordered baseline a mapping has to measure
+ * before this bench will call it write-combined. See verdict(). */
+#define WC_MIN_SPEEDUP 3.0
+
 static double now_s(void)
 {
     struct timespec t;
@@ -98,12 +102,13 @@ static void store_neon(uint8_t *d, const uint8_t *s, size_t bytes)
 
 /* Run the four store forms against one destination.
  *
- * `neon_vs_memcpy` receives NEON's rate divided by memcpy's. This ratio is the
- * result that cannot be faked (see verdict() below), so every arm reports it. */
+ * `memcpy_rate_out` receives the memcpy figure in MB/s. memcpy is the form the
+ * present path actually uses, and its rate against the strongly-ordered
+ * baseline is the verdict (see verdict() below), so every arm reports it. */
 static void bench_dst(const char *how, uint8_t *dst, const uint8_t *src,
-                      double *neon_vs_memcpy)
+                      double *memcpy_rate_out)
 {
-    double t, memcpy_rate, neon_rate;
+    double t, memcpy_rate;
 
     t = now_s();
     for (int i = 0; i < ITERS; i++) memcpy(dst, src, FRAME);
@@ -111,7 +116,7 @@ static void bench_dst(const char *how, uint8_t *dst, const uint8_t *src,
 
     t = now_s();
     for (int i = 0; i < ITERS; i++) store_neon(dst, src, FRAME);
-    neon_rate = report("neon 128-bit stores", how, now_s() - t);
+    report("neon 128-bit stores", how, now_s() - t);
 
     t = now_s();
     for (int i = 0; i < ITERS; i++)
@@ -123,13 +128,13 @@ static void bench_dst(const char *how, uint8_t *dst, const uint8_t *src,
         store16((volatile uint16_t*)dst, (const uint16_t*)src, FRAME / 2);
     report("16-bit stores", how, now_s() - t);
 
-    if (neon_vs_memcpy)
-        *neon_vs_memcpy = memcpy_rate > 0 ? neon_rate / memcpy_rate : 0;
+    if (memcpy_rate_out)
+        *memcpy_rate_out = memcpy_rate;
 }
 
 /* Map the DDR window through `node` and bench the buffer-0 slot. */
 static int bench_mem(const char *node, int use_osync, const char *how,
-                     const uint8_t *src, double *neon_vs_memcpy)
+                     const uint8_t *src, double *memcpy_rate_out)
 {
     int fd = open(node, O_RDWR | O_CLOEXEC | (use_osync ? O_SYNC : 0));
     if (fd < 0) {
@@ -143,7 +148,7 @@ static int bench_mem(const char *node, int use_osync, const char *how,
         return 0;
     }
 
-    bench_dst(how, (uint8_t*)m + NV_BUF0, src, neon_vs_memcpy);
+    bench_dst(how, (uint8_t*)m + NV_BUF0, src, memcpy_rate_out);
 
     munmap(m, NV_REGION);
     close(fd);
@@ -182,7 +187,7 @@ static void bench_doorbell(void)
 /* Probe: is a write-combined mapping of FPGA-side DDR obtainable at all on this
  * kernel? fbdev's own smem, which we cannot present through, but which maps
  * WC by convention. */
-static void bench_fb0(const uint8_t *src)
+static void bench_fb0(const uint8_t *src, double so_rate)
 {
     int fd = open("/dev/fb0", O_RDWR | O_CLOEXEC);
     if (fd < 0) {
@@ -197,47 +202,75 @@ static void bench_fb0(const uint8_t *src)
         close(fd);
         return;
     }
-    double ratio = 0;
-    bench_dst("fb0 (probe)", (uint8_t*)m, src, &ratio);
-    printf("      NEON/memcpy = %.2f%s\n", ratio,
-           ratio > 1.0 ? "  (write-combined)" : "  (not write-combined)");
+    double fb_rate = 0;
+    bench_dst("fb0 (probe)", (uint8_t*)m, src, &fb_rate);
+    if (so_rate > 0)
+        printf("      memcpy vs strongly-ordered = %.1fx%s\n",
+               fb_rate / so_rate,
+               fb_rate >= so_rate * WC_MIN_SPEEDUP
+                   ? "  (write-combining is reachable on this kernel)"
+                   : "  (no faster than /dev/mem — fbdev is not write-combined"
+                     " here, so this probe says nothing)");
     munmap(m, FRAME);
     close(fd);
 }
 
-/* Under a Strongly-Ordered mapping every store is its own bus transaction, so
- * the path is transaction-latency bound and hand-written NEON measures SLOWER
- * than glibc memcpy (79.4 vs 89.5 MB/s, docs/bench-results.md). Write-combining
- * removes that bound and 128-bit stores merge into full bursts, so the ranking
- * must invert. That inversion is the check the throughput number cannot fake:
- * a fast MB/s figure with NEON still behind memcpy means something else changed
- * (cached alias, wrong region, module not actually loaded), not the memory
- * type. */
-static void verdict(double so_ratio, double wc_ratio, int wc_ran)
+/* The verdict is the memcpy rate through /dev/mem_wc against the memcpy rate
+ * through /dev/mem, into the SAME physical bytes with the same instructions.
+ * Only the page attribute differs between the two arms, so a large ratio has
+ * nowhere to come from except the memory type.
+ *
+ * Strongly-Ordered stores cannot merge, so each is its own bus transaction and
+ * the path is transaction-latency bound at ~89 MB/s. Write-combining removes
+ * that bound; measured on 5.15.1-MiSTer, 858.5 vs 89.0 MB/s.
+ *
+ * A RATIO rather than an absolute rate, because the absolute rate moves with
+ * whatever else the A9 is doing: across four runs, with and without a game on
+ * the other core, the strongly-ordered arm measured 44.7 to 89.0 MB/s -- but the
+ * ratio stayed 7.8x to 9.6x, because both arms are slowed by the same load. A
+ * 3x threshold sits far under the low end of that and far over anything the
+ * strongly-ordered mapping can reach.
+ *
+ * An EARLIER VERSION of this check looked for hand-written NEON to overtake
+ * glibc memcpy, on the theory that the transaction-latency bound was what held
+ * 128-bit stores back. That is wrong and it reported failure on a working
+ * module: glibc's ARM memcpy is itself NEON with prefetch and better alignment
+ * handling than store_neon(), so it wins under BOTH memory types (measured
+ * NEON/memcpy = 0.95 strongly-ordered, 0.66 write-combined). Do not reinstate
+ * it. The per-form rates are still printed because the SHAPE of the four is
+ * informative -- under WC the 16- and 32-bit forms close most of the gap to
+ * memcpy (24 -> 315, 46 -> 331 MB/s) -- but no verdict is drawn from them. */
+static void verdict(double so_rate, double wc_rate, int wc_ran)
 {
     printf("\nverdict\n");
-    printf("  NEON/memcpy, strongly-ordered : %.2f%s\n", so_ratio,
-           so_ratio < 1.0 ? "  (expected: transaction-latency bound)"
-                          : "  (UNEXPECTED — re-check the baseline)");
+    printf("  memcpy, /dev/mem (strongly-ordered) : %7.1f MB/s\n", so_rate);
     if (!wc_ran) {
         printf("  /dev/mem_wc did not run — build and insmod "
                "tools/mister/mem_wc/ to measure the candidate transport\n");
         return;
     }
-    printf("  NEON/memcpy, /dev/mem_wc      : %.2f\n", wc_ratio);
-    if (wc_ratio > 1.0 && wc_ratio > so_ratio)
-        printf("  => write-combining CONFIRMED: the ranking inverted.\n");
+    printf("  memcpy, /dev/mem_wc                 : %7.1f MB/s\n", wc_rate);
+    if (so_rate <= 0) {
+        printf("  => no baseline to compare against — the /dev/mem arm did "
+               "not run.\n");
+        return;
+    }
+    printf("  speedup                             : %7.1fx (need %.1fx)\n",
+           wc_rate / so_rate, WC_MIN_SPEEDUP);
+    if (wc_rate >= so_rate * WC_MIN_SPEEDUP)
+        printf("  => write-combining CONFIRMED: same bytes, same stores, "
+               "only the page attribute differs.\n");
     else
-        printf("  => write-combining NOT confirmed: NEON did not overtake "
-               "memcpy. Whatever the MB/s says, the mapping did not change — "
-               "check `dmesg | grep mem_wc` and that phys_base/phys_size cover "
-               "0x%08x+0x%x.\n", NV_BASE, NV_REGION);
+        printf("  => write-combining NOT confirmed: /dev/mem_wc is no faster "
+               "than /dev/mem, so its mmap did not give Normal Non-Cacheable "
+               "pages — check `dmesg | grep mem_wc` and that phys_base/"
+               "phys_size cover 0x%08x+0x%x.\n", NV_BASE, NV_REGION);
 }
 
 int main(void)
 {
     uint8_t *src = 0;
-    double so_ratio = 0, wc_ratio = 0;
+    double so_rate = 0, wc_rate = 0;   /* memcpy MB/s, the verdict's inputs */
     int wc_ran;
 
     if (posix_memalign((void**)&src, 64, FRAME)) { perror("alloc"); return 1; }
@@ -255,19 +288,19 @@ int main(void)
     }
 
     printf("\n/dev/mem — baseline (strongly-ordered; O_SYNC cannot change it)\n");
-    bench_mem("/dev/mem", 1, "O_SYNC", src, &so_ratio);
+    bench_mem("/dev/mem", 1, "O_SYNC", src, &so_rate);
     bench_mem("/dev/mem", 0, "no O_SYNC", src, NULL);
 
     printf("\n/dev/mem_wc — candidate transport\n");
-    wc_ran = bench_mem("/dev/mem_wc", 0, "write-combined", src, &wc_ratio);
+    wc_ran = bench_mem("/dev/mem_wc", 0, "write-combined", src, &wc_rate);
 
     printf("\n/dev/fb0 — probe only (cannot carry our framebuffer)\n");
-    bench_fb0(src);
+    bench_fb0(src, so_rate);
 
     printf("\ndoorbell\n");
     bench_doorbell();
 
-    verdict(so_ratio, wc_ratio, wc_ran);
+    verdict(so_rate, wc_rate, wc_ran);
 
     free(src);
     return 0;

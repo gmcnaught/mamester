@@ -25,9 +25,9 @@ return vma_prot;                                                       /* cachea
 memblock, so `pfn_valid()` is false and **every** `/dev/mem` mapping of it takes
 the first branch — which is why the `O_SYNC` A/B in `docs/bench-results.md`
 measured a null. Strongly-Ordered (`L_PTE_MT_UNCACHED`) stores cannot merge, so
-each one is a separate bus transaction; the path is transaction-latency bound,
-which is also why hand-written NEON measured *slower* than glibc `memcpy`
-(79.4 vs 89.5 MB/s).
+each one is a separate bus transaction and the path is transaction-latency
+bound, which is why store width barely helps: 16-bit stores 24.2, 32-bit 46.0,
+NEON 128-bit 84.1, `memcpy` 88.7 MB/s.
 
 This driver never asks `pfn_valid()`. It sets `pgprot_writecombine()`
 (`L_PTE_MT_BUFFERABLE`, Normal Non-Cacheable) unconditionally and calls
@@ -117,8 +117,30 @@ that is the A/B.
 
 ## Verifying it actually worked
 
-`tools/mister/ddr-write-bench.c` has a `/dev/mem_wc` arm. Beyond the MB/s
-figure it checks one thing that cannot be faked: **under a real WC mapping NEON
-128-bit stores must overtake glibc `memcpy`**, inverting the Strongly-Ordered
-result, because the transaction-latency bound is gone. If they do not, the
-mapping did not change, whatever the throughput number says.
+`tools/mister/ddr-write-bench.c` has a `/dev/mem_wc` arm and prints a verdict:
+**the `memcpy` rate through `/dev/mem_wc` against the `memcpy` rate through
+`/dev/mem`**, into the same physical bytes with the same instructions. Only the
+page attribute differs between the two arms, so a large ratio has nowhere to
+come from except the memory type. A ratio rather than an absolute rate because
+the absolute rate moves with whatever else the A9 is doing — across four runs
+the strongly-ordered arm measured 44.7 to 89.0 MB/s while the ratio stayed
+7.8× to 9.6×. It wants ≥ 3×; measured on 5.15.1-MiSTer:
+
+```
+  memcpy, /dev/mem (strongly-ordered) :    89.0 MB/s
+  memcpy, /dev/mem_wc                 :   858.5 MB/s
+  speedup                             :     9.6x (need 3.0x)
+  => write-combining CONFIRMED
+```
+
+If the module is not loaded, or `phys_base`/`phys_size` do not cover the window,
+`/dev/mem_wc` either fails to open or its `mmap` returns `EPERM`, and the bench
+says so rather than reporting a number.
+
+**Do not "improve" this into a NEON-vs-`memcpy` check.** An earlier version
+looked for hand-written NEON to overtake glibc `memcpy` under WC, on the theory
+that the transaction-latency bound was all that held 128-bit stores back. It is
+not: glibc's ARM `memcpy` is itself NEON with prefetch and better alignment
+handling than the bench's `store_neon()`, so it wins under *both* memory types
+(measured NEON/`memcpy` = 0.95 strongly-ordered, 0.66 write-combined). That
+check reported failure on a module that was working at 9.6×.
