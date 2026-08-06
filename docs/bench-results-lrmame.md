@@ -334,10 +334,64 @@ revision. **The 27.3% sitting next to it is four times the size and has not
 been diagnosed.** Diagnose that first; it may turn out to be the thing worth
 offloading, or worth avoiding entirely.
 
+## The render pipeline is a fixed 12–18% tax, and it splits two ways
+
+`pacman`'s 27.3% is not a worse code path than `s1945ii`'s 8.8% — it is mostly
+that `pacman` pushes 2.7x the pixels per second while emulating far less.
+Normalised on an 800 MHz A9:
+
+| driver | texture format | px/s | cycles/pixel |
+|---|---|---:|---:|
+| `pacman` | `PALETTE16` | 6.98 M | **31.3** |
+| `s1945ii` | `RGB32` | 2.62 M | **21.7** |
+
+Both paths run through `setup_and_draw_textured_quad`; the per-quad setup is
+cheap and the switch at `rendersw.hxx:1661` picks the inner loop. The profiler
+attributes them differently only because of inlining — `PALETTE16` reaches
+`draw_quad_convert_none(..., gettexel_palette16)`, which inlines into the
+wrapper, while `RGB32` calls the out-of-line `draw_quad_rgb32<>`.
+
+**The tax at 60 Hz** on a typical 320x240 (4.61 Mpx/s), independent of how heavy
+the emulation is:
+
+| path | cost of the A9 |
+|---|---:|
+| `rgb32` | **12.5%** |
+| `ind16` | **18.0%** |
+
+**The gap families hit both.** By `screen_update` bitmap type:
+
+- `bitmap_rgb32` → the 21.7 cyc/px path: `psikyosh`, `taito_f3`, `konamigx`,
+  `segas32`, `suprnova`, `cv1k`, `metro`, `ms32`
+- `bitmap_ind16` → the 31.3 cyc/px path: `segas24`, `ssv`, `seta2`,
+  `namconb1`, `pacman`
+- mixed: `kaneko16`
+
+### The fix is different for each half
+
+**`rgb32`: bypass the render pipeline in software, no RTL.** For these drivers
+the screen bitmap *is* the finished image. MAME steps texture coordinates
+across a 1:1 unscaled, unrotated quad to produce a copy. Handing
+`screen_device`'s bitmap straight to `nv_present` deletes the whole 12.5%, and
+the libretro OSD is ours to modify. This is the bigger and cheaper win, and it
+should come first because it establishes whether the pipeline can be sidestepped
+at all before any RTL is committed.
+
+**`ind16`: FPGA palette lookup at scanout.** Here a per-pixel palette lookup
+genuinely has to happen somewhere. Keeping palette RAM in the FPGA and 16-bit
+indices in DDR moves it to the scanout tap — the texel-fetch shape — and is
+worth 18%. This is the case where offload buys something a software bypass
+cannot.
+
+Caveats on the bypass, both acceptable here: MAME's UI overlay and
+artwork/bezel layers are lost (the host already ignores both), and drivers that
+genuinely need the render pipeline — vector, SVG screens, multi-screen — must
+keep it.
+
 ## Open
 
-- **The 27.3% render pipeline.** Largest single item found, cause unknown,
-  entirely inside MAME's OSD rather than our code.
+- **The render-pipeline bypass** for `rgb32` drivers — 12.5%, software only.
+- **FPGA palette lookup at scanout** for `ind16` drivers — 18%, needs RTL.
 - **`M16B`'s stride bug** — ~9% / ~2%, in a code path upstream marked FIXME.
 - **FPGA format-convert offload** — ~6.6% / ~2%, needs RTL.
 - **ROM-load latency.** ~19% of a 21-second run is SHA-1 verification of the
