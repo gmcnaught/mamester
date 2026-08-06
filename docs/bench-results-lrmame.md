@@ -245,9 +245,101 @@ is roughly 38–39 fps. The profile says why: a third of the steady state is the
 JIT'd SH-2 and the rest is spread thin. Closing the gap needs either the
 renderer arm (`M16B`, 8.8%) landing well, or a different engine for this driver.
 
+## `M16B` is faster and it renders garbage
+
+Measured, 4 reps, interleaved, both arms built from one tree with `SYMBOLS=1`
+and differing only by `-DM16B`:
+
+| game | XRGB8888 | RGB565 | delta |
+|---|---:|---:|---:|
+| `pacman` | 110.3 | 120.0 | +8.7% |
+| `s1945ii` | 36.4 | 37.2 | +2.3% |
+
+**None of which counts, because the picture is wrong.** `libretro_shared.h:10`
+defines `HAVE_RGB32` unconditionally next to a `FIXME: re-add way to handle
+16/32 bit`, and that bit-rot is real. Same frame of `s1945ii`'s monitor-test
+screen through each arm:
+
+| XRGB8888 | `M16B` |
+|---|---|
+| ![correct](img/m16b-xrgb8888-correct.png) | ![broken](img/m16b-rgb565-broken.png) |
+
+Green circles, upright text and correct geometry become yellow/white circles,
+displaced, with the text duplicated and skewed. The skew is a wrong-pitch
+signature — something downstream still strides at 4 bytes per pixel — and the
+colours being wrong *as well as* the geometry rules out a palette-only fault.
+
+**The frame hash could not have caught this and must not be used as the gate
+for this lever.** The two arms legitimately produce different hashes: the
+32-bit path renders 8/8/8 and truncates to 5/6/5, the 16-bit path rasterises at
+5/6/5 natively, so the rounding differs even when both are correct. A
+difference proves nothing and a match was never going to happen. **A screenshot
+is the gate.** (The XRGB arm's hash `912aeffbaed7ea59` does match the one PR #7
+recorded for `s1945ii`, which is a useful check that this rebuild is equivalent
+to the tested one.)
+
+Fixing it means finding the stride bug in 0.289's 16-bit path. Worth ~9% on a
+light driver and ~2% on a heavy one, so it is not urgent, and the FPGA route
+below gets part of the same win without touching a bit-rotted code path.
+
+## Where the frame time actually goes on a light driver
+
+`pacman`, 1500 frames, 14,032 samples, symbolised:
+
+| | share |
+|---|---:|
+| `software_renderer<uint32_t,…>::setup_and_draw_textured_quad` | **27.3%** |
+| `z80_device::execute_run` | 12.5% |
+| libc (largely `memcpy` beneath the above) | 11.2% |
+| `nv_frame` — our convert **and** present, the whole host cost | **6.6%** |
+| `z80_device::arg_read` | 1.4% |
+| `__udivmoddi4` | 1.2% |
+
+**MAME's own render pipeline costs more than twice the emulated CPU.** At
+288x224 and 108 fps that is roughly 31 cycles per pixel for what ought to be a
+copy — the target is exactly `compute_minimum_size`, so nothing is being
+rescaled, and `host_video.c:7` is explicit that **nothing is rotated in
+software** (the core hands over an unrotated bitmap and rotation rides the
+`SET_ROTATION` path into `nv_set_mode`). So the 27% is neither scaling nor
+rotation, and what it *is* has not been established.
+
+`alternate_renderer` is not an escape hatch: it replaces the minimum-size target
+with a fixed `altres` (640x360 and friends), which adds a rescale rather than
+removing one.
+
+## Can the format conversion be offloaded to the FPGA?
+
+Yes, and it is a different and better proposition than `M16B` — but it is
+smaller than the number above.
+
+`nv_frame` is **6.6% on `pacman` and 1.99% on `s1945ii`**, and that figure is
+the convert *plus* the DDR present *plus* everything else host-side, so the
+convert alone is less. Offloading means writing XRGB8888 straight to DDR and
+having the reader select `[23:19]`, `[15:10]`, `[7:3]` at the scanout tap — a
+bit-select, not arithmetic. It doubles the per-frame write (129 KB → 258 KB at
+288x224), which was unaffordable at the Strongly-Ordered 89 MB/s and is ~0.3 ms
+at the write-combined rate.
+
+Three points in its favour over `M16B`: it keeps MAME's 32-bit renderer, which
+is the path that demonstrably renders correctly; it deletes the convert rather
+than replacing it with a broken one; and it is **not** the offload
+`CLAUDE.md` rules out — that prohibition is on *compositing* offload (the
+`solarus` blitter model), on the grounds that a MAME driver composites in its
+own rasteriser and emits a finished bitmap. Choosing how DDR bytes become
+pixels is already the reader's job.
+
+Against it: ~6.6% on a driver that already runs at 108 fps and ~2% on the one
+that does not reach 60 is a poor return for an RTL change plus a reader
+revision. **The 27.3% sitting next to it is four times the size and has not
+been diagnosed.** Diagnose that first; it may turn out to be the thing worth
+offloading, or worth avoiding entirely.
+
 ## Open
 
-- **`M16B`** — building. The one lever with a measured target.
+- **The 27.3% render pipeline.** Largest single item found, cause unknown,
+  entirely inside MAME's OSD rather than our code.
+- **`M16B`'s stride bug** — ~9% / ~2%, in a code path upstream marked FIXME.
+- **FPGA format-convert offload** — ~6.6% / ~2%, needs RTL.
 - **ROM-load latency.** ~19% of a 21-second run is SHA-1 verification of the
   romset. It costs no frames but it is seconds of launch delay on every start,
   and nothing has looked at whether 0.289 can be told to skip it.

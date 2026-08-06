@@ -26,7 +26,11 @@ LABEL="$1"; BIN_A="$2"; ENV_A="$3"; BIN_B="$4"; ENV_B="$5"; GAMES="$6"
 REPS="${7:-3}"; FRAMES="${8:-600}"
 ROMPATH="${ROMPATH:-roms2003}"
 
-cd /media/fat/games/mame || exit 1
+# WORKDIR is where the two arm binaries live, and it is not always the engine
+# directory: an A/B between two builds of the SAME engine needs both .so files
+# side by side, and the deployed lrmame_libretro.so cannot be overwritten
+# without invalidating every other binary that links it.
+cd "${WORKDIR:-/media/fat/games/mame}" || exit 1
 OUT=/tmp/lev-$LABEL.tsv
 [ -f "$OUT" ] || printf "game\trep\ta_fps\tb_fps\n" > "$OUT"
 
