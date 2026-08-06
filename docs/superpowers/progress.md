@@ -27,6 +27,10 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
   rename "MAME" — it means the emulator in most refs.
 - Present path: mame4all → `mister_video.cpp` `nv_present()` → `0x3A000000` DDR
   double-buffer → `openbor_video_reader` → scaler → HDMI/analog.
+- **Stage 11 (`drcbearm32`, the ARM32 DRC back-end) is lowered in full** and
+  agrees with `drcbe_c` on 77 differential cases over twelve input states,
+  under qemu. It has never run a driver, and the emulated-memory opcodes have
+  never executed at all — see the stage section for what that leaves open.
 
 | Stage | Status | Commit | Evidence |
 |---|---|---|---|
@@ -491,3 +495,512 @@ the source: run the binary from its own directory (MAME `chdir()`s to
 reports every ROM missing), and pick a frame where the driver animates — attract
 modes hold still (gng 899–902 are byte-identical), and it has already caught
 three would-be false passes.
+
+## Stage 10 — libretro's current MAME (0.289) as a third engine (in progress)
+
+Design: [`specs/2026-08-05-lrmame-engine-design.md`](specs/2026-08-05-lrmame-engine-design.md).
+Branch `claude/libretro-mame-engine-target-u14ehm`. Submodule `vendor/lrmame` =
+[`libretro/mame`](https://github.com/libretro/mame) `85eaed9c` (upstream MAME
+**0.289**, 2026-08-04).
+
+**This is the first engine whose feasibility is genuinely in doubt, so the plan
+is one kill decision rather than a schedule.** MAME 0.289's device model,
+`emumem` dispatch and scheduler are built for 64-bit desktop silicon; this is an
+800 MHz Cortex-A9 on a 32-bit ABI. **Gate: build `SOURCES=pacman`, bench it on the
+device with sound and the core loaded. Below 60 fps → stop and write it up.**
+Everything past the gate is deliberately unbuilt. (The missing ARM32 DRC backend
+is a separate and much smaller issue — measured at 3.2% of drivers and descoped,
+below. Pac-Man is a Z80 and never touches `drcuml`, so the gate measures core
+overhead, which is the thing genuinely in doubt.)
+
+**The 2003-plus work paid off — the engine is mostly a build problem, not a port.**
+Verified by reading the core, not assumed:
+- `need_fullpath = true`, `valid_extensions = "cmd|zip|7z"` (`libretro.cpp:718`) —
+  so `host_main.c`'s setname → `<rompath>/<setname>.zip` contract is unchanged.
+- `SET_HW_RENDER` is inside `#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)`
+  (`libretro.cpp:938`), so a no-GL build never issues it and renders purely into a
+  software framebuffer. **Its failure path returns false from `retro_load_game`**,
+  so an accidental GL build does not degrade — it fails to load every game.
+- genie links the target with `--version-script=link.T` (exports `retro_*`, hides
+  everything else) and `--no-undefined`. That is exactly the frontend contract, so
+  the host **links against the `.so` directly** — no `dlopen`, no host source
+  change, no libretro-common obligation.
+- `nv_present.c` already carries both formats this core can emit.
+
+**What was actually new, and done:**
+1. **Toolchain.** 0.289 is `-std=c++20` (`genie.lua:774`); the bullseye/gcc-10.2.1
+   cross container cannot build it. New container
+   `tools/mister/Dockerfile.cross-armhf-cxx20` (trixie/gcc-14). The old one is
+   **kept, not upgraded** — `docs/bench-results.md`'s engine comparison rests on
+   mame4all and 2003-plus sharing a compiler.
+2. **`tools/build-lrmame.sh`.** Six load-bearing flags, documented in the script.
+   The one that is not guessable: **`ARCHITECTURE=` (empty) is mandatory.**
+   `PTR64=0` sets `ARCHITECTURE:=_x86` regardless of `PLATFORM` (`makefile:364`),
+   which routes the build to the `linux_x86` target and puts `-m32` on an ARM
+   compiler. Upstream's own `android-arm` block clears it the same way.
+   Also required: `OSD=retro` — `CONFIG=libretro` does **not** imply it (the OSD
+   default is `sdl`, `makefile:455`), and without it there are no `retro_*` entry
+   points at all.
+3. **Engine seam in the host.** `make ENGINE=lrmame`; default unchanged.
+   Per-engine library, include path, container and link flags.
+4. **`host_env.c` gains the commands 0.289 issues and 0.78 did not.**
+   `SET_SYSTEM_AV_INFO` is the load-bearing one — it carries a timing block, so
+   unlike `SET_GEOMETRY` it can change the refresh rate, and the modeline is
+   derived from that rate. Every new case is `#ifdef`'d on the constant so one
+   shared source compiles against either engine's `libretro.h`.
+
+**Verified this far:** genie generates all 27 projects for the armhf
+configuration; the emu core cross-compiles; all six host sources compile clean
+against 0.289's `libretro.h` with `-DMAMESTER_ENGINE_LRMAME`; the Makefile
+resolves both engines' link lines.
+
+**The build works end to end.** `SOURCES=src/mame/pacman/pacman.cpp` cross-built
+clean (~40 min on 4 cores, dominated by MAME's own emu core and 3rdparty, not by
+the driver): **`mamester_libretro.so`, 40 MB, ELF 32-bit ARM EABI5**, 151 drivers,
+exporting **34 `retro_*` symbols and nothing else** (link.T works as advertised)
+and needing only `libm`/`libc`/`ld-linux-armhf.so.3` — no SDL, no GL, not even
+pthread. The host links against it and **runs**: under `qemu-arm` it reports
+`MAME 0.289 (85eaed9c)`, captures 28 core-option defaults through
+`host_environment()`, selects XRGB8888, and MAME's own init resolves the driver
+("System found: pacman", rotation 3 = 270° CCW accepted) before failing at ROM
+load with `Required files are missing` — correct, since no romset exists here.
+So the frontend contract, the environment callback, the engine seam and the
+toolchain recipe are all proven; what is untested is pixels, sound and speed.
+
+**Two findings that only appeared by running the artefact:**
+
+1. **Link the `.so` with `-L<dir> -l:<file>`, never by path.** genie builds it
+   with **no `-soname`**, so `ld` records whatever it is handed; given a path,
+   `DT_NEEDED` becomes the absolute *build-host* path, which does not exist on
+   the MiSTer — the binary then dies in the loader before `main()`. Both forms
+   link without a warning, so this is visible only under `objdump -p` or on the
+   device. Fixed; `RUNPATH=$ORIGIN` resolves the bare name beside the binary.
+2. **`SOURCES=` filtering breaks clone→parent links across files.** The pacman
+   build emitted **30** `Driver is a clone of nonexistent driver` validity errors
+   (e.g. `8bpm` → `8ballact`) because the parents live in files the filter
+   excluded. Non-fatal — it proceeded to ROM load — but the shippable subset has
+   to be closed over parents, or accept that those clones are unrunnable. Worth
+   settling when the subset is chosen (Stage 5 of the design doc).
+
+**Launch integration done (2026-08-05).** `deploy.py` had claimed since the
+2003-plus work that "the per-driver choice is made at launch time
+(`game_manager.sh`)" — **it was not**: `MAME_BIN` was a single fixed path, so
+every game launched mame4all and the deployed `mame2003` binary was never used
+by anything. An `engine <name>` line in `games/mame/opts/<setname>.opt` now
+selects the binary (`game_engine()` reads it; `game_opts()` deletes it, since
+`engine lrmame` on MAME's command line is an unknown-option error). Unknown names
+and un-deployed engines fall back to the default and say why in the game log —
+loud but not fatal, because a device with no console is a bad place to fail
+silently. **The default stays mame4all**: `deploy.py` calls 2003-plus primary,
+but flipping it here would silently re-point every already-deployed game, so
+`engine mame2003` in `default.opt` is left as an operator decision and the
+mismatch is documented at `engine_bin()`.
+
+`deploy.py` also pushes **`lrmame_libretro.so`**, paired with its binary rather
+than listed separately — lrmame is the only engine that is not self-contained
+(the host resolves MAME through an `$ORIGIN` RUNPATH), and a missing `.so` fails
+in the dynamic loader before `main()`, which looks nothing like a missing engine.
+Tests 31 → 46.
+
+**Not verified — needs the operator's machine:** the gate itself. This session's
+container has **no `ssh`**, so `.81` was unreachable and nothing was benched, and
+no ROMs exist here to run. The fps number is the whole decision and it does not
+exist yet.
+
+**DRC on ARM32: measured, then descoped (operator, 2026-08-05).** 0.289 has no
+32-bit native DRC backend for ANY architecture (x86-32's went too), and
+`drcbearm64` cannot apply — the A9 is ARMv7-A with no 64-bit mode — so everything
+DRC-backed runs `drcbec`, the portable UML interpreter. **This is narrower than it
+sounds: 147 of 4652 driver files, 3.2%** (`tools/lrmame-drc-scan.sh --summary`).
+Z80/6502/6809/68000/68020/V60 never touch `drcuml`, and none of the Stage-8 gap
+families checked (`taito_f3`, `konamigx`, `segas24`, `kaneko16`) include a DRC
+CPU. Most of the 147 is out of scope regardless (SGI, Mac, skeletons, Jaguar);
+the real loss is the borderline SH-2/SH-3 boards — **`psikyosh`** (a named gap
+target), `stv`, `feversoc`, `cv1000`. Writing `drcbearm32` was rejected: ~5,700
+lines by `drcbearm64.cpp`'s measure, and harder on ARMv7 (~14 GPRs vs 31, and a
+64-bit-register IR needing register pairs). Stage 5 picks the subset from the
+non-DRC majority, with the exclusion list generated rather than remembered.
+
+**This does not move the gate.** Pac-Man is a Z80 and never sees the DRC, so the
+fps number measures 0.289's core overhead — device model, `emumem` dispatch,
+scheduler — which is the thing actually in question.
+
+**Open, deliberately deferred to after the gate:** `M16B`. Defining it makes the
+core report RGB565 (`libretro.cpp:771`) — already the DDR format, skipping a
+per-frame convert — but `libretro_shared.h:10` defines `HAVE_RGB32`
+unconditionally beside a `FIXME: re-add way to handle 16/32 bit`, so the 16-bit
+path is plausibly bit-rotted. Treat it as a measured arm (`MISTER_FRAME_HASH`
+both ways), not a free win.
+
+**Licensing changes with this engine.** MAME has been **GPL-2.0-or-later /
+BSD-3-Clause since 0.172**, not the pre-2016 non-commercial licence that governs
+mame4all and 2003-plus. Less restrictive, but different obligations —
+`CLAUDE.md`'s licensing note describes only the old one and needs updating.
+
+## Stage 11 — `drcbearm32`, an ARM32 DRC back-end (in progress)
+
+Reverses this file's own 2026-08-05 descope, on the operator's instruction.
+Design: [`specs/2026-08-05-drcbearm32-design.md`](specs/2026-08-05-drcbearm32-design.md).
+
+**The descope had the wrong base, and that is the whole finding.** It sized the
+work as backporting `drcbearm64.cpp` and rejected it on ARMv7 having ~14 GPRs
+against 31 and no 64-bit registers for a 64-bit-register IR. Both facts are
+true; neither is the relevant one. **MAME shipped a 32-bit back-end,
+`drcbex86.cpp`, through `mame0287` and deleted it only in 0.288/0.289** —
+verified by fetching the file at each tag (present at 0.250 … 0.287, 404 at
+0.289). It ran the whole UML on *seven* usable GPRs for two decades. Register
+pairs, synthesised 64-bit shifts/multiplies/divides, flag reconstruction: all
+already solved there. Relative to the back-end actually worth copying, ARMv7 is
+a *doubling* of the register file, not a scarcity.
+
+And the port distance is short. **`uml.h` is byte-identical between 0.287 and
+0.289** — every opcode, every parameter type. The entire interface delta is
+`drcbe_interface::hash_invalidate_range()`, a `max_sequence_length` argument on
+`drcuml_state`/`drc_hash_table`, and the factory signature.
+
+**What is genuinely new is the encoder, because asmjit has no AArch32.** It
+enumerates `Arch::kARM` and `kThumb` — which is the trap — but
+`3rdparty/asmjit/asmjit/arm/` ships `a64*` and nothing else. There is no
+`a32::Assembler` to target, so `drcbex86`'s algorithms cannot simply be
+retargeted by swapping an emitter namespace.
+
+### Done
+
+- **`tools/mame-drc-arm32/arm32emit.h`** — an ARMv7-A A32 encoder: data
+  processing with all four shift kinds, `movw`/`movt`, both load/store
+  families, block transfer, multiplies, ARMv6T2 bitfield ops, NZCV access,
+  VFP single/double. Targeting ARMv7 rather than v5/v6 is load-bearing:
+  `movw`/`movt` mean **no literal pool**, so no pool placement, no
+  mid-sequence drain, no PC-relative reach limit inside the code cache.
+  `SDIV`/`UDIV` are deliberately absent — they are ARMv7-R/M or ARMv7-A with
+  the idiv extension and **the A9 has neither**, so `DIVU`/`DIVS` must lower
+  to a call.
+- **`tests/arm32emit/`** — the encoder differentially tested against
+  `arm-linux-gnueabihf-as`, which is installed in this container, so it runs
+  with no device and no MAME: **391 instructions, all matching.** It paid for
+  itself on the first run — the single-precision `Vm` field splits high-4 into
+  bits[3:0] and low-1 into bit 5, the first draft wrote it as a plain shift,
+  and 15 VFP instructions silently addressed the wrong register. That is
+  exactly the failure mode this back-end cannot afford, since a mis-encode is
+  not a compile error but a wrong answer inside a game minutes in.
+- **`tools/mame-drc-arm32/inject.sh`** — idempotent copy-and-patch into the
+  submodule (`--check`, `--revert`), following `build-mame.sh`'s arrangement
+  for the mame4all present back-end. Patches `drcuml.cpp`'s `NATIVE_DRC` chain
+  and `scripts/src/cpu.lua`. Note it adds a **separate** `files{}` block for
+  `PLATFORM=arm` rather than widening the existing one, which would have handed
+  the armhf compiler `drcbex64.cpp` and `drcbearm64.cpp` for no reason.
+- **`DRC=1` in `tools/build-lrmame.sh`.** Two flags come off, not one:
+  `FORCE_DRC_C_BACKEND=1` is obvious, but **`NOASM=1` also has to go** — it
+  defines `MAME_NOASM`, which the `NATIVE_DRC` chain tests, so leaving it set
+  selects `drcbec` even with the back-end compiled in. Dropping it also lets
+  `eminline.h` reach `eigccarm.h`, an ARM path unused in this build until now.
+- **`drcbearm32.{h,cpp}` compiles against 0.289's `drcbe_interface`**, verified
+  with a native `g++ -fsyntax-only` over MAME's headers — no cross toolchain
+  and no full build needed, which makes the iteration loop seconds rather than
+  the hour a genie build costs.
+
+### Not done — and this is most of the work
+
+**No instruction that computes anything is lowered yet.** Structural opcodes
+(`HANDLE`/`HASH`/`LABEL`/`COMMENT`/`MAPVAR`/`NOP`) are real; everything else —
+control flow, the integer ALU, the flag ops, the entire float set — is a
+`fatalerror`, deliberately, so a missing opcode cannot become a game that runs
+and is wrong. The entry/exit/nocode stub shapes follow `drcbex86`'s model (call
+into generated code, `nocode` returns to the caller) but have **not** been
+checked against its `hashjmp`/`exit` contract; that check is the next step and
+it gates everything after.
+
+Correctness plan, in order: link into the `pacman` subset (proves wiring only —
+Pac-Man is a Z80 and never touches `drcuml`); link and boot a DRC subset
+(`psikyosh`, SH-2, a `CLAUDE.md` gap target); then the real gate, **`MISTER_FRAME_HASH`
+matching between a `FORCE_DRC_C_BACKEND=1` build and a `DRC=1` build of the same
+driver over N frames**; then `MISTER-BENCH fps=` to say whether it was worth
+doing. Steps 2–4 need the device.
+
+**This is downstream of a gate that has not been run.** `tools/lrmame-drc-scan.sh`
+still measures the reachable set at **147 of 4652 driver files, 3.2%**, most of
+it out of scope for other reasons (SGI, Mac, Jaguar, skeletons); the real
+recoveries are the SH-2/SH-3 boards — `psikyosh`, `stv`, `feversoc`, `cv1000`.
+And Stage 10's Pac-Man gate — can 0.289's device model, `emumem` dispatch and
+scheduler hold 60 fps on an 800 MHz A9 — is untouched by any of this and still
+unmeasured. If that gate fails, this back-end has no engine to live in. It is
+being built gate-independent (it is tied to MAME's UML, not to the libretro
+host) but the ordering risk is real and deliberate.
+
+### Correction (same day): asmjit *does* have an AArch32 port
+
+The entry above says asmjit ships `a64*` and nothing else. That is true of the
+copy **MAME vendors** and false of asmjit **upstream**, which has an unmerged
+[`a32_port`](https://github.com/asmjit/asmjit/tree/a32_port) branch — flagged by
+the operator, and it materially changes the encoder decision.
+
+It is not a stub: one WIP commit (`594cb9e`, 2025-11-29, by asmjit's author),
+**21,406 lines**, `a32assembler.cpp` alone 11,016, Assembler/Builder/Compiler,
+A32 *and* Thumb, 1,342 emitter entries. It is on the **same version line MAME
+vendors** (both `ASMJIT_LIBRARY_VERSION 1.21.0`, 16 shared files differing), and
+its own `core/` changes are ~70 lines across five files — so the `a32*` sources
+plausibly drop into the vendored tree.
+
+`tests/a32-asmjit/` qualifies it the same way `tests/arm32emit/` qualifies our
+own encoder — diff against `arm-linux-gnueabihf-as`, over the subset the
+lowering needs rather than a survey of all 1,342 entries. Result: **85 of 85
+encodings match exactly.** Two defects, both small and localised:
+
+- **`lsr #32` / `asr #32` rejected** (`kInvalidInstruction`). Legal A32 — an
+  encoded amount of 0 *means* 32 for those two — and not exotic here, since
+  synthesising 64-bit shifts on a 32-bit host reaches for shift-by-32 constantly.
+- **The rejection path segfaults**: `EmitterUtils::log_instruction_failed()`
+  calls `_funcs.format_instruction`, which the a32 emitter never installs. A
+  refused instruction is a null-pointer crash with no diagnostic instead of an
+  error return. `run.sh` patches this to run at all.
+
+**A false bug report, caught before it went anywhere, and worth recording as a
+method failure rather than a code one.** The first run showed six disagreements
+in a damning pattern — every non-LSL shift encoded as LSL — which reads exactly
+like "a32 drops the shift type". It was **our call-site bug**: the shift op
+lives in the predicate of the *last* operand (`a32assembler.cpp:972,986` reads
+`o3.predicate()`), so it is `add(rd, rn, rm, lsr(16))`, never
+`add(rd, rn, lsr(rm), imm(16))` — and the wrong form encodes silently as LSL
+because LSL is predicate 0. Corrected usage: 85/85. **A differential test proves
+that something disagrees, never whose fault it is**, and the fact that the wrong
+answer was *plausible* is what made it dangerous.
+
+**Recommendation: qualify-then-adopt, and decide before the lowering is
+written.** `arm32emit.h` stays as fallback and oracle. The case for adopting a32
+is not its coverage but that **`drcbex86.cpp` is written against asmjit** —
+retargeting it inside the same `CodeHolder`/`Label`/`Mem`/relocation machinery
+is far more mechanical than retargeting onto a bespoke encoder, and that
+lowering is ~7,700 lines, the dominant remaining cost. The residual risk is not
+correctness-so-far but **staleness**: the branch is unmerged and four months
+behind master, and vendoring 21k WIP lines into a submodule we do not control is
+a maintenance position, not a free win. Switching encoders after the lowering
+exists is a rewrite, which is why this is a decision and not a preference.
+
+### Adopted: asmjit a32 is the encoder (operator decision)
+
+Integration proved before commitment, in this order:
+
+1. **The a32 sources compile against MAME's asmjit core**, not just upstream's.
+   The branch's seven core/x86 hook files apply to MAME's copy despite the two
+   trees sitting at different points on master — both are 1.21.0.
+2. **They encode identically there.** Rebuilt on MAME's core, the corpus still
+   matches `arm-linux-gnueabihf-as` on every case, so the 16-file drift changes
+   nothing that matters.
+3. **The `lsr #32` defect is fixed**, and the fix found a second, worse half.
+
+**The shift bug was worse than "rejects a legal instruction".** a32 validates
+every immediate shift amount as `amount <= 31`, which is wrong in both
+directions at once: it rejects the legal `lsr #32`/`asr #32`, *and* it accepts
+`lsr #0`/`asr #0` and silently encodes them as shift-by-32 — asmjit's `lsr(0)`
+and the assembler's `lsr #32` are the same word, `e0843025`. A32 has no LSR #0
+or ASR #0; an encoded amount of 0 *means* 32. The accepting half is the
+dangerous one, and it would have been invisible: the lowering would have asked
+for a no-op shift and got a 32-bit erasure.
+
+`tools/mame-drc-arm32/asmjit-a32-fixes.py` fixes both that and the null-formatter
+crash, at the three general data-processing sites. The `pkhbt`/`pkhtb`/`ssat`
+sites have the same bug class and are left alone — different per-instruction
+shift rules, and outside the UML lowering's path. Corpus after the fix:
+**88 of 88 encodings match, 3 of 3 invalid forms correctly refused.**
+
+**Vendoring.** `vendor/asmjit-a32` is a submodule pinned to `594cb9e`;
+`inject.sh` copies the `a32*` sources into MAME's asmjit, takes the core hooks
+straight from the commit (`git diff HEAD~1 HEAD`) rather than storing a patch so
+provenance stays upstream, runs the fixes, and opens `3rdparty.lua`'s asmjit
+project — which is gated on the same x86/arm64 pair `cpu.lua` is — to
+`PLATFORM=arm`. All idempotent; `--revert` restores the submodule exactly.
+
+**`drcbearm32.cpp` now emits through `a32::Assembler`**, with drcbearm64's
+`CodeHolder`/`copy_flattened_data`/`invalidate_instruction_cache` mechanics
+rather than a hand-rolled buffer. It compiles against 0.289 with the a32 encoder
+installed. Scope is unchanged and still small: structural opcodes only,
+everything else `fatalerror`. `arm32emit.h` and `tests/arm32emit/` stay as the
+fallback and as the oracle the a32 corpus was built from — 391 instructions,
+still passing, still the thing that would catch a32 regressing.
+
+### The differential harness exists (`tests/drc-diff/`)
+
+Nothing in the lowering was verified by anything, which is why this came before
+more lowering. `tests/drc-diff/README.md` carries the detail; the findings worth
+keeping in the ledger:
+
+**One `drcuml_block` can be generated twice, and that was the open question.**
+A back-end's `generate()` reads nothing from the block but `invariant()` and
+uses it only as the channel for `abort()` — three appearances each in
+`drcbec.cpp` and `drcbearm64.cpp`, and the `drcbeut` bookkeeping is the same
+shape. **Nothing anywhere asserts `inuse()`**, so the block needs no second
+`begin()` and the harness needs no second `drcuml_state`. `block.end()` is
+never called, because `end()` routes generation through the state's own
+back-end — which is neither of the two under test.
+
+**Two back-ends in one process, but not via `drc_use_c()`.** That option is
+read once in `drcuml_state`'s constructor and selects the single back-end that
+state will own. The factories are exported, so the harness calls
+`make_drcbe_c` and `make_drcbe_<native>` itself, **each over its own
+`drc_cache`** — the hash table, label list, map variables and the
+`drcuml_machine_state` the generated code operates on are all per-back-end
+members allocated out of the cache the back-end was handed, so one shared cache
+would have the two code streams overwriting each other's register file.
+
+**`SAVE`/`RESTORE` are the readout.** They move a whole `drcuml_machine_state`
+in one opcode, so a case is `HANDLE / RESTORE seed / body / SAVE out / EXIT`
+and the diff covers all ten I registers, all ten F registers, `exp`, `fmod` and
+`flags` with no per-opcode plumbing. The cost: a back-end without those two
+reports *every* case unimplemented, which is precisely why they are the first
+two to lower. Comparison is field-by-field, not `memcmp` — the struct has tail
+padding no back-end writes — and floats compare as bit patterns, since
+comparing as `double` calls two NaNs unequal and two encodings of zero equal.
+
+**An unlowered opcode is a report, not a crash.** The deliberate `fatalerror`
+is caught per case and reported as `UNIMPL`, so the harness is a coverage
+report from the first day of lowering rather than only after the last. Each
+case gets a fresh `drcuml_state` and cache pair, because `generate()` raises
+from mid-block and `block_end()` never runs. `drcbec` is the oracle: if *it*
+refuses a case the harness says `BAD-CASE`, which is the difference between a
+corpus bug and a lowering bug.
+
+**`HOST=1 tools/build-lrmame.sh`** builds x86_64 natively into its own
+`BUILDDIR` (`build-host`, so the two configurations do not clean each other
+out), with neither `NOASM` nor `FORCE_DRC_C_BACKEND`, so the host's native
+back-end is compiled in. `run.sh --host` then diffs `drcbe_c` against
+`drcbe_x64`. **That run is the calibration and it comes first**: a differential
+test proves that two things disagree and never whose fault it is, and
+`tests/a32-asmjit/` already paid for that lesson once — six disagreements in a
+pattern that read exactly like an asmjit defect, and the bug was in the calling
+code.
+
+**The calibration run is clean: 48 of 48 cases agree between `drcbe_c` and
+`drcbe_x64`.** It took four rounds to get there and `drcbe_x64` was correct in
+every one — the failures were all the harness's or the corpus's, which is
+exactly the outcome that makes the control worth running. What it caught,
+because each would otherwise have been read as an ARM32 lowering bug:
+
+- **`drc_cache` is two-phase in 0.289.** The constructor allocates nothing and
+  leaves every pointer null; `allocate_cache()` maps the memory, and every CPU
+  core calls it from `device_start` (`sh.cpp:41`). Omitting it does not fail
+  loudly — `alloc_near()` returns null and the crash lands in whichever
+  back-end constructor first writes through it.
+- **The cache floor is the hash table, not the generated code.** At
+  `addrbits=32, ignorebits=1` the empty L1/L2 tables alone are 768 KB out of
+  the main cache; 1 MB segfaulted. The SH cores use 32 MB and so does this.
+- **Three kinds of UML state are undefined and must not be compared**: a 4-byte
+  op on a 64-bit register defines the low half only (`drcbe_c` zeroes the
+  upper, `drcbe_x64` preserves it, both conform); `FLAG_U` is FP-only and
+  `drcbe_x64` maps x86 *parity* onto it; and flags are undefined until an
+  opcode *computes* them — `RESTORE` loading them is not the same thing. The
+  compare mask is therefore derived from the block via `is_param_out()` and
+  `output_flags()` rather than hand-maintained per case.
+- **`instruction::size()` is not always the destination width.** For `FTOINT`
+  it is the float *source* width; the integer destination's width is the
+  `SIZE_` parameter.
+- **Two corpus bugs**, one of them found by the oracle path: `FFRFLT` converts
+  *between* float widths, so a size-matched `fdfrflt` is an invalid opcode, not
+  a no-op, and `drcbe_c` refusing it is the `BAD-CASE` report working.
+
+A crash handler was added off the back of this — a back-end being written emits
+wrong code and jumps into it, and a bare SIGSEGV in the code cache has no
+walkable stack. It names case, back-end and phase from a signal handler and
+exits 3, which is what turned the first crash into
+`case='empty' backend=drcbe_c phase=drcuml_state`.
+
+### The lowering is complete, and the corpus is what says so
+
+**Every UML opcode in `uml.h` is lowered.** `tests/drc-diff/` reports
+**77 of 77 cases agreeing between `drcbe_c` and `drcbe_arm32`**, under
+`qemu-arm`, over **twelve different input states**; the same corpus is clean
+against `drcbe_x64` on the host, which is what makes the ARM number mean
+anything at all.
+
+**The flag model is `drcbearm64`'s, copied rather than re-derived.** N/Z/V live
+in APSR as UML S/Z/V; C and U live in a software flags register (r10); and
+`m_carry_state` tracks what the hardware carry currently is relative to the UML
+one, so a consumer reloads it only when the polarity is wrong. ARM sets C to
+NOT-borrow after a subtract and UML calls it borrow — that one disagreement is
+the entire reason the mechanism exists, and it is the single most error-prone
+part of an ARM UML back-end. `drcbex86` supplies the algorithms, because it ran
+this IR on a 32-bit host for twenty years.
+
+**Six families call a C helper in the same file rather than being synthesised
+inline**, and the reason is the same for all of them — cold, long, and a UML
+register is memory in this back-end so "pass the destination" is just passing a
+pointer. Both divides (**the A9 has no divide instruction at all**, so a divide
+is a call however it is written), 64×64 multiplies, 64-bit shifts and rotates,
+and the 64-bit integer/float conversions.
+
+**The encoder came first, as the design demands.** `tests/a32-asmjit/` grew from
+88 encodings to **130, all matching `arm-linux-gnueabihf-as`** — `mrs`/`msr`,
+the predicated forms the carry capture rides on, the register-amount shifts the
+64-bit synthesis needs, and the three FPSCR words. That last one is a real gap
+in a32: it has **no VMRS/VMSR emitter entry**, and its `MRC` path wants a
+`kOpRegC` operand which is signature zero and which nothing in the library
+constructs. FPSCR access is therefore `embed_uint32()` of the literal word,
+qualified against the assembler like everything else.
+
+**The corpus grew from 48 cases to 77, and that growth is the real work.** The
+48 passed on the first run of the finished lowering, which is a reason for
+suspicion rather than satisfaction: a corpus that passes immediately is more
+likely to be missing the hard cases. The additions are deliberately what
+nothing was asking about — the narrow multiplies whose overflow comes from the
+wide product, divide by zero, 64-bit ADDC/SUBB, the rotates through carry,
+BFXU/BFXS, every condition code through SET, and, worth more than all the rest,
+**the call contract**: CALLH, nested CALLH, conditional CALLH and RET, EXH, a
+hash jump that hits, a hash jump that misses through the nocode stub into
+RECOVER, and CALLC. On a host with a link register rather than a pushed return
+address that is the whole of the remaining risk, and none of it is visible in a
+corpus of straight-line arithmetic.
+
+**`MAMESTER_DRC_SEED` varies the state the corpus starts from**, and CI sweeps
+eight seeds. One fixed seed tests one set of values, and flag reconstruction is
+exactly the code that is right for the values it was written against. A forty
+seed soak of the ARM back-end is clean.
+
+**Four places where the two REFERENCES disagree**, all found by the calibration
+and sweep runs, all recorded in the corpus rather than worked around silently.
+Where `drcbe_c` and `drcbe_x64` disagree, a differential test has nothing to
+say, so the corpus stays inside the defined domain:
+
+- `drcbec` computes a 64-bit `ROLC`'s carry contribution with a **32-bit**
+  shift, so a rotate by more than 32 is undefined and comes out zero;
+  `drcbe_x64` is right and `drcbearm32` agrees with it.
+- `BFXU`/`BFXS` at full register width: `drcbec` returns the value,
+  `drcbe_x64` returns zero.
+- `FTOINT` from single precision to a 64-bit integer, negative value: `drcbec`
+  zero-extends the 32-bit answer, `drcbe_x64` sign-extends the 64-bit one.
+- `drcbec`'s `EXH` pushes the EXH instruction where `CALLH` pushes the one
+  after it, so a `RET` out of an exception handler re-executes the EXH forever.
+  Real cores end a handler in `HASHJMP` or `EXIT`, which is why nothing has
+  ever tripped over it.
+
+A fifth finding was a **bug in this tree**: `tools/mame-drc-arm32/inject.sh`
+wrapped upstream's own `cpu.lua` lines inside the sentinel fence, and
+`--revert` deletes whatever a fence contains — so a revert left the tree
+without `CPU_INCLUDE_DRC_NATIVE`, and the next host build failed to link
+`make_drcbe_x64`. Both patches are additive now and a revert restores
+`cpu.lua` byte for byte. That is the second time the revert path has been
+wrong in a way only an alternating build would show.
+
+### What is still unverified, and it is not a small list
+
+- **The emulated-memory opcodes have never executed.** `READ`/`READM`/`WRITE`/
+  `WRITEM`/`FREAD`/`FWRITE` are lowered — a call to the resolved accessor,
+  following `drcbex86`'s model rather than `drcbearm64`'s inlined dispatch —
+  but the harness runs a machine started with **no content**, so `m_space` is
+  empty and there is nothing to read. Nothing tests them. They are also the
+  opcodes every real driver leans on hardest.
+- **`DEBUG`, `BREAK` and the end-of-block handler** are equally untested, for
+  the same reason.
+- **No driver has run.** There is no romset in the build environment and the
+  device is unreachable from it, so the gate that actually matters —
+  `MISTER_FRAME_HASH` matching between a `DRC=0` build and a `DRC=1` build of
+  `psikyosh` over N frames — has not been run, and neither has
+  `MISTER-BENCH fps=`, which is the only thing that can say whether any of this
+  was worth doing.
+- **qemu is not a Cortex-A9.** It models NZCV faithfully enough that the corpus
+  is meaningful, but it does not prove instruction-cache coherency (the
+  `osd::invalidate_instruction_cache` call after every block), and a JIT that
+  is correct under emulation and wrong on hardware fails exactly there.
+
+**Next, in order:** run `psikyosh` on the device under `DRC=0` and `DRC=1` and
+diff the frame hashes; then bench; then take READ/WRITE seriously, either by
+teaching the harness to start a machine that has an address space or by
+trusting the driver run to cover them.

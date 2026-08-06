@@ -1,0 +1,138 @@
+# Cross-compile container for the CURRENT libretro MAME (0.289), armhf/Cortex-A9.
+#
+# Why this exists beside Dockerfile.cross-armhf rather than replacing it:
+# MAME 0.289 compiles with -std=c++20 (scripts/genie.lua:774,778,1174). The
+# existing cross container is Debian bullseye / gcc 10.2.1, which has only
+# partial C++20 and cannot build it. The two older engines (mame4all, 2003-plus)
+# are C++98-era code whose measured figures belong to gcc 10.2.1, and
+# docs/bench-results.md's engine comparison rests on both of them being built by
+# the SAME compiler -- so bumping the shared container would silently invalidate
+# that comparison. New compiler, new file.
+#
+# Debian BOOKWORM = gcc 12, past MAME's C++20 requirement (it wants 11 or
+# later). Trixie/gcc-14 was tried first and cannot be used at all, for a reason
+# that is not about C++: trixie IS Debian's armhf time64 transition, so its
+# libstdc++.a is built for 64-bit time_t and references __clock_gettime64,
+# __ioctl_time64, __fstat64_time64 and friends. The MiSTer's glibc 2.31 has none
+# of them, and no compiler flag or sysroot can change a prebuilt runtime
+# library's ABI. Bookworm's armhf is still the 32-bit time_t ABI, which is the
+# one the device runs.
+#
+# MAME cross-builds need BOTH toolchains at once: genie emits host-native build
+# tools (verinfo, png2bdc, makedep) and cross-compiles the emulator itself, which
+# is what makefile:361's CROSS_BUILD:=1 plus OVERRIDE_CC/OVERRIDE_CXX select.
+# g++ (native) and arm-linux-gnueabihf-g++ therefore both have to be present.
+#
+# python3 is not optional: the build runs scripts/build/verinfo.py and the
+# genie-driven code generators through it (makefile:1000 PYTHON_AVAILABLE).
+#
+# BUT THE COMPILER'S DEBIAN RELEASE AND THE TARGET'S GLIBC ARE TWO SEPARATE
+# CHOICES, and conflating them produced a binary that could not load on the
+# device at all:
+#
+#     ./lrmame: /lib/libc.so.6: version `GLIBC_2.38' not found
+#     ./lrmame: /lib/libc.so.6: version `GLIBC_2.34' not found (x4 more)
+#
+# The MiSTer rootfs is glibc **2.31** (`/lib/libc-2.31.so`, Debian bullseye
+# vintage); trixie's armhf libc is 2.41. Link against 2.41 and the binary
+# carries versioned references — GLIBC_2.34 alone is unavoidable, since that is
+# where libpthread and libdl were folded into libc — that a 2.31 loader refuses.
+# Nothing catches this before the device: it builds clean, and it RUNS clean
+# under qemu-arm, because qemu is pointed at the container's own 2.41 libs.
+#
+# So: gcc-12 from bookworm for the C++20 requirement, glibc 2.31 from bullseye
+# for the target. The bullseye stage supplies only the target sysroot (headers
+# and armhf libraries); no compiler comes from it. This is also why the two older
+# engines never hit this — their container IS bullseye.
+#
+# Two residues remain after that split, and both are handled at link time by
+# tools/mister/glibc231-compat.c rather than here:
+#
+#   __libc_single_threaded  glibc 2.32. bookworm's libstdc++.a reads it in
+#                           __cxa_guard_acquire, locale init and the COW string
+#                           refcount, so essentially every C++ link needs it.
+#   arc4random              glibc 2.36.
+#   -lpthread               glibc 2.31 still has a separate libpthread, and a
+#                           libstdc++ built against 2.34+ does not ask for it.
+#
+# Verified end to end before this container was adopted: a C++20 program using
+# threads, chrono, locale, filesystem, random and iostreams builds this way and
+# RUNS on the device, requiring nothing later than GLIBC_2.25.
+FROM debian:bullseye AS sysroot
+
+# apt's download sandbox is switched off before anything is fetched. On Docker
+# for macOS the unprivileged _apt user cannot read what it just wrote into the
+# overlay, and apt reports that as "At least one invalid signature was
+# encountered" against every repository -- a signature error for a permission
+# problem, and it comes and goes with the storage driver's mood rather than
+# staying reproducible.
+RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/99-no-sandbox
+
+RUN dpkg --add-architecture armhf \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        libc6-dev:armhf \
+        libasound2-dev:armhf \
+        linux-libc-dev:armhf \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM debian:bookworm
+
+# apt's download sandbox is switched off before anything is fetched. On Docker
+# for macOS the unprivileged _apt user cannot read what it just wrote into the
+# overlay, and apt reports that as "At least one invalid signature was
+# encountered" against every repository -- a signature error for a permission
+# problem, and it comes and goes with the storage driver's mood rather than
+# staying reproducible.
+RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/99-no-sandbox
+
+RUN dpkg --add-architecture armhf \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        crossbuild-essential-armhf \
+        build-essential \
+        make \
+        python3 \
+        git \
+        ca-certificates \
+        libasound2-dev:armhf \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# The target glibc is replaced IN PLACE rather than supplied as a separate
+# --sysroot, because --sysroot does not reach it. Debian's cross gcc resolves
+# crt1.o and libc.so through its own prefix:
+#
+#     $ arm-linux-gnueabihf-gcc --sysroot=/sysroot -print-file-name=crt1.o
+#     /usr/lib/gcc-cross/arm-linux-gnueabihf/12/../../../../arm-linux-gnueabihf/lib/crt1.o
+#
+# — a compiler-prefix path that --sysroot leaves alone, so a sysroot flag builds
+# a binary that still references GLIBC_2.34. Overwriting the toolchain's own
+# target tree is what actually takes effect.
+#
+# Debian is multiarch on the bullseye side, so glibc arrives from three places
+# and lands merged in the two the cross compiler reads. gcc's own target
+# libraries (libstdc++, libgcc, libatomic) live in the same lib directory and are
+# NOT overwritten: nothing bullseye installs is named like them.
+COPY --from=sysroot /usr/include/ /usr/arm-linux-gnueabihf/include/
+COPY --from=sysroot /usr/include/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/include/
+COPY --from=sysroot /usr/lib/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/lib/
+COPY --from=sysroot /lib/arm-linux-gnueabihf/ /usr/arm-linux-gnueabihf/lib/
+
+# And again into the multiarch path, because glibc's libc.so is a LINKER SCRIPT
+# holding absolute paths:
+#
+#     GROUP ( libc.so.6 libc_nonshared.a AS_NEEDED ( ld-linux-armhf.so.3 ) )
+#     ... /usr/lib/arm-linux-gnueabihf/libc_nonshared.a
+#
+# so a bullseye libc.so placed only in the toolchain tree fails the link with
+# "cannot find /usr/lib/arm-linux-gnueabihf/libc_nonshared.a". Both locations
+# have to be the same glibc.
+COPY --from=sysroot /usr/lib/arm-linux-gnueabihf/ /usr/lib/arm-linux-gnueabihf/
+COPY --from=sysroot /lib/arm-linux-gnueabihf/ /usr/lib/arm-linux-gnueabihf/
+
+# MAME's makefile runs `git describe` for the version string it stamps into the
+# binary. The bind-mounted checkout is owned by the host uid, and git refuses to
+# read a repo it does not own, which makes the version come out empty rather
+# than failing the build -- so the ownership check is waived here.
+RUN git config --global --add safe.directory '*'
+
+WORKDIR /src

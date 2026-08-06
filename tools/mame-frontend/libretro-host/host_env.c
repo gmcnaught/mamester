@@ -64,6 +64,19 @@ static char host_cyclone_mode[32] = "default";
  * cpu_clock_scale=default, skip_disclaimer=disabled, skip_warnings=disabled,
  * use_samples=enabled, autosave_hiscore=default, nvram_bootstraps=enabled. */
 static const struct { const char *key; const char *value; } host_options[] = {
+#if defined(MAMESTER_ENGINE_LRMAME)
+    /* Current MAME (0.289) namespaces its options `mame_*`, not
+     * `mame2003-plus_*`, and pins NOTHING yet -- deliberately. An unrecognised
+     * key falls through to the core's own default SILENTLY (the reason the
+     * table below is annotated so heavily), so a table written from naming
+     * convention would look pinned and not be. Nothing goes in here until the
+     * gate build proves the engine runs and each key has been read out of
+     * src/osd/libretro/libretro-internal/libretro_core_options.h.
+     *
+     * This is not a gap in the meantime: host_capture_defaults() snapshots the
+     * core's own defaults from SET_VARIABLES, so GET_VARIABLE still answers for
+     * every option. The engine simply runs at its own defaults. */
+#else
     { "mame2003-plus_frameskip",        "disabled" }, /* "0" is NOT legal; the
                                                        * set is disabled,1..11,
                                                        * auto,auto_aggressive,
@@ -75,6 +88,7 @@ static const struct { const char *key; const char *value; } host_options[] = {
     { "mame2003-plus_use_samples",      "disabled" },
     { "mame2003-plus_autosave_hiscore", "disabled" },
     { "mame2003-plus_nvram_bootstraps", "disabled" },
+#endif
     { NULL, NULL }
 };
 
@@ -249,6 +263,23 @@ bool host_environment(unsigned cmd, void *data)
         host_geometry_changed((const struct retro_game_geometry *)data);
         return true;
 
+    /* Current MAME sends this; mame2003-plus never did (its only geometry
+     * notification is SET_GEOMETRY, which cannot carry a refresh rate). It is
+     * the ONE new command that is load-bearing rather than ceremonial: the
+     * payload is a full retro_system_av_info, so it can change `timing.fps`,
+     * and the modeline published to the FPGA is derived from that rate. Ignore
+     * it and a driver that revises its refresh after load keeps presenting at
+     * the rate reported by retro_get_system_av_info() -- the raster stays right
+     * and the timing quietly does not.
+     *
+     * The core also uses it when the geometry outgrows the maximum it first
+     * reported (libretro.cpp:533), which nv_set_mode() has to see. */
+#ifdef RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO
+    case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+        host_av_info_changed((const struct retro_system_av_info *)data);
+        return true;
+#endif
+
     /* --- accepted and ignored -------------------------------------------- */
 
     case RETRO_ENVIRONMENT_SET_MESSAGE:
@@ -268,6 +299,57 @@ bool host_environment(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
         return true;
+
+    /* --- current MAME also issues these -----------------------------------
+     * Guarded on the constant rather than on the engine: the two engines vendor
+     * different vintages of libretro.h, and this file is compiled against
+     * whichever one belongs to the engine being built. An #ifdef on the command
+     * keeps one shared source compiling against both. */
+#ifdef RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK
+    case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS
+    case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
+    case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
+#endif
+        return true;
+
+    /* The content directory. Refusing it is not neutral: the core falls back to
+     * the directory the ROM came from (libretro.cpp:788), which scatters state
+     * into the romset directory -- the same failure GET_SAVE_DIRECTORY exists
+     * to avoid. Served from the system directory, which is where the launcher
+     * puts the emulator's data. */
+#ifdef RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY
+    case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:
+        *(const char **)data = host_system_dir;
+        return host_system_dir != NULL;
+#endif
+
+    /* Refused deliberately.
+     *
+     * GET_INPUT_BITMASKS would let the core read a whole port in one call
+     * instead of one call per button. Refusing it costs a handful of calls per
+     * frame and keeps host_input.c's single code path serving both engines;
+     * accepting it is an optimisation to make with a profile in hand, not
+     * ahead of one.
+     *
+     * The fast-forward pair is refused because the host owns pacing
+     * (host_throttle.c, or the audio clock -- see host_main.c's "EXACTLY ONE
+     * CLOCK"). Letting the core believe it may fast-forward would put a second
+     * opinion on frame timing into a loop whose whole design is that there is
+     * only one. */
+#ifdef RETRO_ENVIRONMENT_GET_INPUT_BITMASKS
+    case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+#endif
+#ifdef RETRO_ENVIRONMENT_GET_FASTFORWARDING
+    case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE
+    case RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE:
+#endif
+        return false;
 
     /* --- optional interfaces this host does not provide ------------------- *
      * All four are guarded at the call site: the core presets the struct or

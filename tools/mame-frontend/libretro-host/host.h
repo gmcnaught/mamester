@@ -52,6 +52,12 @@ void host_set_rotation(unsigned rot);
  * here and stays whatever retro_get_system_av_info() reported. */
 void host_geometry_changed(const struct retro_game_geometry *geom);
 
+/* RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO. Current MAME sends this; mame2003-plus
+ * never does. It carries the timing block as well as the geometry, so it is the
+ * only notification that can change the refresh rate after load -- and the
+ * modeline published to the FPGA is derived from that rate. */
+void host_av_info_changed(const struct retro_system_av_info *av);
+
 /* --- video (host_video.c) ------------------------------------------------- */
 void    host_video_refresh(const void *data, unsigned width, unsigned height,
                            size_t pitch);

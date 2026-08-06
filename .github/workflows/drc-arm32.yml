@@ -1,0 +1,198 @@
+name: ARM32 DRC
+
+# Tests for the ARM32 dynamic recompiler (tools/mame-drc-arm32/) and the
+# libretro MAME engine that hosts it. Everything here runs on a GitHub-hosted
+# x86_64 Linux runner: the ARM code is CROSS-compiled and executed under
+# qemu-arm-static, which is exactly how it was developed — no MiSTer, no ARM
+# runner and no romset is involved at any point.
+#
+# Two jobs, split by cost, because they differ by a factor of about fifty --
+# and, since they differ that much, by TRIGGER as well:
+#
+#   encoder   ~2 min, on every push and PR touching these paths. No MAME
+#             checkout at all: the asmjit a32 corpus diffs against
+#             arm-linux-gnueabihf-as and the launch-harness tests are plain
+#             POSIX sh. This is the job that gates a PR.
+#
+#   drc-diff  ~40-60 min COLD, and NOT on push/PR -- nightly and on demand
+#             only. It fetches vendor/lrmame (~1.2 GB even shallow),
+#             cross-builds a MAME core and runs the no-content probe under
+#             qemu. Warm, ccache and the codegen cache take it to a few
+#             minutes; the floor is the link, a 40 MB shared object either way.
+#
+# The nightly is what keeps the caches warm, which is most of why the on-demand
+# run is ever fast: GitHub lets a branch read the default branch's caches, so a
+# manual run after a nightly starts from a populated ccache rather than cold.
+#
+# NOTE that scheduled workflows only run on the DEFAULT branch. Until this lands
+# on main the nightly will not fire at all, and drc-diff is workflow_dispatch
+# only -- run it by hand from the Actions tab against this branch.
+#
+# THE TRAP THIS JOB EXISTS TO CATCH, and the reason SOURCES names an SH-2
+# driver rather than the cheaper pacman: CPU_INCLUDE_DRC is false when no
+# DRC-backed CPU is in the build, and then every drcbe* file — including the
+# back-end under test — silently drops out. A pacman build would compile, link,
+# pass, and have tested nothing at all.
+
+on:
+  push:
+    paths:
+      - 'tools/mame-drc-arm32/**'
+      - 'tools/build-lrmame.sh'
+      - 'tests/a32-asmjit/**'
+      - 'tests/drc-diff/**'
+      - 'tests/game_manager_test.sh'
+      - 'games/MAMESTer/**'
+      - '.github/workflows/drc-arm32.yml'
+  pull_request:
+    paths:
+      - 'tools/mame-drc-arm32/**'
+      - 'tools/build-lrmame.sh'
+      - 'tests/a32-asmjit/**'
+      - 'tests/drc-diff/**'
+      - '.github/workflows/drc-arm32.yml'
+  schedule:
+    # 04:31 UTC. Off the hour deliberately: GitHub's scheduler is heavily
+    # oversubscribed at :00 and a job queued there can be delayed or dropped.
+    - cron: '31 4 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: drc-arm32-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  encoder:
+    name: encoder corpus + launch harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        # No submodules: tests/a32-asmjit clones asmjit's a32_port branch
+        # itself (blob:none), and the harness tests are pure shell.
+
+      - name: install cross binutils
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils-arm-linux-gnueabihf g++
+
+      - name: launch harness tests
+        run: sh tests/game_manager_test.sh
+
+      - name: asmjit a32 encoder corpus vs GNU as
+        run: bash tests/a32-asmjit/run.sh
+
+  drc-diff:
+    name: cross-build a DRC core + qemu probe
+    # Nightly and on-demand only. The `on:` block still lists push and PR
+    # because `encoder` needs them, so this job has to opt out of them here --
+    # a workflow-level trigger fires every job in the file.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false   # fetched selectively below; the full set is large
+
+      # Only vendor/lrmame and vendor/asmjit-a32 are needed. `submodules: true`
+      # would also drag in mame4all-pi and mame2003-plus, neither of which this
+      # job touches.
+      #
+      # asmjit is NOT optional and its absence is a hard build failure, not a
+      # degraded build: tools/mame-drc-arm32/inject.sh copies the a32 sources
+      # into vendor/lrmame's 3rdparty tree and exits 1 when the submodule is
+      # empty -- after it has already patched drcuml.cpp and cpu.lua. It is not
+      # fetched shallow because .gitmodules pins it to the `a32_port` branch and
+      # `--depth 1` against a non-default branch is fragile; the whole clone is
+      # 11 MB.
+      - name: fetch vendor/lrmame and vendor/asmjit-a32
+        run: |
+          git submodule update --init --depth 1 vendor/lrmame
+          git submodule update --init vendor/asmjit-a32
+
+      - name: install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            crossbuild-essential-armhf qemu-user-static python3 ccache
+
+      # ccache reached by PATH rather than by editing OVERRIDE_CC: MAME's
+      # genie splits that variable on whitespace, so "ccache arm-...-gcc" is
+      # parsed as a compiler named ccache with a stray argument.
+      - name: ccache shims for the cross compiler
+        run: |
+          mkdir -p "$HOME/ccache-bin"
+          for t in gcc g++; do
+            ln -sf "$(command -v ccache)" "$HOME/ccache-bin/arm-linux-gnueabihf-$t"
+          done
+          echo "$HOME/ccache-bin" >> "$GITHUB_PATH"
+
+      - name: restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: drc-ccache-${{ hashFiles('.gitmodules') }}-${{ github.sha }}
+          restore-keys: |
+            drc-ccache-${{ hashFiles('.gitmodules') }}-
+            drc-ccache-
+
+      # The layout codegen walks ~2000 .lay files through complay.py on every
+      # cold build and is a fixed several-minute cost independent of SOURCES,
+      # so it is cached separately from the objects.
+      - name: restore layout codegen
+        uses: actions/cache@v4
+        with:
+          path: vendor/lrmame/build/generated
+          key: drc-generated-${{ hashFiles('.gitmodules') }}
+
+      - name: build a core containing an SH-2 (DRC on)
+        env:
+          SOURCES: src/mame/psikyo/psikyosh.cpp
+          SUBTARGET: drcsh
+        run: |
+          ccache --zero-stats >/dev/null
+          tools/build-lrmame.sh
+
+      # A sweep, not a single run. The corpus seeds the machine state, and one
+      # fixed seed tests one set of values -- flag reconstruction is exactly
+      # the code that is right for the values it was written against and wrong
+      # a little further along. The sweep costs a minute per seed and has
+      # already paid for itself once, on a case where the two REFERENCE
+      # back-ends disagreed.
+      - name: differential run under qemu, over several input states
+        run: |
+          for seed in 0 1 2 3 4 5 6 7; do
+              echo "::group::seed $seed"
+              MAMESTER_DRC_SEED=$seed bash tests/drc-diff/run.sh
+              echo "::endgroup::"
+          done
+
+      - name: report
+        if: always()
+        run: |
+          ccache --show-stats | head -20
+          ls -lh vendor/lrmame/drcsh_libretro.so 2>/dev/null || true
+          # The back-end must actually have been BUILT; see the header note.
+          #
+          # Checked at the object level, not with nm on the .so: genie links it
+          # with -s and a --version-script that exports only retro_*, so `nm`
+          # reports "no symbols" on a perfectly good build and a symbol check
+          # fails closed for the wrong reason. The object existing proves
+          # CPU_INCLUDE_DRC was true and that cpu.lua selected the ARM32 file,
+          # which is the thing that silently goes wrong.
+          if find vendor/lrmame/build -name drcbearm32.o | grep -q .; then
+            echo "OK: drcbearm32.o was built"
+          else
+            echo "FAIL: drcbearm32.o absent — CPU_INCLUDE_DRC false, or cpu.lua"
+            echo "      did not select the ARM32 back-end. The build and the"
+            echo "      probe can both pass with the back-end entirely absent."
+            exit 1
+          fi
+          # And the 64-bit back-ends must NOT be, on a 32-bit target.
+          if find vendor/lrmame/build \( -name drcbex64.o -o -name drcbearm64.o \) \
+               | grep -q .; then
+            echo "FAIL: a 64-bit DRC back-end was built for PLATFORM=arm"
+            exit 1
+          fi

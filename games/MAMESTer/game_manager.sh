@@ -46,6 +46,29 @@ POLL_SEC="${POLL_SEC:-1}"
 
 file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
 
+# engine_bin <name>
+#   Map an `engine` directive to a binary. Echoes the path; returns 1 for a name
+#   this build does not know, so the caller can say so rather than exec'ing a
+#   path that was never going to exist.
+#
+#   An empty name means "no directive" and gets $MAME_BIN, which keeps every
+#   existing device — with no opts files or an opts file that predates this —
+#   launching exactly what it launched before.
+#
+#   NOTE the mismatch this exposes: deploy.py calls 2003-plus the PRIMARY engine,
+#   but the default here is mame4all, because that is what the default has always
+#   been and changing it silently would re-point every already-deployed game at a
+#   different emulator. Put `engine mame2003` in opts/default.opt to make the
+#   deploy-time claim true; that is an operator decision, not a code change.
+engine_bin() {
+    case "$1" in
+        ""|mame4all) echo "$MAME_BIN" ;;
+        mame2003)    echo "$GAMEDIR/mame2003" ;;
+        lrmame)      echo "$GAMEDIR/lrmame" ;;
+        *)           return 1 ;;
+    esac
+}
+
 launch_game() {     # $1 = rom zip path; echoes the child pid
     if [ -n "${LAUNCH_CMD:-}" ]; then
         "$LAUNCH_CMD" "$1" >/dev/null 2>&1 &
@@ -65,12 +88,30 @@ launch_game() {     # $1 = rom zip path; echoes the child pid
             | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     _log="$LOGDIR/$_set.log"
 
+    # Engine selection, with two distinct failure modes and a fallback for each.
+    # Neither is fatal: launching the default engine is very likely to work, and
+    # a game that starts on the wrong emulator is a better outcome on a device
+    # with no console than a core that silently does nothing.
+    _engine=$(game_engine "$GAMEDIR" "$_set")
+    _why=""
+    if ! _bin=$(engine_bin "$_engine"); then
+        _why="unknown engine '$_engine'"
+        _bin=$(engine_bin "")
+    elif [ ! -x "$_bin" ]; then
+        # Deployed without that engine built — deploy.py warns rather than
+        # failing when only some engines are present.
+        _why="engine '$_engine' not installed at $_bin"
+        _bin=$(engine_bin "")
+    fi
+
     mv -f "$_log" "$_log.prev" 2>/dev/null
     {
         echo "MAMESTer: launching '$_set'"
         echo "  pick    $1"
         echo "  rompath $_rompath"
         echo "  opts    ${_opts:-(none)}"
+        echo "  engine  ${_engine:-(default)} -> $_bin"
+        [ -n "$_why" ] && echo "  WARNING $_why — falling back to $_bin"
     } > "$_log"
 
     # -rompath is the directory the picked romset actually lives in, so a pick
@@ -86,7 +127,7 @@ launch_game() {     # $1 = rom zip path; echoes the child pid
     # liveness poll both depend on that. stdin from /dev/null: Master_Daemon
     # spawns this whole chain with no terminal.
     # shellcheck disable=SC2086  # $_opts is a deliberate word-split flag list
-    SDL_VIDEODRIVER=dummy "$MAME_BIN" "$_set" -rompath "$_rompath" $_opts \
+    SDL_VIDEODRIVER=dummy "$_bin" "$_set" -rompath "$_rompath" $_opts \
         >> "$_log" 2>&1 </dev/null &
     echo $!
 }

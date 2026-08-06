@@ -143,16 +143,55 @@ rom_path() {
     dirname "$_z"
 }
 
+# game_optfile <gamedir> <setname>
+#   The per-game options file: opts/<setname>.opt if present, else
+#   opts/default.opt, else nothing. Factored out so game_opts and game_engine
+#   cannot disagree about which file a game's settings come from.
+game_optfile() {
+    _dir="$1/opts"
+    _f="$_dir/$2.opt"
+    [ -f "$_f" ] || _f="$_dir/default.opt"
+    [ -f "$_f" ] || return 0
+    echo "$_f"
+}
+
 # game_opts <gamedir> <setname>
 #   Per-game launch flags. mame4all takes orientation and speed switches on the
 #   command line (-norotate / -ror / -rol, -frameskip N, -nosound), which is how
 #   a portrait driver gets presented as its real cabinet signal — see
 #   docs/superpowers/progress.md Stage 3. Echoes opts/<setname>.opt if present,
 #   else opts/default.opt, else nothing. '#' starts a comment.
+#
+#   An `engine <name>` line is a directive for game_engine below, NOT a flag, so
+#   it is deleted here. Every other non-comment token goes to the emulator
+#   verbatim, and passing `engine lrmame` to MAME would be an unknown-option
+#   error rather than something ignorable.
 game_opts() {
-    _dir="$1/opts"
-    _f="$_dir/$2.opt"
-    [ -f "$_f" ] || _f="$_dir/default.opt"
-    [ -f "$_f" ] || return 0
-    sed -e 's/#.*$//' "$_f" | tr '\n' ' '
+    _f=$(game_optfile "$1" "$2")
+    [ -n "$_f" ] || return 0
+    # Two delete expressions rather than one alternation: `\|` is a GNU sed
+    # extension and these tests also run on macOS.
+    sed -e 's/#.*$//' "$_f" \
+        | sed -e '/^[[:space:]]*engine[[:space:]]/d' \
+              -e '/^[[:space:]]*engine[[:space:]]*$/d' \
+        | tr '\n' ' '
+}
+
+# game_engine <gamedir> <setname>
+#   Which emulator this driver should launch under, from an `engine <name>` line
+#   in the same options file. Echoes the name, or nothing for "the default".
+#
+#   The port ships three engines and the right one is per-driver: mame4all-pi is
+#   fastest where it works at all, 2003-plus covers families mame4all lacks, and
+#   lrmame (current MAME) covers what neither has. That choice cannot be made at
+#   deploy time — it is a property of the driver — so it lives beside the
+#   driver's other launch settings.
+#
+#   Last line wins, so a `default.opt` engine can be overridden per game.
+game_engine() {
+    _f=$(game_optfile "$1" "$2")
+    [ -n "$_f" ] || return 0
+    sed -e 's/#.*$//' "$_f" \
+        | sed -n -e 's/^[[:space:]]*engine[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*$/\1/p' \
+        | tail -1
 }

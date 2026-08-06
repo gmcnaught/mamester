@@ -15,12 +15,18 @@ The three pieces:
                .github/workflows/build-rbf.yml. Fetch the newest with
                `gh run download <id> -n mame-rbf -D _Other`. The
                lexicographically-last name wins (the dates sort chronologically).
-  2. EMULATORS both engines, since the per-driver choice is made at launch:
+  2. EMULATORS every engine that has been built, because the per-driver choice
+               is made at launch (an `engine` line in games/mame/opts/<set>.opt,
+               read by games/MAMESTer/game_lib.sh), not at deploy time:
                tools/mame-frontend/libretro-host/mame2003 — MAME 2003-Plus, the
-               PRIMARY engine (make -C tools/mame-frontend/libretro-host CROSS=1),
-               and vendor/mame4all-pi/mame — mame4all-pi, the fallback for
-               drivers 2003-Plus cannot run acceptably (tools/build-mame.sh).
-               Both carry the same present/input/audio backend (nv_present.c).
+               PRIMARY engine (make -C tools/mame-frontend/libretro-host CROSS=1);
+               vendor/mame4all-pi/mame — mame4all-pi, the fallback for drivers
+               2003-Plus cannot run acceptably (tools/build-mame.sh); and
+               tools/mame-frontend/libretro-host/lrmame — MAME 0.289 over a
+               driver subset, PLUS vendor/lrmame/lrmame_libretro.so, which must
+               land beside it (tools/build-lrmame.sh). All carry the same
+               present/input/audio backend (nv_present.c). Missing engines warn
+               rather than fail; all missing is an error.
   3. HARNESS   games/MAMESTer/ — _handler.sh (Master_Daemon entry point),
                game_manager.sh + game_lib.sh (OSD game selection).
   4. MEM_WC    tools/mister/mem_wc/mem_wc.ko, IF it has been built — the
@@ -346,7 +352,33 @@ def main():
             (REPO / "vendor" / "mame4all-pi" / "mame",
              f"{GAMEDIR}/mame", "mame4all-pi (fallback)",
              "tools/build-mame.sh"),
+            (REPO / "tools" / "mame-frontend" / "libretro-host" / "lrmame",
+             f"{GAMEDIR}/lrmame", "MAME 0.289 (libretro, driver subset)",
+             "tools/build-lrmame.sh && make -C tools/mame-frontend/libretro-host "
+             "ENGINE=lrmame"),
         ]
+
+        # lrmame is the only engine that is not a self-contained binary: MAME is
+        # linked as a shared object and the host resolves it through an $ORIGIN
+        # RUNPATH, so the .so has to sit BESIDE the binary in GAMEDIR. Miss it
+        # and the failure is at exec, from the dynamic loader, before main() —
+        # which looks nothing like a missing-engine problem in the game log.
+        #
+        # Paired with its binary rather than listed separately: pushing a .so
+        # whose binary is absent installs a library nothing loads, and pushing a
+        # binary whose .so is absent installs one that cannot start.
+        lrmame_bin = REPO / "tools" / "mame-frontend" / "libretro-host" / "lrmame"
+        lrmame_so = REPO / "vendor" / "lrmame" / "lrmame_libretro.so"
+        if lrmame_bin.is_file():
+            if lrmame_so.is_file():
+                engines.append(
+                    (lrmame_so, f"{GAMEDIR}/{lrmame_so.name}",
+                     "MAME 0.289 shared object", "tools/build-lrmame.sh"))
+            else:
+                print(f"  WARNING: {lrmame_bin.relative_to(REPO)} was built but "
+                      f"{lrmame_so.relative_to(REPO)} is missing — it would fail "
+                      f"at exec in the dynamic loader; build with "
+                      f"tools/build-lrmame.sh")
         missing = [(p, why, how) for p, _, why, how in engines if not p.is_file()]
         if len(missing) == len(engines):
             for p, why, how in missing:

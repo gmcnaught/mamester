@@ -96,6 +96,25 @@ void host_geometry_changed(const struct retro_game_geometry *geom)
             geom->base_width, geom->base_height);
 }
 
+/* RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO. Unlike SET_GEOMETRY this carries the
+ * timing block, so the refresh rate can genuinely change here -- and the
+ * modeline the FPGA runs on is derived from it. Only the rate is taken: the
+ * geometry is read from the frame itself for the reason host_geometry_changed()
+ * records, and that reasoning does not stop applying just because the geometry
+ * arrived inside a bigger struct.
+ *
+ * Marking the mode invalid is what makes it take effect -- the next frame
+ * republishes through nv_set_mode() rather than this call reaching DDR itself,
+ * so a mid-frame arrival cannot tear the published timing. */
+void host_av_info_changed(const struct retro_system_av_info *av)
+{
+    fprintf(stderr, "MISTER-HOST: SET_SYSTEM_AV_INFO %ux%u @ %.4f Hz, "
+                    "%.0f Hz audio\n",
+            av->geometry.base_width, av->geometry.base_height,
+            av->timing.fps, av->timing.sample_rate);
+    host_video_set_refresh(av->timing.fps);
+}
+
 void host_video_set_refresh(double hz)
 {
     if (hz > 0.0 && hz != cur_refresh) {
