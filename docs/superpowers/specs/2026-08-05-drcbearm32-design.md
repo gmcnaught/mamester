@@ -230,6 +230,30 @@ means `DRC=0` is the configuration for shipping or benching those ~3.2% of
 drivers. Everything else, including the whole target library and the pacman
 gate, never reaches `drcuml` and is unaffected either way.
 
+## As built (2026-08-06)
+
+The design below is what was built, with three departures worth recording
+because each was settled by building rather than by reasoning:
+
+- **No lookup tables for the flag permutation.** UML's Z and S sit at bits 2
+  and 3 and APSR's at 30 and 31, so one mask and one shift place both and V
+  moves with a second. Cheaper than a load, and no near-cache footprint.
+- **FPSCR access is an embedded literal word.** a32 has no VMRS/VMSR emitter
+  entry, and its `MRC` path wants a `kOpRegC` operand that is signature zero
+  and that nothing in the library constructs. The three words are qualified
+  against the assembler in `tests/a32-asmjit/` like every other encoding.
+- **Six families are C helper calls, not inline synthesis**: both divides (the
+  A9 has no divide instruction, so it is a call either way), 64x64 multiplies,
+  64-bit shifts and rotates, and the 64-bit integer/float conversions. All
+  cold; a UML register is memory in this back-end, so passing a destination is
+  passing a pointer.
+
+Two registers are pinned beyond the state base the design specified: r10 holds
+the software flags (C and U, which APSR has no room for) and r9 anchors the
+stack so HASHJMP can unwind and RECOVER can find the outermost saved link
+register. Both are callee-saved under AAPCS, which is what lets generated code
+call into C without spilling them.
+
 ## Build status (2026-08-05)
 
 The back-end **compiles and links inside a real MAME build that contains a

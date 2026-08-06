@@ -2453,6 +2453,14 @@ void drcbe_arm32::op_read(Assembler &a, const uml::instruction &inst)
 	emit_mov_reg_imm(a, r0, uint32_t(uintptr_t(func.obj)));
 	emit_call_saving_lr(a, (void const *)func.func);
 
+	// A sub-word return leaves the upper bits of r0 unspecified, so they are
+	// cleared here rather than trusted -- the same reason drcbex86 follows a
+	// byte or word read with a movzx.
+	if (spacesizep.size() == SIZE_BYTE)
+		a.uxtb(r0, r0);
+	else if (spacesizep.size() == SIZE_WORD)
+		a.uxth(r0, r0);
+
 	if (inst.size() == 4)
 	{
 		mov_param_reg(a, dstp, r0);
@@ -2496,6 +2504,11 @@ void drcbe_arm32::op_readm(Assembler &a, const uml::instruction &inst)
 	mov_reg_param(a, r1, addrp);
 	emit_mov_reg_imm(a, r0, uint32_t(uintptr_t(func.obj)));
 	emit_call_saving_lr(a, (void const *)func.func);
+
+	if (spacesizep.size() == SIZE_BYTE)
+		a.uxtb(r0, r0);
+	else if (spacesizep.size() == SIZE_WORD)
+		a.uxth(r0, r0);
 
 	if (inst.size() == 4)
 	{
@@ -2569,12 +2582,17 @@ void drcbe_arm32::op_writem(Assembler &a, const uml::instruction &inst)
 		mov_reg_param_pair(a, r4, r5, maskp);
 		mov_reg_param(a, r1, addrp);
 		emit_mov_reg_imm(a, r0, uint32_t(uintptr_t(func.obj)));
-		a.push(GpList({ r4, r5 }));
+
+		// The link register is parked FIRST and the stack argument pushed on
+		// top of it, not the other way round: the callee reads the mask at
+		// [sp], so nothing may go below it after it is placed. Both pushes are
+		// pairs, which is also what keeps sp 8-byte aligned at the call.
 		a.push(GpList({ r12, r14 }));
+		a.push(GpList({ r4, r5 }));
 		emit_mov_reg_imm(a, REG_ADDR, uint32_t(uintptr_t(func.func)));
 		a.blx(REG_ADDR);
-		a.pop(GpList({ r12, r14 }));
 		a.add(sp, sp, imm(8));
+		a.pop(GpList({ r12, r14 }));
 	}
 	else
 	{

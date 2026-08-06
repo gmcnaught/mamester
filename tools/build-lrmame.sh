@@ -101,16 +101,13 @@ ARCHOPTS="${ARCHOPTS:--marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard}"
 # the AArch64 one would be, which inject.sh implements by folding PLATFORM=arm
 # into CPU_INCLUDE_DRC_NATIVE rather than into a parallel flag beside it.
 #
-# WHAT THAT COSTS TODAY. Only the structural opcodes are lowered; every other
-# UML opcode is a fatalerror. So with DRC on, a driver that actually uses a
-# DRC-backed CPU -- SH, MIPS, PowerPC, Hyperstone, the DSPs, ~3.2% of drivers,
-# tools/lrmame-drc-scan.sh --summary -- ABORTS instead of running slowly through
-# drcbec. That is the intended trade while the lowering is built: a hard stop on
-# an unlowered opcode is how the remaining work gets found, and a silent wrong
-# answer is the thing being avoided. Everything else -- Z80, 6502, 6809, 68000,
-# the whole target library and the pacman gate -- never reaches drcuml at all
-# and is bit-identical either way. Build with DRC=0 to ship or to bench those
-# 3.2% of drivers.
+# WHERE IT STANDS. Every UML opcode is lowered, and tests/drc-diff/ agrees with
+# drcbe_c on 77 cases over a sweep of input states, under qemu. What that has
+# NOT covered is the emulated-memory path -- READ/WRITE and their masked and
+# float forms -- because the harness runs a machine with no content and so has
+# no address space to read, and no real driver has run through this back-end
+# yet. DRC=0 remains the way to get a known-good comparison run, and the A/B
+# that matters is MISTER_FRAME_HASH between the two over the same driver.
 #
 # Two flags come OFF rather than one going on:
 #
@@ -155,8 +152,8 @@ if [ "$HOST" = "1" ]; then
 elif [ "${DRC:-1}" = "1" ]; then
     echo "# DRC on: injecting the ARM32 back-end into vendor/lrmame"
     "$REPO/tools/mame-drc-arm32/inject.sh"
-    echo "#   NOTE: only structural opcodes are lowered — a driver on a DRC-backed"
-    echo "#   CPU will fatalerror on the first unlowered opcode. Use DRC=0 for those."
+    echo "#   NOTE: the emulated-memory opcodes have never run — the harness has no"
+    echo "#   address space to test them with. Use DRC=0 for a reference run."
     DRC_VARS=()
 else
     echo "# DRC=0: UML interpreter (drcbec), back-end not injected"

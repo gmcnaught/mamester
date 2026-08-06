@@ -1,5 +1,31 @@
 # drcbearm32 — first lowering slice: RESTORE, SAVE, EXIT
 
+> **DONE, and overtaken in the same cycle.** The slice below was written as
+> three opcodes and turned out to be the gate it predicted: with SAVE, RESTORE
+> and EXIT in place the corpus became an instrument, and the rest of the
+> lowering followed immediately rather than over several cycles. The whole of
+> `uml.h` is lowered; `tests/drc-diff/` runs 77 cases over twelve input states.
+> Two of the plan's specifics were revised by building rather than by
+> reasoning, and both are worth keeping:
+>
+> * **SAVE/RESTORE are subroutines, not inline sequences**, exactly as
+>   `drcbex86` has them — but the flag byte cannot be part of the copy, because
+>   the live flags are in APSR and the software flags register rather than in
+>   the machine state. SAVE takes the byte as an argument and RESTORE hands it
+>   back.
+> * **The flag permutation is not a lookup table.** The plan proposed two
+>   tables in the near cache, mirroring `flags_map`/`flags_unmap`. UML's Z and S
+>   sit at bits 2 and 3 and APSR's at 30 and 31, so one mask and one shift place
+>   both, and V moves with a second — cheaper than a load, and no cache
+>   footprint.
+>
+> `FLAG_U` was descoped here and is no longer: it is carried in bit 4 of the
+> software flags register, FCMP writes it, and the conditional opcodes test it
+> by borrowing NZCV and giving it back on both paths.
+>
+> See `docs/superpowers/progress.md`, Stage 11.
+
+
 Plan for the cycle after the differential harness went live. Design:
 [`../specs/2026-08-05-drcbearm32-design.md`](../specs/2026-08-05-drcbearm32-design.md).
 Harness: [`../../../tests/drc-diff/README.md`](../../../tests/drc-diff/README.md).

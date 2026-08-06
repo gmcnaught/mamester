@@ -27,6 +27,10 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
   rename "MAME" — it means the emulator in most refs.
 - Present path: mame4all → `mister_video.cpp` `nv_present()` → `0x3A000000` DDR
   double-buffer → `openbor_video_reader` → scaler → HDMI/analog.
+- **Stage 11 (`drcbearm32`, the ARM32 DRC back-end) is lowered in full** and
+  agrees with `drcbe_c` on 77 differential cases over twelve input states,
+  under qemu. It has never run a driver, and the emulated-memory opcodes have
+  never executed at all — see the stage section for what that leaves open.
 
 | Stage | Status | Commit | Evidence |
 |---|---|---|---|
@@ -899,7 +903,103 @@ walkable stack. It names case, back-end and phase from a signal handler and
 exits 3, which is what turned the first crash into
 `case='empty' backend=drcbe_c phase=drcuml_state`.
 
-**Next: `tests/drc-diff/run.sh` against the ARM32 core.** With only the
-structural opcodes lowered it will report `UNIMPL` for all 48. `SAVE` and
-`RESTORE` are the first two to lower, because every case begins and ends with
-them — until they exist the corpus cannot report anything else.
+### The lowering is complete, and the corpus is what says so
+
+**Every UML opcode in `uml.h` is lowered.** `tests/drc-diff/` reports
+**77 of 77 cases agreeing between `drcbe_c` and `drcbe_arm32`**, under
+`qemu-arm`, over **twelve different input states**; the same corpus is clean
+against `drcbe_x64` on the host, which is what makes the ARM number mean
+anything at all.
+
+**The flag model is `drcbearm64`'s, copied rather than re-derived.** N/Z/V live
+in APSR as UML S/Z/V; C and U live in a software flags register (r10); and
+`m_carry_state` tracks what the hardware carry currently is relative to the UML
+one, so a consumer reloads it only when the polarity is wrong. ARM sets C to
+NOT-borrow after a subtract and UML calls it borrow — that one disagreement is
+the entire reason the mechanism exists, and it is the single most error-prone
+part of an ARM UML back-end. `drcbex86` supplies the algorithms, because it ran
+this IR on a 32-bit host for twenty years.
+
+**Six families call a C helper in the same file rather than being synthesised
+inline**, and the reason is the same for all of them — cold, long, and a UML
+register is memory in this back-end so "pass the destination" is just passing a
+pointer. Both divides (**the A9 has no divide instruction at all**, so a divide
+is a call however it is written), 64×64 multiplies, 64-bit shifts and rotates,
+and the 64-bit integer/float conversions.
+
+**The encoder came first, as the design demands.** `tests/a32-asmjit/` grew from
+88 encodings to **130, all matching `arm-linux-gnueabihf-as`** — `mrs`/`msr`,
+the predicated forms the carry capture rides on, the register-amount shifts the
+64-bit synthesis needs, and the three FPSCR words. That last one is a real gap
+in a32: it has **no VMRS/VMSR emitter entry**, and its `MRC` path wants a
+`kOpRegC` operand which is signature zero and which nothing in the library
+constructs. FPSCR access is therefore `embed_uint32()` of the literal word,
+qualified against the assembler like everything else.
+
+**The corpus grew from 48 cases to 77, and that growth is the real work.** The
+48 passed on the first run of the finished lowering, which is a reason for
+suspicion rather than satisfaction: a corpus that passes immediately is more
+likely to be missing the hard cases. The additions are deliberately what
+nothing was asking about — the narrow multiplies whose overflow comes from the
+wide product, divide by zero, 64-bit ADDC/SUBB, the rotates through carry,
+BFXU/BFXS, every condition code through SET, and, worth more than all the rest,
+**the call contract**: CALLH, nested CALLH, conditional CALLH and RET, EXH, a
+hash jump that hits, a hash jump that misses through the nocode stub into
+RECOVER, and CALLC. On a host with a link register rather than a pushed return
+address that is the whole of the remaining risk, and none of it is visible in a
+corpus of straight-line arithmetic.
+
+**`MAMESTER_DRC_SEED` varies the state the corpus starts from**, and CI sweeps
+eight seeds. One fixed seed tests one set of values, and flag reconstruction is
+exactly the code that is right for the values it was written against.
+
+**Four places where the two REFERENCES disagree**, all found by the calibration
+and sweep runs, all recorded in the corpus rather than worked around silently.
+Where `drcbe_c` and `drcbe_x64` disagree, a differential test has nothing to
+say, so the corpus stays inside the defined domain:
+
+- `drcbec` computes a 64-bit `ROLC`'s carry contribution with a **32-bit**
+  shift, so a rotate by more than 32 is undefined and comes out zero;
+  `drcbe_x64` is right and `drcbearm32` agrees with it.
+- `BFXU`/`BFXS` at full register width: `drcbec` returns the value,
+  `drcbe_x64` returns zero.
+- `FTOINT` from single precision to a 64-bit integer, negative value: `drcbec`
+  zero-extends the 32-bit answer, `drcbe_x64` sign-extends the 64-bit one.
+- `drcbec`'s `EXH` pushes the EXH instruction where `CALLH` pushes the one
+  after it, so a `RET` out of an exception handler re-executes the EXH forever.
+  Real cores end a handler in `HASHJMP` or `EXIT`, which is why nothing has
+  ever tripped over it.
+
+A fifth finding was a **bug in this tree**: `tools/mame-drc-arm32/inject.sh`
+wrapped upstream's own `cpu.lua` lines inside the sentinel fence, and
+`--revert` deletes whatever a fence contains — so a revert left the tree
+without `CPU_INCLUDE_DRC_NATIVE`, and the next host build failed to link
+`make_drcbe_x64`. Both patches are additive now and a revert restores
+`cpu.lua` byte for byte. That is the second time the revert path has been
+wrong in a way only an alternating build would show.
+
+### What is still unverified, and it is not a small list
+
+- **The emulated-memory opcodes have never executed.** `READ`/`READM`/`WRITE`/
+  `WRITEM`/`FREAD`/`FWRITE` are lowered — a call to the resolved accessor,
+  following `drcbex86`'s model rather than `drcbearm64`'s inlined dispatch —
+  but the harness runs a machine started with **no content**, so `m_space` is
+  empty and there is nothing to read. Nothing tests them. They are also the
+  opcodes every real driver leans on hardest.
+- **`DEBUG`, `BREAK` and the end-of-block handler** are equally untested, for
+  the same reason.
+- **No driver has run.** There is no romset in the build environment and the
+  device is unreachable from it, so the gate that actually matters —
+  `MISTER_FRAME_HASH` matching between a `DRC=0` build and a `DRC=1` build of
+  `psikyosh` over N frames — has not been run, and neither has
+  `MISTER-BENCH fps=`, which is the only thing that can say whether any of this
+  was worth doing.
+- **qemu is not a Cortex-A9.** It models NZCV faithfully enough that the corpus
+  is meaningful, but it does not prove instruction-cache coherency (the
+  `osd::invalidate_instruction_cache` call after every block), and a JIT that
+  is correct under emulation and wrong on hardware fails exactly there.
+
+**Next, in order:** run `psikyosh` on the device under `DRC=0` and `DRC=1` and
+diff the frame hashes; then bench; then take READ/WRITE seriously, either by
+teaching the harness to start a machine that has an address space or by
+trusting the driver run to cover them.

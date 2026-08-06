@@ -1,32 +1,52 @@
 # drc-diff — differential testing for the ARM32 back-end
 
 Run a UML block through the native back-end and through `drcbec`, execute both,
-and diff the resulting machine state. That is what makes each opcode group in
-`drcbearm32.cpp`'s REMAINING WORK an independently verifiable unit rather than
-an aspiration.
+and diff the resulting machine state. That is what makes each opcode in
+`drcbearm32.cpp` an independently verifiable unit rather than an aspiration.
 
 ```sh
 tests/drc-diff/run.sh --host       # calibrate: drcbe_c vs drcbe_x64
 tests/drc-diff/run.sh              # the real thing: drcbe_c vs drcbe_arm32
 tests/drc-diff/run.sh alu          # one group, or one case, by name
 tests/drc-diff/run.sh --probe      # just the no-content probe, no diff
+MAMESTER_DRC_SEED=3 tests/drc-diff/run.sh    # a different input state
 ```
 
-**Status: `--host` is clean — 48 of 48 cases agree between `drcbe_c` and
-`drcbe_x64`.** The ARM32 run has not been done yet; with only the structural
-opcodes lowered it will report `UNIMPL` for everything, `SAVE`/`RESTORE` first.
-
-## Baseline, 2026-08-05
+**Status: 77 of 77 cases agree, on both back-ends, over twelve input states.**
 
 ```
---host (drcbe_c vs drcbe_x64)      pass=48 fail=0 unimpl=0  skipped=0
---arm  (drcbe_c vs drcbe_arm32)    pass=0  fail=0 unimpl=48 skipped=0
+--host (drcbe_c vs drcbe_x64)      pass=77 fail=0 unimpl=0 skipped=0   seeds 0-11
+--arm  (drcbe_c vs drcbe_arm32)    pass=77 fail=0 unimpl=0 skipped=0   seeds 0-11
 ```
 
-The ARM run is the loop working, not the back-end working: 48 clean `UNIMPL`
-reports, no crash, no hang, exit 0. From here every opcode lowered turns one or
-more of those into `PASS` or `FAIL`, which is the whole point of building this
-before writing the lowering.
+## What this does NOT cover
+
+Worth stating plainly, because a green corpus invites the assumption that it
+covers everything:
+
+- **`READ`/`READM`/`WRITE`/`WRITEM`/`FREAD`/`FWRITE`.** The harness starts a
+  machine with no content, and that machine has **no device with a memory
+  interface at all** -- checked by walking the device tree, not assumed -- so
+  `m_space` is empty and there is nothing to read or write. Those opcodes are
+  lowered and have never executed. Closing this needs either a machine with an
+  address space or a real driver run.
+- **`DEBUG`, `BREAK`, and the end-of-block handler**, for the same reason.
+- **Hardware.** Everything here runs under `qemu-arm`. It models NZCV
+  faithfully enough for the corpus to mean something, but it does not prove
+  instruction-cache coherency on a Cortex-A9.
+
+## Seeds
+
+`MAMESTER_DRC_SEED` perturbs the machine state each case starts from; seed 0 is
+the original fixed state, so the default run is unchanged and a sweep is
+additional rather than instead. CI runs eight seeds.
+
+The reason is that one fixed seed tests one set of values, and flag
+reconstruction is exactly the code that is right for the values it was written
+against and wrong a little further along. The sweep paid for itself on its
+first run, twice, and both times against the reference back-ends rather than
+against the ARM lowering -- see the "no oracle" list at the head of the corpus
+in `drc_diff.cpp`.
 
 **All 48 name the same opcode, and it is not any of the opcodes the cases are
 about.** Every one reports UML opcode 23 — `OP_RESTORE` — including `fmov`,
