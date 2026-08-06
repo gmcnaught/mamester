@@ -76,10 +76,20 @@ static const size_t NV_JOY_OFF[4] = { 0x08, 0x18, 0x20, 0x28 };
  *     replaces the SO pages rather than aliasing them, so no page is ever
  *     mapped both ways.
  *
- * BUF0 starts 0x40 into page 0, so its first 4032 bytes stay Strongly-Ordered.
- * That is ~4 lines of a 512-wide frame, ~45 us against the ~700 us the rest of
- * the copy costs under WC -- about 1 %, and it buys a single linear pointer for
- * the whole window instead of a straddling special case in nv_frame().
+ * BUF0 starts 0x40 into page 0, so its first 4032 bytes stay Strongly-Ordered:
+ * ~4 lines of a 512-wide frame, at 89 MB/s, ~45 us. MEASURED COST, 512x384:
+ * 0.506 ms per present against 0.440 ms into a destination that is WC all the
+ * way down -- so the straddle is ~13 % of the present, not the ~1 % this comment
+ * first claimed (that figure divided the same 45 us by a 700 us estimate for the
+ * rest of the copy, which is 6 % even on its own numbers, and the real WC copy
+ * is faster than 700 us, which makes the share larger still).
+ *
+ * It buys a single linear pointer for the whole window instead of a straddling
+ * special case in nv_frame(). Buying it back needs the RTL: page 0 holds the
+ * control word AND BUF0's first 4032 bytes, so no split of THIS layout can put
+ * all of BUF0 on WC pages. Moving BUF0 from 0x40 to 0x1000 in the reader would
+ * recover the whole ~66 us. Worth doing next time the reader is touched; not
+ * worth an RTL revision on its own against a 3.7 ms/frame win.
  *
  * See docs/dreamster-ddr-channel-review.md and tools/mister/mem_wc/README.md.
  */
@@ -268,9 +278,13 @@ int nv_open(void)
         fprintf(stderr, "nv_present: pixel buffers write-combined via "
                         "/dev/mem_wc\n");
     else
-        fprintf(stderr, "nv_present: pixel buffers strongly-ordered "
-                        "(/dev/mem_wc unavailable) — expect ~4.2 ms/frame at "
-                        "512x384; see tools/mister/mem_wc/README.md\n");
+        /* Say WHICH fallback this is. The forced arm is the A/B, and an A/B
+         * whose two logs read the same is the thing present= exists to stop. */
+        fprintf(stderr, "nv_present: pixel buffers strongly-ordered (%s) — "
+                        "expect ~4.2 ms/frame at 512x384; see "
+                        "tools/mister/mem_wc/README.md\n",
+                getenv("MISTER_NO_WC") ? "MISTER_NO_WC=1"
+                                       : "/dev/mem_wc unavailable");
 #endif
     return nv_enabled;
 }

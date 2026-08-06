@@ -26,9 +26,14 @@
  *
  * Build (armhf container):
  *   gcc -O2 -marm -mfpu=neon -mfloat-abi=hard -o ddr-write-bench ddr-write-bench.c
- * Run on the device as root. The /dev/mem arms write only into the DDR frame
- * buffers, i.e. the same bytes the emulator writes, so a loaded core just shows
- * noise. The /dev/fb0 arm scribbles on the framebuffer console.
+ * Run on the device as root. The four store-form arms write only into the DDR
+ * frame buffers, i.e. the same bytes the emulator writes, so a loaded core just
+ * shows noise. Two arms reach further and are worth knowing about before you
+ * run this against something you care about: the doorbell arm drives the
+ * control word for 10000 iterations, so a loaded core's reader follows it
+ * through 10000 buffer flips and then sees the counter jump backwards when the
+ * saved value is restored; and the /dev/fb0 arm scribbles on the framebuffer
+ * console.
  *
  * For the arm that matters:
  *   insmod mem_wc.ko phys_base=0x3A000000 phys_size=0x00400000
@@ -44,6 +49,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <linux/fb.h>
 #include <arm_neon.h>
 
 #define NV_BASE   0x3A000000u
@@ -194,8 +201,29 @@ static void bench_fb0(const uint8_t *src, double so_rate)
         printf("  %-22s %-18s unavailable (/dev/fb0)\n", "--", "fb0 (probe)");
         return;
     }
-    /* Map exactly one frame; the console framebuffer is at least this big on
-     * any mode MiSTer sets, and a short mapping keeps the scribble bounded. */
+    /* Ask fbdev how much there actually is, rather than assuming the console
+     * framebuffer is at least FRAME on any mode MiSTer sets. mmap() of /dev/fb0
+     * succeeds for any length -- it maps the smem region and leaves the rest of
+     * the vma to fault -- so a framebuffer smaller than FRAME would not fail
+     * here, it would SIGBUS partway through the first memcpy and kill the bench
+     * on the machine you are trying to diagnose.
+     *
+     * Measured on 5.15.1-MiSTer: smem_len 1228800, comfortably over FRAME, so
+     * the assumption happens to hold on this device in the mode it was in. It
+     * is not something fbdev guarantees across modes or kernels, and the cost
+     * of checking is one ioctl once. */
+    struct fb_fix_screeninfo fix;
+    if (ioctl(fd, FBIOGET_FSCREENINFO, &fix) != 0) {
+        printf("  %-22s %-18s FBIOGET_FSCREENINFO failed\n", "--", "fb0 (probe)");
+        close(fd);
+        return;
+    }
+    if (fix.smem_len < FRAME) {
+        printf("  %-22s %-18s skipped: smem_len %lu < frame %u\n", "--",
+               "fb0 (probe)", (unsigned long)fix.smem_len, FRAME);
+        close(fd);
+        return;
+    }
     void *m = mmap(NULL, FRAME, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (m == MAP_FAILED) {
         printf("  %-22s %-18s mmap failed\n", "--", "fb0 (probe)");

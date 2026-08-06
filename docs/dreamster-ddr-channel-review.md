@@ -1,7 +1,9 @@
 # DreamSTer's DDR channel — review, and what of it applies here
 
 **Date:** 2026-08-04
-**Status:** research only. No code changed, no device run.
+**Status:** implemented and measured on device (5.15.1-MiSTer, 2026-08-05).
+The analysis below is as written on 2026-08-04; where hardware contradicted
+it, the correction is inline and says so.
 **Prompted by:** [issue #4](https://github.com/gmcnaught/mamester/issues/4) —
 benchmark `/dev/mem_wc` write performance on MiSTer.
 **Method:** static reading of `skmp/DreamSTer` and its two relevant submodules,
@@ -98,7 +100,9 @@ pfn is valid, it just sets `pgprot_writecombine` unconditionally and calls
 `remap_pfn_range`. On ARM32 that is `L_PTE_MT_BUFFERABLE`, Normal Non-Cacheable,
 which permits store merging in the write buffer; `pgprot_noncached` is
 `L_PTE_MT_UNCACHED`, Strongly-Ordered, which does not. That difference *is* the
-89.5 → ~540 MB/s gap.
+gap — measured on device at **89.0 → 858.5 MB/s**, further than the ~540 MB/s
+estimated here, because that estimate used the cached-RAM figure as a ceiling
+and streaming stores into non-cacheable memory beat it (§7.2).
 
 ### 1.2 The safety argument, which is stronger than it first looks
 
@@ -117,10 +121,11 @@ settles it:
   write-combined** (branch 2 above), the A/B would not have been a null, and we
   would not need the module at all.
 
-So either the module is unnecessary, or it is safe. **[UNK]** The one gap: on
-SPARSEMEM, `pfn_valid()` can be true for a hole inside a populated section. Worth
-one `cat /proc/iomem` on device (is `0x3A000000` inside a "System RAM" range?)
-rather than an argument.
+So either the module is unnecessary, or it is safe. The one gap in the argument:
+on SPARSEMEM, `pfn_valid()` can be true for a hole inside a populated section.
+Settled on device rather than by argument — `/proc/iomem` reports System RAM as
+`00000000-1fefffff` and nothing else, so `0x3A000000` is outside it and there is
+no linear-map alias (§7.1).
 
 ---
 
@@ -333,8 +338,11 @@ exactly the class of bug that gets misattributed to the reader RTL.
 
 ### 6.1 What landed
 
-Items 1 and 3–5 are implemented; **nothing here has been run on hardware**, so
-item 2 and every number in §7 are still open.
+Items 1 and 3–5 are implemented and item 2 has now been run on hardware.
+Headline: **the present goes 4.231 → 0.506 ms/frame at 512×384 (8.4×)**, and
+flat-out frame rate rises 18.8 % (`mk`, with sound) to 72.6 % (`robotron`,
+`-nosound`) across the five drivers benched. §7 records which of its unknowns
+that closed.
 
 | Where | What |
 |---|---|
@@ -364,10 +372,18 @@ Two details the implementation had to deal with that the analysis did not
 anticipate:
 
 - **`BUF0` begins 0x40 into page 0**, so its first 4032 bytes stay
-  strongly-ordered. That is ~4 lines of a 512-wide frame, ~45 µs against the
-  ~700 µs the rest of the copy should cost under WC — ~1 %, in exchange for the
-  window staying one linear pointer instead of `nv_frame()` growing a
-  straddling special case.
+  strongly-ordered — ~4 lines of a 512-wide frame, ~45 µs at 89 MB/s — in
+  exchange for the window staying one linear pointer instead of `nv_frame()`
+  growing a straddling special case. **Measured cost, 512×384: 0.506 ms per
+  present against 0.440 ms into a destination that is WC all the way down, so
+  ~13 %.** This bullet first called it ~1 %, dividing the same 45 µs by a 700 µs
+  estimate for the rest of the copy — which is 6 % on its own numbers, and the
+  real WC copy is faster than 700 µs, which makes the share larger still.
+
+  No split of *this* layout can do better: page 0 holds the control word **and**
+  `BUF0`'s first 4032 bytes. Recovering the ~66 µs means moving `BUF0` from
+  `0x40` to `0x1000` in `openbor_video_reader.sv` — worth folding into the next
+  reader revision, not worth one on its own against a 3.7 ms/frame win.
 - **`MAP_FIXED` unmaps its target range before the driver's `.mmap` runs**, so a
   mapping the driver then rejects — `mem_wc` loaded with an allowlist that does
   not cover our window returns `-EPERM` — would leave a *hole* mid-window rather
@@ -385,14 +401,57 @@ invariant to check if this is ever refactored: *every doorbell store in
 
 ## 7. Unknowns
 
-1. Does `0x3A000000` sit in a "System RAM" range (§1.2)? Gates the safety
-   argument, though both branches are benign.
-2. Actual WC throughput at 512×384 on this kernel — the ~540 MB/s target is the
-   *cached* figure and WC will land below it; unknown how far.
-3. Whether MiSTer's kernel exposes `/proc/config.gz` and whether the 5.15.1
-   vermagic recipe in minicast's README still matches current MiSTer releases.
+Items 1–3 were open when this document was written and were closed on device
+(5.15.1-MiSTer) before merge; they are kept with their answers rather than
+deleted, because the answers are the evidence.
+
+1. ~~Does `0x3A000000` sit in a "System RAM" range (§1.2)?~~ **No.**
+   `/proc/iomem` reports System RAM as `00000000-1fefffff` and nothing else.
+   The window is outside it, so there is no kernel linear-map alias and §1.2
+   lands on its benign branch.
+2. ~~Actual WC throughput at 512×384 — the ~540 MB/s target is the *cached*
+   figure and WC will land below it; unknown how far.~~ **It lands above it:**
+   858.5 MB/s WC vs 544.4 MB/s cached, against 89.0 MB/s strongly-ordered.
+   Streaming stores into non-cacheable memory skip read-for-ownership and do not
+   evict anything, so the cached figure was never the ceiling.
+3. ~~Whether MiSTer's kernel exposes `/proc/config.gz`, and whether the 5.15.1
+   vermagic recipe still matches.~~ **Both yes.** `/proc/config.gz` is present;
+   `Linux-Kernel_MiSTer` + that config + `LOCALVERSION=-MiSTer` produces
+   vermagic `5.15.1-MiSTer SMP mod_unload ARMv7 p2v8`, which `insmod` accepts.
 4. `MISTER_FB` geometry coverage (unchanged from the present-path doc's §6.4) —
    only relevant if we pursue `/dev/fb0` as a transport rather than a probe.
+5. **Whether `dsb sy` is sufficient to make the pixel stores visible to the
+   FPGA, or whether the PL310 store buffer can hold them past the doorbell.**
+   Open, and the one hazard write-combining introduces that §5.1's barrier work
+   does not cover.
+
+   `dsb sy` drains the *CPU's* write buffer. It does not drain the L2C-310's.
+   This SoC selects `CONFIG_PL310_ERRATA_769419` (`arch/arm/mach-socfpga/
+   Kconfig:20`), described in `arch/arm/mm/Kconfig` as *"the Store Buffer does
+   not automatically drain. This can cause normal, non-cacheable writes to be
+   retained when the memory system is idle"* — which is exactly the memory type
+   the pixel pages now use. The kernel's own `wmb()` is `dsb(st)` followed by
+   `arm_heavy_mb()` → `outer_sync()`, a write to the PL310 `CACHE_SYNC`
+   register. Userspace cannot issue that. Under the old all-strongly-ordered
+   mapping the question did not arise; SO writes are not store-buffered this
+   way.
+
+   The failure it would produce is a frame published while some of its pixels
+   are still in the store buffer: a torn frame, rare, self-healing on the next
+   present, and very easy to misattribute to the reader RTL.
+
+   Measured, and found no signal: 12 screenshots of a 60 Hz alternating
+   solid-red/solid-blue soak under WC produced 1 split frame, and 12 under a
+   forced-`MISTER_NO_WC` control produced 1 as well (boundaries at row 381 and
+   row 40). Both are single clean horizontal splits at a scanline boundary —
+   the free-running publish-vs-scanout race, which is inherent to the design and
+   present in *both* arms. Nothing WC-specific. But 12 frames per arm cannot
+   clear a one-in-a-few-thousand hazard.
+
+   If tearing is ever reported against a WC build, the fix is small and is in
+   code we already ship: an ioctl on `mem_wc` that calls `outer_sync()`, invoked
+   from `NV_FENCE()`. Not added pre-emptively — it costs a syscall per frame and
+   there is no repro to test it against.
 
 ## Sources
 
