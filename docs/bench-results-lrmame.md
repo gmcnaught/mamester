@@ -162,6 +162,8 @@ invisible in a summary — a mean over four reps would have reported +23.6%.
 `MISTER_PROFILE=1000`, 600 frames, 23,643 samples, symbolised against the
 `SYMBOLS=1` build. Needs an unstripped core — the shipped
 `lrmame_libretro.so` has no `.symtab` at all, so this had to wait for a build.
+The raw dump every figure below is read off is
+[`prof-s1945ii.txt`](prof-s1945ii.txt).
 
 **19% of the run is ROM load, not emulation.** `sha1_process` 14.8%,
 `inflate_fast` 2.3%, `read_rom_data` 1.2%, `sha1_creator::append` 1.0%. That is
@@ -424,7 +426,14 @@ keep it.
 
 ## Open
 
-- **The render-pipeline bypass** for `rgb32` drivers — 12.5%, software only.
+- ~~**The render-pipeline bypass** for `rgb32` drivers~~ — DONE, +7.1%. What is
+  left of the 12.5% estimate is the `memcpy` the fast path still does; removing
+  it means handing the driver's bitmap pointer to `nv_present`.
+- **MAME's UI** is NOT a lever. Startup screens are already compiled out for
+  `__LIBRETRO__` (`ui.cpp:666`); at steady state `update_and_render` empties
+  every container and `handler_ingame` draws nothing, so the frame-300 primitive
+  list is exactly one quad on both `pacman` and `s1945ii`. No UI symbol appears
+  in the profile. Skipping `draw_user_interface` outright is sub-1%.
 - **FPGA palette lookup at scanout** for `ind16` drivers — 18%, needs RTL.
 - **`M16B`'s stride bug** — ~9% / ~2%, in a code path upstream marked FIXME.
 - **FPGA format-convert offload** — ~6.6% / ~2%, needs RTL.
