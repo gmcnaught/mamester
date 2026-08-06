@@ -228,6 +228,65 @@ def check_roms(dev: Device):
     print("           browser will be empty. Copy 0.37b5 romsets in.")
 
 
+# ------------------------------------------------------ write-combining module
+
+MEM_WC_DIR = REPO / "tools" / "mister" / "mem_wc"
+
+
+def push_mem_wc(dev: Device, do_bin: bool):
+    """Ship the module that makes the present path write-combining.
+
+    Two sources, in this order:
+
+      tools/mister/mem_wc/mem_wc.ko                     a local build, if any
+      tools/mister/mem_wc/prebuilt/mem_wc-<release>.ko  committed, per kernel
+
+    A local build wins, because someone who just ran `make` in that directory
+    means the thing they built. The prebuilt set is keyed by `uname -r` rather
+    than being one mem_wc.ko, because the module carries a vermagic string and
+    the kernel refuses it if that does not match exactly. Keying by release
+    turns a MiSTer kernel update into "no file for that release, say so and
+    carry on" instead of "ship the 5.15.1 object to a 6.x kernel and let insmod
+    fail in the field with no explanation".
+
+    Never fatal. The module is a PERFORMANCE dependency: without it nv_present.c
+    falls back to the strongly-ordered /dev/mem mapping, which costs ~3.7 ms of
+    every frame at 512x384 and nothing else. See tools/mister/mem_wc/README.md.
+    """
+    local = MEM_WC_DIR / "mem_wc.ko"
+    if local.is_file():
+        push(dev, local, f"{GAMEDIR}/mem_wc.ko")
+        print(f"  built  {local.relative_to(REPO)} (local build wins over prebuilt)")
+        print("  _handler.sh insmods it at core launch "
+              "(phys_base=0x3A000000 phys_size=0x00400000)")
+        return
+
+    release = dev.run("uname -r", check=False, quiet=True)
+    if not release:
+        print("  could not read the device's `uname -r` — skipping the module; "
+              "the present path will use the strongly-ordered mapping")
+        return
+
+    prebuilt = MEM_WC_DIR / "prebuilt" / f"mem_wc-{release}.ko"
+    if prebuilt.is_file():
+        push(dev, prebuilt, f"{GAMEDIR}/mem_wc.ko")
+        print(f"  vermagic {release}")
+        print("  _handler.sh insmods it at core launch "
+              "(phys_base=0x3A000000 phys_size=0x00400000)")
+        return
+
+    # Leave any previously-deployed .ko alone: it may have been built for this
+    # kernel by hand. _handler.sh will try it and ignore the failure if not.
+    have = sorted(p.name for p in (MEM_WC_DIR / "prebuilt").glob("mem_wc-*.ko"))
+    print(f"  no module for kernel {release} — the present path will use the "
+          "strongly-ordered /dev/mem mapping (~4.2 ms/frame at 512x384).")
+    if have:
+        print(f"  prebuilt available: {', '.join(have)}")
+    if do_bin:
+        print("  Build one for this kernel with tools/mister/mem_wc/ (see its "
+              "README) to recover ~3.7 ms/frame.")
+
+
 # ------------------------------------------------------------------------ main
 
 def main():
@@ -303,21 +362,8 @@ def main():
                 print(f"  WARNING: {path.relative_to(REPO)} missing ({why}) — "
                       f"not deployed; build with {how}")
 
-    # Optional and deliberately non-fatal: the module is built out-of-tree
-    # against one MiSTer kernel's vermagic, so most checkouts will not have it.
-    # Without it the present path still works, just strongly-ordered.
-    ko = REPO / "tools" / "mister" / "mem_wc" / "mem_wc.ko"
-    if ko.is_file():
-        print("\nwrite-combining module")
-        push(dev, ko, f"{GAMEDIR}/mem_wc.ko")
-        print("  _handler.sh insmods it at core launch "
-              "(phys_base=0x3A000000 phys_size=0x00400000)")
-    elif do_bin:
-        print("\nwrite-combining module")
-        print("  mem_wc.ko not built — the present path will use the "
-              "strongly-ordered /dev/mem mapping (~4.2 ms/frame at 512x384).")
-        print("  Build it with tools/mister/mem_wc/ (see its README) to "
-              "recover ~3.5 ms/frame.")
+    print("\nwrite-combining module")
+    push_mem_wc(dev, do_bin)
 
     if do_rbf:
         print("\ncore")

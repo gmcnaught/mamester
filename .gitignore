@@ -52,8 +52,10 @@ tools/mister/test_frame_writer
 # Local build of the DDR write microbenchmark (tools/mister/ddr-write-bench.c)
 tools/mister/ddr-write-bench
 
-# Out-of-tree kernel module build output (tools/mister/mem_wc/). The .ko is
-# kernel-version-specific — built per device, never committed.
+# Out-of-tree kernel module build output (tools/mister/mem_wc/). A local build
+# lands here and is NOT committed; the shipped objects live in
+# tools/mister/mem_wc/prebuilt/, one per kernel release, and these patterns are
+# directory-local so they do not reach them.
 tools/mister/mem_wc/*.ko
 tools/mister/mem_wc/*.mod
 tools/mister/mem_wc/*.mod.c

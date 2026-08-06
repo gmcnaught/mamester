@@ -81,12 +81,41 @@ Produces `mem_wc.ko`. The running kernel has `CONFIG_MODVERSIONS` and
 **only the vermagic string has to match**, which building against the same
 source + `.config` guarantees.
 
+## Prebuilt
+
+`prebuilt/` holds one committed object per kernel release:
+
+```
+prebuilt/mem_wc-5.15.1-MiSTer.ko     5.3 KB, vermagic "5.15.1-MiSTer SMP mod_unload ARMv7 p2v8"
+```
+
+Committed rather than left to every user to build, because building it needs a
+full kernel tree, the device's `/proc/config.gz` and a cross toolchain — and
+"optional" would otherwise mean "off for everyone", i.e. everyone silently
+paying ~3.7 ms of every frame. The GPL-2.0 source sits next to it, so shipping
+the object alongside it is exactly what the licence asks for. Stripped of debug
+info, which is 128 KB of the 133 KB and none of it reaches the kernel.
+
+**Named for its vermagic on purpose.** The kernel refuses a module whose
+vermagic does not match exactly, so a MiSTer kernel update must turn into "there
+is no object for this release, say so and carry on", never "ship the 5.15.1
+object to a 6.x kernel and let `insmod` fail in the field". After building
+against a new kernel:
+
+```sh
+make prebuilt KDIR=/path/to/Linux-Kernel_MiSTer   # strips + names it by vermagic
+git add prebuilt/mem_wc-<release>.ko
+```
+
+`mem_wc.ko` at the top of this directory is a local build and stays gitignored.
+
 ## Install
 
-`deploy.py` pushes `mem_wc.ko` to `/media/fat/games/mame/mem_wc.ko` when it has
-been built (it is optional — deploy warns and continues if absent), and
-`games/MAMESTer/_handler.sh` loads it at core launch, restricted to this core's
-own window:
+`deploy.py` ships the module to `/media/fat/games/mame/mem_wc.ko`, preferring a
+local `mem_wc.ko` over `prebuilt/mem_wc-$(uname -r).ko` — if you just ran `make`
+here, that is the object you meant. Absent both, it says which kernel it wanted
+and continues; the module is never fatal. `games/MAMESTer/_handler.sh` loads it
+at core launch, restricted to this core's own window:
 
 ```sh
 insmod /media/fat/games/mame/mem_wc.ko phys_base=0x3A000000 phys_size=0x00400000
