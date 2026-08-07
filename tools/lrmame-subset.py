@@ -17,11 +17,19 @@ The filters, in order, each reported with what it dropped:
    `MACHINE_IS_SKELETON`, `MACHINE_IS_BIOS_ROOT`. A family with no working
    parent left is not a shippable family. This is the single largest cut and it
    is MAME's own judgement, not ours.
-2. **Already covered**, by the Stage 8 scope rule: a MiSTer core (any member has
-   an MRA), or mame4all (any member setname is in the 0.37b5 build -- matching on
-   setnames, never filenames, because driver files get renamed between versions).
-   Plus `coverage-diff.py`'s reviewed exclusion lists: NeoGeo, the console-core
-   false gaps, and the PS1-class 3D families.
+2. **Covered by a MiSTer FPGA core** -- any member has an MRA -- plus
+   `coverage-diff.py`'s reviewed exclusion lists: NeoGeo, the console-core false
+   gaps, and the PS1-class 3D families.
+
+   **mame4all having a family is NOT a reason to exclude it** (operator rule,
+   2026-08-07): the engine ladder is mame4all 0.37b5 < 2003-plus 0.78 <
+   lrmame 0.289, and the newest engine that holds real time wins. mame4all is the
+   FALLBACK for a family lrmame cannot run at 60 Hz, which is a fact about a
+   measurement that has not been taken yet -- so those families have to be IN the
+   build for the comparison to be possible at all. They are labelled in the kept
+   table instead, and `--skip-mame4all` restores the old behaviour. The `mame "*"
+   -sourcefile` input stays required because that label is what says which
+   families have a fallback if lrmame comes up short.
 3. **Gambling and mahjong.** Fruit machines, poker and pachislot are ~40% of what
    0.289 adds over 0.37b5 and none of it is why this port exists. Two rules, both
    printed in full so they can be argued with: a gambling-manufacturer vendor
@@ -195,6 +203,11 @@ def main():
     ap.add_argument("--mame4all", required=True)
     ap.add_argument("--src", default=os.environ.get(
         "LRMAME_SRC", os.path.join(os.path.dirname(here), "vendor", "lrmame")))
+    ap.add_argument("--skip-mame4all", action="store_true",
+                    help="drop families mame4all already runs. OFF by default: "
+                         "the newest engine that holds real time wins, so a "
+                         "family mame4all has still needs to be in the lrmame "
+                         "build for the two to be compared on it")
     ap.add_argument("--keep", action="append", default=[],
                     help="family path to retain regardless of the gambling rule "
                          "(repeatable)")
@@ -255,7 +268,8 @@ def main():
         if any(g["name"] in mra for g in members):
             dropped["MiSTer core (MRA)"].append(entry)
             continue
-        if any(g["name"] in m4a_sets for g in members):
+        in_mame4all = any(g["name"] in m4a_sets for g in members)
+        if in_mame4all and args.skip_mame4all:
             dropped["mame4all already has it"].append(entry)
             continue
         if family in coverage_diff.FALSE_GAP_FAMILIES:
@@ -301,6 +315,7 @@ def main():
             continue
 
         kept[family_raw] = {"parents": len(parents), "drc": cls,
+                            "mame4all": in_mame4all,
                             "example": parents[0]["description"]}
 
     # Parent closure. A retained clone whose parent lives elsewhere is
@@ -347,7 +362,10 @@ def main():
     add(f"- **{total_parents} parent romsets** of coverage value")
     add(f"- of the {len(kept)} coverage files, "
         f"**{sum(1 for v in kept.values() if v['drc'] == 'ok')}** need "
-        "`drcbearm32` (SH-2/SH-3)\n")
+        "`drcbearm32` (SH-2/SH-3)")
+    add(f"- **{sum(1 for v in kept.values() if v.get('mame4all'))}** of them have a "
+        "mame4all fallback if lrmame cannot hold 60 Hz; the other "
+        f"**{sum(1 for v in kept.values() if not v.get('mame4all'))}** do not\n")
     add("## Dropped\n")
     add("| reason | files | parents |")
     add("|---|---:|---:|")
@@ -375,11 +393,15 @@ def main():
             add(f"| `{family_raw}` | {count} | {example} |")
         add("")
     add(f"## Kept — {len(kept)} files, {total_parents} parents\n")
-    add("| file | parents | DRC | example |")
-    add("|---|---:|---|---|")
+    add("`fallback` marks a family mame4all also runs: if lrmame cannot hold 60 Hz")
+    add("there, the game ships on the older engine instead of not shipping. A blank")
+    add("means lrmame is the only engine that has it, so its fps number is the whole")
+    add("decision.\n")
+    add("| file | parents | DRC | fallback | example |")
+    add("|---|---:|---|---|---|")
     for family_raw, v in sorted(kept.items(), key=lambda kv: -kv[1]["parents"]):
         add(f"| `{family_raw}` | {v['parents']} | {v['drc'] or '—'} | "
-            f"{v['example']} |")
+            f"{'mame4all' if v.get('mame4all') else '—'} | {v['example']} |")
     add("")
     if closure:
         add(f"## Pulled in by parent closure — {len(closure)} files\n")
