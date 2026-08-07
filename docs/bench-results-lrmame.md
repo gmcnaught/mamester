@@ -29,12 +29,19 @@ behaviour differs.
 | lever | reps | `pacman` A → B | `s1945ii` A → B | verdict |
 |---|---:|---|---|---|
 | write-combining (A = `MISTER_NO_WC=1`) | 3 | 90.5 → 104.1 (**+15.0%**) | 32.6 → 34.3 (**+5.0%**) | real |
-| `MISTER_SCHED_RT=5` | 6 | 105.4 → 113.3 (see below) | 34.3 → 38.3 (**+11.6%**) | real |
+| `MISTER_SCHED_RT=5` | 6 | 105.4 → 113.3 (see below) | 34.3 → 38.3 (**+11.6%**) | **overturned** |
 | `MISTER_THREADED_PRESENT=1` | 3 | 105.1 → 103.6 (−1.4%) | 34.4 → 34.4 (+0.1%) | null |
 | `MISTER_EMU_CPU=0` | 3 | 104.5 → 105.4 (+0.8%) | 33.9 → 34.1 (+0.6%) | null |
 
 Per-cell spread was under 1% in every cell of the write-combining run, which is
 what lets a +5.0% be read as real rather than as the noise floor.
+
+**These figures were measured on the pre-bypass host and only write-combining
+survived re-measurement on the current one.** `SCHED_RT` re-measures at −1.8% on
+`lrmame-fast`, i.e. it changed sign, and stacking all three costs 3.8% — see
+[Stacking all three shipping-candidate levers makes it *slower*](#stacking-all-three-shipping-candidate-levers-makes-it-slower).
+**Shipping configuration is write-combining on, everything else off**, which is
+what the defaults already are.
 
 ### `SCHED_RT`: report the median on `pacman`, not the mean
 
@@ -240,14 +247,61 @@ discrete-sound driver before believing either sign.
 
 ## Where `s1945ii` stands
 
-34.3 fps baseline against the 60 it needs — a 75% gap. Best measured stack so
-far is write-combining + `SCHED_RT` + the salvaged host, and none of the
-remaining host-side levers stack with each other, so the ceiling from this page
-is roughly 38–39 fps. The profile says why: a third of the steady state is the
-JIT'd SH-2 and the rest is spread thin. Closing the gap needs either the
-renderer arm (`M16B`, 8.8%) landing well, or a different engine for this driver.
+**39.0 fps** against the 60 it needs, on the current best binary (`lrmame-fast`
+= salvaged host + the `rgb32` render-pipeline bypass) with write-combining on
+and nothing else. That is a 35% gap, and it is the whole of what this page's
+levers deliver. The profile says why the rest is hard: a third of the steady
+state is the JIT'd SH-2 and the remainder is spread thin. **Nothing left on this
+page closes a 35% gap.** The render pipeline was 8.8% here and the bypass has
+already taken most of it; what remains of that estimate is the full-frame
+`memcpy` the fast path still does, worth a few percent. `M16B` is dead (below).
+The realistic routes are handing the driver bitmap pointer straight to
+`nv_present`, or a different engine for this driver.
 
-## `M16B` is faster and it renders garbage
+### Stacking all three shipping-candidate levers makes it *slower*
+
+Write-combining + `MISTER_SCHED_RT=5` + `MISTER_THREADED_PRESENT=1`, all on
+`lrmame-fast`, interleaved, 4 reps, 600 frames:
+
+| A arm | B arm | `pacman` | `s1945ii` |
+|---|---|---|---|
+| `MISTER_NO_WC=1`, nothing else | WC + RT + threaded | 97.3 → 107.4 (**+10.4%**) | 37.0 → 37.5 (+1.3%) |
+| WC only (shipping default) | WC + RT + threaded | — | 39.0 → **37.5 (−3.8%)** |
+| WC only | WC + `SCHED_RT=5` | — | 38.7 → 38.0 (−1.8%) |
+| WC + `SCHED_RT=5` | + `THREADED_PRESENT=1` | — | 37.3 → 37.5 (+0.5%) |
+
+All three were verified to engage in the B arm, not silently decline:
+
+```
+nv_present: pixel buffers write-combined via /dev/mem_wc
+MISTER-HOST: emulation pinned to cpu0, present worker to cpu1
+MISTER-HOST: threaded present (worker owns nv_present)
+MISTER-HOST: SCHED_FIFO priority 5
+... 0 present-dropped ... present=write-combined
+```
+
+**Write-combining is the only one of the three that is still worth anything,
+and `SCHED_RT` has changed sign.** It measured +11.6% on `s1945ii` earlier on
+this page; re-measured on the bypass binary it is −1.8%, and the loss is
+consistent across every rep except one (the same bimodal fast outlier that
+`SCHED_RT` produced on `pacman`). Threaded present remains null (+0.5%), as it
+was when measured on top of WC alone.
+
+The general lesson is the one the salvage baseline already taught: **a lever
+measured against one binary does not carry to another.** `SCHED_RT` bought back
+preemption during a frame that was ~29 ms of emulation plus a full
+`draw_primitives` pass; the bypass removed part of that frame, and what is left
+does not pay for a `SCHED_FIFO` thread on a two-core box that also has to run
+Main_MiSTer, `Master_Daemon.sh`, `game_manager.sh` and `solarus_daemon.sh`. The
+lever has to be re-run after any change to the thing being measured.
+
+Practical consequence: **ship WC on, `SCHED_RT` off, threaded present off** —
+which is what the defaults already are, and `SCHED_RT` keeps the untriaged-
+driver wedge risk that kept it opt-in in the first place. Raw rows in
+`/tmp/lev-stack.tsv`, `/tmp/lev-rt2.tsv`, `/tmp/lev-thr2.tsv`,
+`/tmp/lev-all3.tsv` on the device.
+
+## `M16B` measured faster only because it rendered garbage
 
 Measured, 4 reps, interleaved, both arms built from one tree with `SYMBOLS=1`
 and differing only by `-DM16B`:
@@ -280,9 +334,35 @@ is the gate.** (The XRGB arm's hash `912aeffbaed7ea59` does match the one PR #7
 recorded for `s1945ii`, which is a useful check that this rebuild is equivalent
 to the tested one.)
 
-Fixing it means finding the stride bug in 0.289's 16-bit path. Worth ~9% on a
-light driver and ~2% on a heavy one, so it is not urgent, and the FPGA route
-below gets part of the same win without touching a bit-rotted code path.
+### Resolved: the stride bug *was* the win
+
+The bug is in `drawretro.cpp`, one line. `M16B` makes `libretro.cpp` declare
+`videoBuffer` as `uint16_t` and report `RETRO_PIXEL_FORMAT_RGB565`
+(`libretro.cpp:64-70`, `:774`), but the `software_renderer<>` instantiation was
+unconditionally `<uint32_t, 0,0,0, 16,8,0>` — so the renderer wrote 4-byte
+pixels with a pitch counted in `uint32_t` units into a buffer the frontend read
+as 2-byte RGB565. A 2:1 stride mismatch, which is exactly the skew in the
+screenshot above. The pitch argument is in `PixelType` units and the buffer is
+`width` pixels wide either way, so only the instantiation changes;
+`<uint16_t, 3,2,3, 11,5,0>` is MAME's own RGB565 form (`drawsdl.cpp:446`).
+
+Fixed in `tools/lrmame-patches/0001-drawretro-m16b-and-direct-blit.patch`.
+Output is now MD5-identical to the XRGB8888 arm — and the re-measurement is the
+point:
+
+| game | XRGB8888 | `M16B`, fixed | delta |
+|---|---:|---:|---:|
+| `pacman` | — | — | **−2.6%** |
+| `s1945ii` | — | — | **−0.2%** |
+
+**The entire earlier +8.7% was the bug**: writing half as many bytes as the
+format requires is faster, and it is not a rendering mode. The fix ships because
+the mode is now honest, not because it is fast. `M16B` is off, and there is no
+lever here.
+
+Note that the fast path below is deliberately **not** enabled under `M16B` —
+there the destination is RGB565 and the source is XRGB8888, so it is a
+conversion rather than a copy.
 
 ## Where the frame time actually goes on a light driver
 
@@ -435,7 +515,11 @@ keep it.
   list is exactly one quad on both `pacman` and `s1945ii`. No UI symbol appears
   in the profile. Skipping `draw_user_interface` outright is sub-1%.
 - **FPGA palette lookup at scanout** for `ind16` drivers — 18%, needs RTL.
-- **`M16B`'s stride bug** — ~9% / ~2%, in a code path upstream marked FIXME.
+- ~~**`M16B`'s stride bug**~~ — fixed, and it deleted the win: honest RGB565
+  measures −2.6% / −0.2%. Not a lever.
+- ~~**Environment levers beyond write-combining**~~ — `SCHED_RT` changed sign on
+  the bypass binary (−1.8%), threaded present and `EMU_CPU` are null, and all
+  three stacked are −3.8%. Ship WC only.
 - **FPGA format-convert offload** — ~6.6% / ~2%, needs RTL.
 - **ROM-load latency.** ~19% of a 21-second run is SHA-1 verification of the
   romset. It costs no frames but it is seconds of launch delay on every start,

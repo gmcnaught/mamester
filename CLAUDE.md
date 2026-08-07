@@ -58,10 +58,16 @@ number is the A9's actual ceiling for that driver. Bench figures without
   shades. No per-game RBF, no output-PLL reconfig. Off-60 Hz refresh rides the
   framework's `vsync_adjust`. Accepted trade: this gives up the lowest-latency
   analog "direct video" mode.
-- **Video build target:** mame4all-pi for v1 (standalone ELF, ALSA already,
-  RGB565-native = zero convert, built for sub-A9 silicon). MAME 2003-Plus is the
-  coverage/accuracy upgrade behind the same framebuffer/ALSA/evdev frontend (needs a
-  minimal libretro driver; `bitmap_rgb32`→RGB565 NEON convert).
+- **Three engines behind one frontend**, selected per game by the `engine` line in
+  `opts/<setname>.opt`; the framebuffer/ALSA/evdev host is shared.
+  - **mame4all-pi (0.37b5)** — v1 default. Standalone ELF, ALSA already,
+    RGB565-native = zero convert, built for sub-A9 silicon.
+  - **mame2003-plus (0.78)** — the coverage/accuracy upgrade, behind a minimal
+    libretro host (`bitmap_rgb32`→RGB565 NEON convert).
+  - **lrmame (MAME 0.289)** — `make ENGINE=lrmame`. Gate passed: `pacman` 88.3 fps
+    with sound. Needs the bookworm/gcc-12 C++20 cross container with a bullseye
+    2.31 target tree, and carries `drcbearm32` (this repo's ARM32 DRC back-end,
+    ~7.4× on SH-2) plus a render-pipeline bypass for `rgb32` drivers (+7.1%).
 - **Launch** via Master_Daemon + `games/<setname>/_handler.sh` (app as a child of
   stock `Main_MiSTer`), **never** the `main=` wrapper — the sibling ports measured
   the wrapper causing frame-1 wedges (maldita 3/5 vs 0/5).
@@ -130,6 +136,16 @@ popeye/spyhunt stall). Establish the shippable list, and judge it with sound on
 
 ## Licensing
 
-Both MAME builds are the pre-2016 **non-commercial MAME license** (not GPL): no
-commercial packaging, source disclosure required, no ROM bundling, derivatives carry
-a distinct name. Keep the port layer's own license compatible and never commit ROMs.
+**The three engines are not under the same license, and the difference is a
+release boundary.**
+
+- **mame4all-pi (0.37b5) and mame2003-plus (0.78)** are the pre-2016
+  **non-commercial MAME license** (not GPL): no commercial packaging, source
+  disclosure required, no ROM bundling, derivatives carry a distinct name.
+- **lrmame (0.289)** is **GPL-2.0-or-later / BSD-3-Clause** — MAME relicensed at
+  **0.172**. Less restrictive, but different obligations: copyleft on
+  distribution of the combined work rather than a non-commercial clause.
+- `tools/mister/mem_wc/` is vendored from minicast under **GPL-2.0**.
+
+Keep the port layer's own license compatible with all three, and never commit
+ROMs.

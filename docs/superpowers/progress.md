@@ -27,10 +27,19 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
   rename "MAME" — it means the emulator in most refs.
 - Present path: mame4all → `mister_video.cpp` `nv_present()` → `0x3A000000` DDR
   double-buffer → `openbor_video_reader` → scaler → HDMI/analog.
-- **Stage 11 (`drcbearm32`, the ARM32 DRC back-end) is lowered in full** and
-  agrees with `drcbe_c` on 77 differential cases over twelve input states,
-  under qemu. It has never run a driver, and the emulated-memory opcodes have
-  never executed at all — see the stage section for what that leaves open.
+- **The present is write-combined** via `mem_wc.ko` (PRs #5, #8): 4.231 → 0.506
+  ms/frame at 512×384, +18.8% to +72.6% flat-out fps across five drivers. It is
+  the only host lever that survived re-measurement — see the present-path
+  section. Check for `present=write-combined` on the bench line before trusting
+  any present-path number.
+- **Stage 10's gate passed: lrmame (MAME 0.289) runs `pacman` at 88.3 fps with
+  sound**, and `s1945ii` at 39.0 fps against the 60 it needs. Host-side levers
+  are exhausted; the `rgb32` render-pipeline bypass (+7.1%) landed, the `ind16`
+  FPGA palette path (18%) has not.
+- **Stage 11 (`drcbearm32`, the ARM32 DRC back-end) is lowered in full**, agrees
+  with `drcbe_c` on 77 differential cases over twelve input states under qemu,
+  and — on the device — produces **frame hashes bit-identical to `drcbec`** on
+  both `pacman` and `s1945ii`, for **~7.4× on SH-2** (3.8 → 30.1 fps).
 
 | Stage | Status | Commit | Evidence |
 |---|---|---|---|
@@ -41,7 +50,11 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
 | 5 Input | ✅ | (branch) | P1 full map verified bit-by-bit on device; gng played with a pad (642 events, combos included) |
 | 6 Audio | ✅ | (branch) | gng/1943/mk run with sound, no flags; ALSA RUNNING, /dev/MrAudio held by mame; user-confirmed audible |
 | 7 Launch/packaging | ✅ | (branch) | Master_Daemon → handler → manager; `.mgl` shortcuts launch Contra/Galaga from the menu and resolve as picker selections; per-game opts verified; 31 host tests |
-| 8 Driver/romset triage | ⏳ NEXT | — | |
+| 8 Driver/romset triage | ⏳ NEXT | — | 196 families / ~622 drivers have no MiSTer core = the target library |
+| — Present write-combining | ✅ | `5298fa5`, `0eec66b` | present 4.231 → 0.506 ms/frame @512×384; +18.8%…+72.6% fps over 5 drivers (PRs #5, #8) |
+| 9 mame2003-plus engine | ⏳ | (branch) | 288 families swept, 40.3% >75 fps |
+| 10 lrmame (MAME 0.289) | ⏳ gate passed | `8b2eb68`, `1d39a62` | `pacman` 88.3 fps sound on; `s1945ii` 39.0; rgb32 render bypass +7.1%, output MD5-identical (PRs #7, #9) |
+| 11 `drcbearm32` | ⏳ | `afdb28c` | 77/77 differential cases × 12 states; on device, frame hashes identical to `drcbec` and **7.4× on SH-2** |
 
 ## How to resume / environment
 
@@ -50,6 +63,14 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
   Screenshot: `echo screenshot > /dev/MiSTer_cmd` → newest PNG in
   `/media/fat/screenshots/MAMESTer/` (scp back + view). Register peek: `busybox devmem`.
 - **Build the ARM binary:** `tools/build-mame.sh` (armhf/qemu Docker → `vendor/mame4all-pi/mame`).
+  For 0.289: `tools/build-lrmame.sh` (bookworm/gcc-12 C++20 cross container with a
+  bullseye 2.31 target tree — **not** trixie, which is the armhf time64 ABI and
+  builds artefacts the device cannot run). Host: `make ENGINE=lrmame`.
+- **Bench:** `tools/lever-ab.sh` for any A/B — interleaved, alternating arm order,
+  resumable from its own TSV. Load the core first; a present measurement with no
+  core loaded measures nothing. Confirm `present=write-combined` on the bench
+  line, and re-run every lever after changing the binary under test — `SCHED_RT`
+  changed sign between two builds.
 - **Build the RBF:** push `fpga/**` → GitHub Actions `Build MAME RBF` (ubuntu +
   `raetro/quartus:17.0`) → `gh run download <id> -n mame-rbf -D _Other`. (Windows
   self-hosted runner to be added later; Linux is the path today.)
@@ -59,6 +80,11 @@ is `docs/feasibility.md`. Stage order was reordered to **1 → 2 → 4 → 3 →
   ROMs (0.37b5, archive.org Ghostware set) live in
   `/media/fat/games/mame/roms/*.zip`; the modern MiSTer set there verifyroms-OK
   for many titles. `./deploy.py --harness-only` for a scripts-only iteration.
+  **Two deploy traps, both of which have cost a measurement round:** a running
+  `game_manager.sh` does not re-read itself, so the first pick after a deploy
+  runs the *old* manager — kill it and reload the core; and `mem_wc.ko` shipping
+  is not `mem_wc.ko` loading — a stale `_handler.sh` without the `insmod` leaves
+  the present on its Strongly-Ordered fallback silently.
 - **Fabric test without emulator:** `tools/mister/test_frame_writer.c` (writes a
   pattern to `0x3A000000`; run in `animate` mode so the watchdog doesn't blank).
 - **Present contract (`0x3A000000`):** ctrl `= (frame_counter<<2)|active_buf`;
@@ -312,6 +338,66 @@ picks kills the running game and starts the new one; per-game opts reach MAME.
 
 **Ledger note:** `_MAMESTer/*.mgl` and `games/mame/opts/*.opt` are device-side
 user data. The repo ships `games/mame/opts/README.md` documenting the flags.
+
+## Present path — write-combining (done, PRs #5 and #8)
+
+Engine-independent: this is `nv_present.c`, so every engine gets it. Full
+analysis in [`../dreamster-ddr-channel-review.md`](../dreamster-ddr-channel-review.md);
+the origin is DreamSTer's DDR channel, reviewed for what transfers here.
+
+**`/dev/mem` on ARM cannot give a write-combining mapping**, so every present
+since Stage 2 paid Strongly-Ordered stores — one non-buffered write per word to
+DDR. `mem_wc.ko` (a 120-line char driver, vendored from minicast under GPL-2.0
+into `tools/mister/mem_wc/`) exposes an arbitrary physical window as WC. On
+hardware: **present 4.231 → 0.506 ms/frame at 512×384 (8.4×)**, and flat-out
+frame rate up **18.8% (`mk`, sound on) to 72.6% (`robotron`, `-nosound`)** over
+five drivers. The module's own `ddr-write-bench` measures the raw memcpy at
+**9.6× (858.5 vs 89.0 MB/s)**.
+
+**The mapping is split page-exactly, and that is forced rather than tidy:**
+
+```
+0x000000..0x001000   control word + joystick words   strongly-ordered
+0x001000..0x300000   BUF0 / BUF1                     write-combining
+0x300000..0x400000   timing registers                strongly-ordered
+```
+
+The `MAP_FIXED` overlay *replaces* those pages rather than adding a second
+mapping, so no physical page is ever live at two memory types at once. Two
+things the analysis did not anticipate and the implementation had to handle:
+
+- **`BUF0` begins `0x40` into page 0**, so its first 4032 bytes stay
+  strongly-ordered — measured **~13%** of the present (0.506 ms against 0.440
+  into an all-WC destination), not the ~1% first claimed. Recovering it means
+  moving `BUF0` to `0x1000` in `openbor_video_reader.sv`; fold into the next
+  reader revision, not worth one on its own against a 3.7 ms/frame win.
+- **`MAP_FIXED` unmaps its target before the driver's `.mmap` runs**, so a
+  rejected mapping leaves a *hole* mid-window and the next present takes
+  SIGSEGV. `nv_map_wc()` probes at a scratch address first, then overlays.
+
+**Write-combining removes the store ordering the doorbell relied on**, so
+`NV_FENCE()` (`dsb sy`) precedes every doorbell store. The invariant to check if
+`nv_present.c` is ever refactored: *`dsb sy` appears exactly three times — in
+`nv_frame`, `nv_frame_repeat` and `nv_set_mode`.*
+
+**PR #8 ships a prebuilt `.ko` keyed by kernel release**, because building it
+needs a prepared MiSTer kernel tree that a checkout does not have.
+`_handler.sh:84` `insmod`s it at core launch, failure-tolerant, and
+`MISTER_NO_WC=1` forces the documented `/dev/mem` fallback.
+
+**Operational trap, and it cost a whole benchmark round:** the module shipping
+is not the module *loading*. A deployed `_handler.sh` predating the `insmod`
+left `mem_wc.ko` on the device unloaded, `nv_present.c` silently took its
+fallback, and every launch paid Strongly-Ordered stores — including PR #7's
+88.3 fps gate figure, which is therefore an understatement. `nv_present` prints
+which mapping it got and the exit line repeats it:
+
+```
+nv_present: pixel buffers write-combined via /dev/mem_wc
+... present=write-combined
+```
+
+**Check that string before trusting any present-path number.**
 
 ## Stage 8 — driver/romset triage (in progress)
 
@@ -602,10 +688,31 @@ than listed separately — lrmame is the only engine that is not self-contained
 in the dynamic loader before `main()`, which looks nothing like a missing engine.
 Tests 31 → 46.
 
-**Not verified — needs the operator's machine:** the gate itself. This session's
-container has **no `ssh`**, so `.81` was unreachable and nothing was benched, and
-no ROMs exist here to run. The fps number is the whole decision and it does not
-exist yet.
+**THE GATE PASSES — 88.3 fps on `pacman`, sound on** (device, 1800 frames in
+20.39 s, 4 underruns; full run in [`../pr7-test-results.md`](../pr7-test-results.md)).
+0.289's device model, `emumem` dispatch and scheduler are **not** the wall the
+design doc feared, at least for a Z80 driver. `s1945ii` (SH-2, ROT270, 320×224
+@ 60 Hz) also runs, at **30.1 fps** — half speed, and that is the number that
+decides whether the engine is useful beyond trivial drivers.
+
+That 88.3 is an **understatement**: it was measured with `mem_wc` unloaded, on
+the Strongly-Ordered fallback (see the present-path section above).
+
+**Four defects came out of that test round**, all fixed, and the third is the
+one worth remembering: **nothing the trixie container builds can run on the
+MiSTer.** Device glibc is 2.31, trixie's armhf is 2.41, and `--sysroot` does not
+fix it — Debian's cross gcc resolves `crt1.o` and `libc.so` through its own
+prefix. Worse, **trixie *is* Debian's armhf time64 transition**, so its prebuilt
+`libstdc++.a` references `__clock_gettime64` and cannot be flagged out of it.
+The container is now **bookworm/gcc-12** with the bullseye 2.31 target tree,
+plus `tools/mister/glibc231-compat.c` (`__libc_single_threaded`, `arc4random`)
+and `-lpthread`. Nothing caught this before the device: the build was clean and
+so was the qemu run, because qemu was pointed at the container's own libraries
+with `-L`. The other three: `drc-diff` CI fetched only `vendor/lrmame`; the
+documented gate build did not link (`SOURCES=pacman` has no DRC CPU, so
+`drc_diff.cpp` is dropped and `inject.sh`'s call dangles — now a weak
+declaration plus a null test); and `deploy.py` pushes `game_manager.sh` while
+it is running, so the first pick after a deploy runs the *old* manager.
 
 **DRC on ARM32: measured, then descoped (operator, 2026-08-05).** 0.289 has no
 32-bit native DRC backend for ANY architecture (x86-32's went too), and
@@ -636,6 +743,109 @@ both ways), not a free win.
 BSD-3-Clause since 0.172**, not the pre-2016 non-commercial licence that governs
 mame4all and 2003-plus. Less restrictive, but different obligations —
 `CLAUDE.md`'s licensing note describes only the old one and needs updating.
+
+### Perf levers (PR #9) — full results in [`../bench-results-lrmame.md`](../bench-results-lrmame.md)
+
+Protocol, non-negotiable on this device: **interleaved, arm order alternating
+per (game, rep), repeated.** Per-cell spread is 1.5–4% and cell order alone
+moved one arm by 2%, so a non-interleaved result under ~5% means nothing.
+`tools/lever-ab.sh` is the harness and resumes from its own TSV. Test drivers:
+`pacman` (Z80, never touches `drcuml`) and `s1945ii` (SH-2, DRC-backed). The
+core must be **loaded** — a present measurement with no core loaded measures
+nothing.
+
+**What ships: write-combining on, everything else off.** That is already the
+default set, and it is the whole of what the host side delivers.
+
+| lever | `pacman` | `s1945ii` | verdict |
+|---|---|---|---|
+| write-combining | +15.0% | +5.0% | **real, ships on** |
+| salvaged host (`nv_present.o` at `-O3`, `build_reverse()` as a constructor) | +6.0% | +2.5% | **real, landed** |
+| `rgb32` render-pipeline bypass | −0.3% | **+7.1%** | **real, landed** |
+| `MISTER_SCHED_RT=5` | +2.8% median | −1.8% | **sign flipped — off** |
+| `MISTER_THREADED_PRESENT=1` | −1.4% | +0.5% | null |
+| `MISTER_EMU_CPU=0` | +0.8% | +0.6% | null |
+| `M16B` (RGB565), stride bug fixed | −2.6% | −0.2% | not a lever |
+| MAME's UI | — | — | not a lever, sub-1% |
+
+**MAME's own render pipeline is the largest single host cost, and it is a fixed
+tax.** Profiling `pacman` to answer an FPGA-offload question found
+`software_renderer<>::setup_and_draw_textured_quad` at **27.3%** — more than
+twice the emulated Z80 (12.5%). Normalised on the 800 MHz A9 the two texture
+paths cost **31.3 cyc/px (`PALETTE16`)** and **21.7 cyc/px (`RGB32`)**, so at
+60 Hz on a 320×240 that is **18.0% of the A9 for `ind16` and 12.5% for
+`rgb32`**, independent of emulation weight. A driver at 53 fps reaches 60 on
+this alone. The gap families split by `screen_update` bitmap type — `rgb32`:
+`psikyosh` `taito_f3` `konamigx` `segas32` `suprnova` `cv1k` `metro` `ms32`;
+`ind16`: `segas24` `ssv` `seta2` `namconb1` `pacman`; mixed: `kaneko16`.
+
+**The `rgb32` half is fixed in software, no RTL: +7.1%.**
+`mamester_try_direct_blit()` recognises the trivial case — one QUAD, RGB32/ARGB32
+with `BLENDMODE_NONE`, no colour modulation, 1:1 bounds, identity texcoords —
+and `memcpy`s per row instead of calling `draw_primitives`. Screenshot is
+**MD5-identical**. The predicate engages **297/300 frames on `s1945ii` and 0/300
+on `pacman`**, which is correct: `pacman` is `PALETTE16`, where the blit is a
+palette lookup, not a copy. Predicted 12.5%, delivered 7.1% — the remainder is
+the full-frame `memcpy` the fast path still does; removing that means handing
+the driver's bitmap pointer to the host, which changes what
+`retro_video_refresh` passes. **The `ind16` half wants the FPGA**: palette RAM
+in fabric, 16-bit indices in DDR, lookup at the scanout tap. Worth 18%, needs
+RTL, still open. Bypass caveats, both acceptable: MAME's UI overlay and
+artwork/bezel are lost (the host ignores both), and vector/SVG/multi-screen
+drivers must keep the normal path.
+
+**Patches to `vendor/lrmame` use `git apply`, not sentinel fences**
+(`tools/lrmame-patches/`), because this one *replaces* upstream lines. Conflicts
+are **fatal** in `build-lrmame.sh` — a patch that stops applying after a
+submodule bump must not silently become a build without it, which is how the
+M16B bug survived. One patch per region: per-patch state checks cannot see a
+stacked series.
+
+**Three methodology findings, each of which produced a wrong answer first:**
+
+- **A lever measured against one binary does not carry to another.** `SCHED_RT`
+  measured **+11.6%** on `s1945ii` pre-bypass and **−1.8%** on `lrmame-fast`. It
+  bought back preemption during a frame that was ~29 ms of emulation plus a full
+  `draw_primitives` pass; the bypass removed part of that frame and what is left
+  does not pay for a `SCHED_FIFO` thread on a two-core box also running
+  Main_MiSTer and three shell poll loops. **Re-run every lever after changing
+  the thing being measured.** Stacking all three shipping candidates is −3.8%.
+- **An A/B between two binaries is only about the change you made if every other
+  difference is zero.** Comparing the salvaged host against the *deployed*
+  binary gave +20.8%/+7.1% — but that binary predated write-combining support,
+  so the A arm was Strongly-Ordered and the B arm was not. It re-measured the WC
+  lever and attributed it to a convert loop. "The old one is still on the
+  device" is not a controlled A arm.
+- **Instrument for the miss as loudly as the hit, and never sample frame 1.**
+  The fast path first reported `declined` on both drivers because the report
+  fired on frame 1 — MAME's own startup UI, 28 primitives of rects and font
+  glyphs with **no screen quad in the list at all**. Both now sample frame 300
+  and report an aggregate. A predicate that silently never matches is
+  indistinguishable from a lever that did nothing.
+- **The frame hash is the wrong gate for a pixel-format lever.** The 32-bit path
+  renders 8/8/8 and truncates; the 16-bit path rasterises 5/6/5 natively. The
+  hashes differ even when both arms are correct. `M16B`'s garbage output was
+  caught by a **screenshot**, not a hash.
+
+**Also ruled out:** killing `Main_MiSTer` (DreamSTer does this; not available
+here — `fpga/MAME.sv:332` sources `joystick_0..3` from `hps_io`, which only
+Main_MiSTer drives, so `nv_pads()` would read frozen input and the launch path
+would go with it). Renice is the usable form of the same idea.
+
+**Where `s1945ii` stands: 39.0 fps against the 60 it needs — a 35% gap**, on
+`lrmame-fast` with WC on. The host-side lever set is exhausted. The profile says
+why the rest is hard: about a third of the steady state is the JIT'd SH-2 and
+the remainder is spread thin. Closing it needs the `ind16` FPGA palette path
+(does not apply to this driver), removing the bypass's remaining `memcpy`, or a
+different engine for this driver.
+
+**Still open on this engine:** FPGA palette lookup at scanout for `ind16` (18%,
+needs RTL); FPGA format-convert offload (~6.6%/~2%, needs RTL); **ROM-load
+latency** — ~19% of a 21-second run is SHA-1 verification of the romset, which
+costs no frames but is seconds of launch delay on every start;
+`mame_thread_mode`/`OPENMP=1`, blocked on a discrete-sound romset in 0.289
+format; compiler arms (LTO, `-ffast-math`, PGO — not `-O2`-vs-`-O3`, which is
+already `-O3`).
 
 ## Stage 11 — `drcbearm32`, an ARM32 DRC back-end (in progress)
 
@@ -979,28 +1189,41 @@ without `CPU_INCLUDE_DRC_NATIVE`, and the next host build failed to link
 `cpu.lua` byte for byte. That is the second time the revert path has been
 wrong in a way only an alternating build would show.
 
-### What is still unverified, and it is not a small list
+### The device run closed the list — bit-identical, and worth 7.4×
 
-- **The emulated-memory opcodes have never executed.** `READ`/`READM`/`WRITE`/
-  `WRITEM`/`FREAD`/`FWRITE` are lowered — a call to the resolved accessor,
-  following `drcbex86`'s model rather than `drcbearm64`'s inlined dispatch —
-  but the harness runs a machine started with **no content**, so `m_space` is
-  empty and there is nothing to read. Nothing tests them. They are also the
-  opcodes every real driver leans on hardest.
-- **`DEBUG`, `BREAK` and the end-of-block handler** are equally untested, for
-  the same reason.
-- **No driver has run.** There is no romset in the build environment and the
-  device is unreachable from it, so the gate that actually matters —
-  `MISTER_FRAME_HASH` matching between a `DRC=0` build and a `DRC=1` build of
-  `psikyosh` over N frames — has not been run, and neither has
-  `MISTER-BENCH fps=`, which is the only thing that can say whether any of this
-  was worth doing.
-- **qemu is not a Cortex-A9.** It models NZCV faithfully enough that the corpus
-  is meaningful, but it does not prove instruction-cache coherency (the
-  `osd::invalidate_instruction_cache` call after every block), and a JIT that
-  is correct under emulation and wrong on hardware fails exactly there.
+The corpus left four things open: the emulated-memory opcodes had never
+executed (the harness starts a machine with **no content**, so `m_space` is
+empty and there is nothing to read — and they are the opcodes every real driver
+leans on hardest), `DEBUG`/`BREAK`/the end-of-block handler likewise, no driver
+had run at all, and **qemu is not a Cortex-A9** — it models NZCV faithfully
+enough for the corpus but proves nothing about instruction-cache coherency (the
+`osd::invalidate_instruction_cache` after every block), which is exactly where a
+JIT that is right under emulation is wrong on hardware.
 
-**Next, in order:** run `psikyosh` on the device under `DRC=0` and `DRC=1` and
-diff the frame hashes; then bench; then take READ/WRITE seriously, either by
-teaching the harness to start a machine that has an address space or by
-trusting the driver run to cover them.
+**Run on the device (PR #7 test round, `.81`, real A9):**
+
+| | `pacman` (Z80, no UML) | `s1945ii` (SH-2, UML) |
+|---|---|---|
+| DRC=1 (`drcbe_arm32`) | 88.6 fps | 27.9–30.1 fps |
+| DRC=0 (`drcbec`) | 88.1 fps | **3.8 fps** |
+| frame hash @400/@600 | `601bc720788077ab` | `912aeffbaed7ea59` |
+| frame hash @800/@1200 | `d7946c8cc9c3a464` | `466e938dbc9304cb` |
+
+**Hashes are identical between the two back-ends on both drivers.** The ARM32
+lowering produces bit-identical output to the UML interpreter on a real driver,
+memory path included, on real silicon — and it is worth **~7.4× on SH-2**.
+`pacman` is the control: it never touches `drcuml`, and the two arms agree
+within noise, which is what says the A/B is measuring the back-end and not the
+build.
+
+**Still open, and it is now a short list:**
+
+- **`DEBUG` and `BREAK`** remain untested. Neither fires in a normal run, so
+  the driver test does not cover them and the corpus still cannot.
+- **The corpus still has no address space.** The driver run covers `READ`/
+  `WRITE` empirically for the paths `psikyosh` uses; it is not a substitute for
+  a differential case, and a regression in an unused addressing form would not
+  be caught.
+- **One driver family.** SH-2 via `psikyosh` is the only DRC CPU exercised on
+  hardware. `stv`, `feversoc` and `cv1000` are the rest of the borderline set
+  the back-end was written for, and none has been run.
