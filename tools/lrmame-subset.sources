@@ -46,6 +46,7 @@ src/mame/atari/firetrk.cpp
 src/mame/atari/flyball.cpp
 src/mame/atari/harddriv.cpp
 src/mame/atari/irobot.cpp
+src/mame/atari/jaguar.cpp
 src/mame/atari/jedi.cpp
 src/mame/atari/klax.cpp
 src/mame/atari/liberatr.cpp
@@ -150,7 +151,10 @@ src/mame/edevices/twins.cpp
 src/mame/efo/cedar_magnet.cpp
 src/mame/efo/cidelsa.cpp
 src/mame/efo/nightmare.cpp
+src/mame/eolith/eolith.cpp
+src/mame/eolith/eolith16.cpp
 src/mame/eolith/ghosteo.cpp
+src/mame/eolith/vegaeo.cpp
 src/mame/excellent/aquarium.cpp
 src/mame/excellent/d9final.cpp
 src/mame/excellent/dblcrown.cpp
@@ -165,6 +169,7 @@ src/mame/exidy/starfire.cpp
 src/mame/exidy/vertigo.cpp
 src/mame/exidy/victory.cpp
 src/mame/f32/crospang.cpp
+src/mame/f32/f-32.cpp
 src/mame/f32/silvmil.cpp
 src/mame/fuuki/fuukifg2.cpp
 src/mame/fuuki/fuukifg3.cpp
@@ -212,6 +217,7 @@ src/mame/irem/m80.cpp
 src/mame/irem/olibochu.cpp
 src/mame/irem/redalert.cpp
 src/mame/itech/capbowl.cpp
+src/mame/itech/iteagle.cpp
 src/mame/itech/itech32.cpp
 src/mame/itech/itech8.cpp
 src/mame/jaleco/aeroboto.cpp
@@ -248,9 +254,11 @@ src/mame/konami/chqflag.cpp
 src/mame/konami/dbz.cpp
 src/mame/konami/divebomb.cpp
 src/mame/konami/djmain.cpp
+src/mame/konami/firebeat.cpp
 src/mame/konami/gijoe.cpp
 src/mame/konami/hexion.cpp
 src/mame/konami/konamigx.cpp
+src/mame/konami/konamim2.cpp
 src/mame/konami/konmedal.cpp
 src/mame/konami/konmedal68k.cpp
 src/mame/konami/kontest.cpp
@@ -270,6 +278,7 @@ src/mame/konami/rollerg.cpp
 src/mame/konami/spy.cpp
 src/mame/konami/tgtpanic.cpp
 src/mame/konami/ultraman.cpp
+src/mame/konami/ultrsprt.cpp
 src/mame/konami/wecleman.cpp
 src/mame/konami/xexex.cpp
 src/mame/matic/barata.cpp
@@ -305,6 +314,7 @@ src/mame/misc/cvs.cpp
 src/mame/misc/cybertnk.cpp
 src/mame/misc/dcheese.cpp
 src/mame/misc/dfruit.cpp
+src/mame/misc/dgpix.cpp
 src/mame/misc/discoboy.cpp
 src/mame/misc/dominob.cpp
 src/mame/misc/dorachan.cpp
@@ -338,6 +348,7 @@ src/mame/misc/kingpin.cpp
 src/mame/misc/ladyfrog.cpp
 src/mame/misc/laserbas.cpp
 src/mame/misc/lependu.cpp
+src/mame/misc/limenko.cpp
 src/mame/misc/luckybal.cpp
 src/mame/misc/magic10.cpp
 src/mame/misc/magicfly.cpp
@@ -358,11 +369,13 @@ src/mame/misc/news.cpp
 src/mame/misc/oneshot.cpp
 src/mame/misc/pachifev.cpp
 src/mame/misc/paracaidista.cpp
+src/mame/misc/pasha2.cpp
 src/mame/misc/pass.cpp
 src/mame/misc/photon.cpp
 src/mame/misc/photon2.cpp
 src/mame/misc/pipeline.cpp
 src/mame/misc/pkscram.cpp
+src/mame/misc/policetr.cpp
 src/mame/misc/quizo.cpp
 src/mame/misc/re900.cpp
 src/mame/misc/sanremo.cpp
@@ -391,6 +404,7 @@ src/mame/misc/ttchamp.cpp
 src/mame/misc/tugboat.cpp
 src/mame/misc/tvg01.cpp
 src/mame/misc/usgames.cpp
+src/mame/misc/vamphalf.cpp
 src/mame/misc/vampire.cpp
 src/mame/misc/videosaa.cpp
 src/mame/misc/xyonix.cpp
@@ -402,6 +416,7 @@ src/mame/msx/sangho.cpp
 src/mame/msx/sfkick.cpp
 src/mame/namco/20pacgal.cpp
 src/mame/namco/30test.cpp
+src/mame/namco/dkmb.cpp
 src/mame/namco/funcube.cpp
 src/mame/namco/kungfur.cpp
 src/mame/namco/namcofl.cpp
@@ -410,11 +425,13 @@ src/mame/namco/namconb1.cpp
 src/mame/namco/namcond1.cpp
 src/mame/namco/namcos2.cpp
 src/mame/namco/namcos21_c67.cpp
+src/mame/namco/namcos23.cpp
 src/mame/namco/polepos.cpp
 src/mame/namco/rallyx.cpp
 src/mame/namco/skykid.cpp
 src/mame/namco/tceptor.cpp
 src/mame/namco/toypop.cpp
+src/mame/namco/turrett.cpp
 src/mame/namco/warpwarp.cpp
 src/mame/nasco/crgolf.cpp
 src/mame/nasco/himesiki.cpp
@@ -481,6 +498,7 @@ src/mame/playmark/sderby.cpp
 src/mame/playmark/sslam.cpp
 src/mame/promat/1945kiii.cpp
 src/mame/promat/3x3puzzl.cpp
+src/mame/promat/gstream.cpp
 src/mame/psikyo/psikyo.cpp
 src/mame/psikyo/psikyo4.cpp
 src/mame/psikyo/psikyosh.cpp
@@ -488,6 +506,7 @@ src/mame/ramtek/hitme.cpp
 src/mame/ramtek/m79amb.cpp
 src/mame/ramtek/starcrus.cpp
 src/mame/rare/btoads.cpp
+src/mame/rare/kinst.cpp
 src/mame/rare/xtheball.cpp
 src/mame/sanritsu/appoooh.cpp
 src/mame/sanritsu/chinsan.cpp
@@ -542,6 +561,7 @@ src/mame/seta/seta.cpp
 src/mame/seta/seta2.cpp
 src/mame/seta/simple_st0016.cpp
 src/mame/seta/speedatk.cpp
+src/mame/seta/speglsht.cpp
 src/mame/seta/ssv.cpp
 src/mame/seta/thedealr.cpp
 src/mame/sigma/nyny.cpp
@@ -553,6 +573,7 @@ src/mame/sigma/spiders.cpp
 src/mame/skeleton/carnival37.cpp
 src/mame/snk/bbusters.cpp
 src/mame/snk/drderby.cpp
+src/mame/snk/hng64.cpp
 src/mame/snk/mainsnk.cpp
 src/mame/snk/mechatt.cpp
 src/mame/snk/miconkit.cpp

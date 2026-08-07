@@ -35,12 +35,16 @@ The filters, in order, each reported with what it dropped:
    printed in full so they can be argued with: a gambling-manufacturer vendor
    directory, or a majority of the family's working parents matching a title
    marker. `--keep` overrides per family.
-4. **DRC policy.** `drcbearm32` is validated on SH-2 and nothing else (Stage 11:
-   77/77 differential cases, frame-hash-identical on `psikyosh` hardware), so
-   SH-2/SH-3 families are IN and families needing any other DRC CPU -- MIPS,
-   PowerPC, E1-32, SHARC -- are OUT. Those run `drcbec` at interpreter speed and
-   are 3D-era boards regardless. This inverts `lrmame-drc-scan.sh`'s blanket
-   exclusion, which predates the back-end existing.
+4. **DRC policy: every DRC family is IN** (operator, 2026-08-07), which retires
+   `lrmame-drc-scan.sh`'s blanket exclusion entirely. `drcbearm32` is validated
+   on SH-2/SH-3 and nothing else (Stage 11: 77/77 differential cases,
+   frame-hash-identical on `psikyosh` hardware), so a MIPS, PowerPC, E1-32 or
+   SHARC board runs `drcbec`, the portable UML interpreter -- which measured
+   3.8 fps against 30.1 on SH-2, so most of them will not hold 60 Hz. The `drc`
+   column names the CPU so the ones running interpreted are visible rather than
+   inferred, and `--skip-unproven-drc` drops them again. Note that a board being
+   PS1- or Dreamcast-class still excludes it (filter 3 above), which is a
+   different question from which back-end its CPU has.
 5. **Parent closure.** A clone whose parent lives in another file produces
    `Driver is a clone of nonexistent driver` and is unrunnable (30 of them in the
    gate build). Any file holding a retained set's parent is pulled in, iterated
@@ -185,13 +189,13 @@ def too_heavy_cpu(cpus):
 
 
 def drc_class(cpus):
-    """-> "ok" (SH only), "unproven" (any other DRC CPU), or "" (no DRC at all)."""
+    """-> the DRC CPU directories this driver needs, "" if it needs none.
+
+    The distinction that matters is which back-end each one gets: `sh` is
+    `drcbearm32`, everything else is `drcbec`.
+    """
     dirs = {d for d, _ in cpus}
-    if dirs & set(DRC_CPU_UNPROVEN):
-        return "unproven"
-    if dirs & set(DRC_CPU_OK):
-        return "ok"
-    return ""
+    return sorted(dirs & (set(DRC_CPU_OK) | set(DRC_CPU_UNPROVEN)))
 
 
 def main():
@@ -203,6 +207,11 @@ def main():
     ap.add_argument("--mame4all", required=True)
     ap.add_argument("--src", default=os.environ.get(
         "LRMAME_SRC", os.path.join(os.path.dirname(here), "vendor", "lrmame")))
+    ap.add_argument("--skip-unproven-drc", action="store_true",
+                    help="drop families whose DRC CPU is not SH. OFF by default: "
+                         "they run drcbec and are almost certainly slow, but "
+                         "that is a measurement, not a reason to leave them out "
+                         "of the binary")
     ap.add_argument("--skip-mame4all", action="store_true",
                     help="drop families mame4all already runs. OFF by default: "
                          "the newest engine that holds real time wins, so a "
@@ -310,7 +319,7 @@ def main():
             dropped[f"out of class — {heavy}"].append(entry)
             continue
         cls = drc_class(cpus)
-        if cls == "unproven":
+        if args.skip_unproven_drc and set(cls) - set(DRC_CPU_OK):
             dropped["DRC CPU drcbearm32 has not been validated on"].append(entry)
             continue
 
@@ -360,9 +369,12 @@ def main():
         + (f" + {len(extra)} added with `--extra` ({', '.join(sorted(extra))})"
            if extra else ""))
     add(f"- **{total_parents} parent romsets** of coverage value")
-    add(f"- of the {len(kept)} coverage files, "
-        f"**{sum(1 for v in kept.values() if v['drc'] == 'ok')}** need "
-        "`drcbearm32` (SH-2/SH-3)")
+    sh_files = sum(1 for v in kept.values() if "sh" in v["drc"])
+    other_drc = sum(1 for v in kept.values()
+                    if v["drc"] and "sh" not in v["drc"])
+    add(f"- of the {len(kept)} coverage files, **{sh_files}** run on "
+        f"`drcbearm32` (SH-2/SH-3) and **{other_drc}** on `drcbec`, the UML "
+        "interpreter, because their DRC CPU has no ARM32 back-end")
     add(f"- **{sum(1 for v in kept.values() if v.get('mame4all'))}** of them have a "
         "mame4all fallback if lrmame cannot hold 60 Hz; the other "
         f"**{sum(1 for v in kept.values() if not v.get('mame4all'))}** do not\n")
@@ -393,6 +405,9 @@ def main():
             add(f"| `{family_raw}` | {count} | {example} |")
         add("")
     add(f"## Kept — {len(kept)} files, {total_parents} parents\n")
+    add("`DRC` names the dynamic-recompiler CPU the board needs. `sh` gets")
+    add("`drcbearm32`; anything else gets `drcbec`, the interpreter, at roughly an")
+    add("eighth of the speed — those are the rows least likely to hold 60 Hz.\n")
     add("`fallback` marks a family mame4all also runs: if lrmame cannot hold 60 Hz")
     add("there, the game ships on the older engine instead of not shipping. A blank")
     add("means lrmame is the only engine that has it, so its fps number is the whole")
@@ -400,7 +415,8 @@ def main():
     add("| file | parents | DRC | fallback | example |")
     add("|---|---:|---|---|---|")
     for family_raw, v in sorted(kept.items(), key=lambda kv: -kv[1]["parents"]):
-        add(f"| `{family_raw}` | {v['parents']} | {v['drc'] or '—'} | "
+        drc = "/".join(v["drc"]) if v["drc"] else "—"
+        add(f"| `{family_raw}` | {v['parents']} | {drc} | "
             f"{'mame4all' if v.get('mame4all') else '—'} | {v['example']} |")
     add("")
     if closure:
