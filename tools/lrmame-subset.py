@@ -36,15 +36,27 @@ The filters, in order, each reported with what it dropped:
    directory, or a majority of the family's working parents matching a title
    marker. `--keep` overrides per family.
 4. **DRC policy: every DRC family is IN** (operator, 2026-08-07), which retires
-   `lrmame-drc-scan.sh`'s blanket exclusion entirely. `drcbearm32` is validated
-   on SH-2/SH-3 and nothing else (Stage 11: 77/77 differential cases,
-   frame-hash-identical on `psikyosh` hardware), so a MIPS, PowerPC, E1-32 or
-   SHARC board runs `drcbec`, the portable UML interpreter -- which measured
-   3.8 fps against 30.1 on SH-2, so most of them will not hold 60 Hz. The `drc`
-   column names the CPU so the ones running interpreted are visible rather than
-   inferred, and `--skip-unproven-drc` drops them again. Note that a board being
-   PS1- or Dreamcast-class still excludes it (filter 3 above), which is a
-   different question from which back-end its CPU has.
+   `lrmame-drc-scan.sh`'s blanket exclusion entirely.
+
+   There is no per-CPU back-end to wait for. `drcuml.cpp` selects ONE
+   `NATIVE_DRC` for the whole binary -- `drcbe_arm32` here, by this tree's patch
+   on `__arm__` -- and every DRC-capable CPU gets it (`drcuml.cpp:165`). The CPU
+   cores are UML front-ends; Stage 11 lowered every opcode in `uml.h`, so MIPS,
+   PowerPC, E1-32 and SHARC boards already run through `drcbearm32`.
+
+   What differs by front-end is VALIDATION, not lowering. `drcbearm32` has been
+   checked against `drcbe_c` on 77 differential cases and confirmed
+   frame-hash-identical on one SH-2 driver; a MIPS or PowerPC front-end emits a
+   different mix of the same opcodes -- 64-bit register pairs, big-endian masked
+   memory access -- and `tests/drc-diff/` still has no address space, so the
+   READ/WRITE forms are covered only by what `psikyosh` happens to execute. The
+   `drc` column names each family's CPU so the unvalidated ones are visible, and
+   the cheap check is the one that settled SH-2: `MISTER_FRAME_HASH` with DRC=1
+   against DRC=0 on one driver per CPU family.
+
+   `--skip-unproven-drc` drops the non-SH families again. A board being PS1- or
+   Dreamcast-class still excludes it (filter 3), which is a question about the
+   class of machine, not about its back-end.
 5. **Parent closure.** A clone whose parent lives in another file produces
    `Driver is a clone of nonexistent driver` and is unrunnable (30 of them in the
    gate build). Any file holding a retained set's parent is pulled in, iterated
@@ -372,9 +384,10 @@ def main():
     sh_files = sum(1 for v in kept.values() if "sh" in v["drc"])
     other_drc = sum(1 for v in kept.values()
                     if v["drc"] and "sh" not in v["drc"])
-    add(f"- of the {len(kept)} coverage files, **{sh_files}** run on "
-        f"`drcbearm32` (SH-2/SH-3) and **{other_drc}** on `drcbec`, the UML "
-        "interpreter, because their DRC CPU has no ARM32 back-end")
+    add(f"- **{sh_files + other_drc}** of the {len(kept)} coverage files are "
+        f"DRC-backed and all of them run on `drcbearm32`: **{sh_files}** on the "
+        f"SH front-end it was validated against, **{other_drc}** on a front-end "
+        "(MIPS, PowerPC, E1-32, SHARC) nothing has checked yet")
     add(f"- **{sum(1 for v in kept.values() if v.get('mame4all'))}** of them have a "
         "mame4all fallback if lrmame cannot hold 60 Hz; the other "
         f"**{sum(1 for v in kept.values() if not v.get('mame4all'))}** do not\n")
@@ -405,9 +418,10 @@ def main():
             add(f"| `{family_raw}` | {count} | {example} |")
         add("")
     add(f"## Kept — {len(kept)} files, {total_parents} parents\n")
-    add("`DRC` names the dynamic-recompiler CPU the board needs. `sh` gets")
-    add("`drcbearm32`; anything else gets `drcbec`, the interpreter, at roughly an")
-    add("eighth of the speed — those are the rows least likely to hold 60 Hz.\n")
+    add("`DRC` names the UML front-end the board needs. They all lower through the")
+    add("same back-end — `drcbearm32` — because `drcuml.cpp` picks one per binary;")
+    add("`sh` is the only front-end that back-end has been validated against, so a")
+    add("row naming anything else is running unverified code, not slower code.\n")
     add("`fallback` marks a family mame4all also runs: if lrmame cannot hold 60 Hz")
     add("there, the game ships on the older engine instead of not shipping. A blank")
     add("means lrmame is the only engine that has it, so its fps number is the whole")
