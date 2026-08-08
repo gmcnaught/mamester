@@ -41,13 +41,39 @@ exit status of a `tail` in the pipeline, not of the binary.)
 segfaulting, none running. A ninth (`x2222`) could not be tested because its
 romset was rejected.
 
-**What this is evidence for, and what it is not.** It is not yet proof that
-`drcbearm32` is at fault: the proof is an A/B against `drcbec`, and `drc_use_c`
-is not reachable from this host's command line, so it needs a `DRC=0` build of
-this same subset. But 8 of 8 on one front-end, 0 of 6 on another, is not a
-distribution that driver-specific bugs produce. It is the shape the Stage 11
-ledger predicted: the back-end was validated against the SH front-end's UML
-output and nothing else.
+**Confirmed against `drcbec`: the crashes are the back-end.** A `DRC=0` build of
+the same 974 files (`SUBTARGET=lrmame-gapc`, same tree, same sources, only the
+UML back-end differs) was run over all thirteen crashers. **Not one segfaults
+under the interpreter:**
+
+| game | front-end | `drcbearm32` | `drcbec` |
+|---|---|---|---|
+| `mrdig` | E1-32 | SEGV | runs, 1.8 fps |
+| `crazywar` | E1-32 | SEGV | runs, 1.6 |
+| `linkypip` | E1-32 | SEGV | runs, 1.5 |
+| `klondkp` | E1-32 | SEGV | runs, 1.0 |
+| `spotty` | E1-32 | SEGV | runs, 8.0 |
+| `x2222` | E1-32 | SEGV | runs, 2.5 |
+| `mosaicf2`, `pasha2`, `fmaniac2p` | E1-32 | SEGV | no crash, under 0.5 fps |
+| `mushitam` | SH-3 | SEGV | no crash, under 0.5 fps |
+| `fiveside` | PowerPC | SEGV | runs, 5.2 |
+| `dkmb` | PowerPC | SEGV | no crash, under 0.5 fps |
+| `bbust2` | MIPS | SEGV | no crash, under 0.5 fps |
+
+"No crash" means the 60-second budget expired (`timeout` SIGKILL, rc 137) rather
+than a fault — the process was still emulating, just below half a frame per
+second. Those runs shared the machine with the classification sweep, so the fps
+figures are contended and low; the SEGV-vs-no-SEGV split is what the test is
+for, and it is unanimous across four different UML front-ends.
+
+**So `drcbearm32` miscompiles every front-end except SH-2**, and this is now a
+defect with thirteen named reproducers rather than a correlation.
+
+**What it does not establish is that fixing it makes these games playable.** The
+interpreter figures are 1-8 fps. Even at the 7.4x the back-end is worth on SH-2,
+and allowing for the sweep contention, most of this set lands well short of 60.
+The reason to fix it is correctness and the SH-3 board (`cv1k`) more than the
+Hyperstone library.
 
 **SH-2 is the good news and it is substantial.** Before this, `drcbearm32` had
 run exactly one driver family on hardware (`psikyosh`). It now runs six:
