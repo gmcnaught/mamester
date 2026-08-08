@@ -245,6 +245,11 @@ def main():
                     help="family path to retain regardless of the gambling rule "
                          "(repeatable)")
     ap.add_argument("--sources", help="write the SOURCES list here, one path per line")
+    ap.add_argument("--setnames", help="write a TSV manifest of the parent "
+                    "romsets this subset can run: setname, driver file, DRC "
+                    "front-end, mame4all fallback, title. This is the list a "
+                    "romset acquisition or a shortcut generator works from — "
+                    "the SOURCES list names files, and a file is not a game.")
     ap.add_argument("--sources-prefix", default="src/mame/",
                     help="prefix for emitted paths. MAME's SOURCES= is relative "
                          "to the build root, mame.lst is relative to src/mame, "
@@ -402,6 +407,25 @@ def main():
                 siblings.add(rel)
 
     subset = sorted(selected | siblings)
+
+    if args.setnames:
+        rows = []
+        for family_raw, v in kept.items():
+            for g in by_family[family_raw]:
+                if not is_parent(g):
+                    continue
+                if any(f in g["flags"] for f in UNSHIPPABLE_FLAGS):
+                    continue
+                rows.append((g["name"], family_raw, "/".join(v["drc"]) or "-",
+                             "mame4all" if v.get("mame4all") else "-",
+                             g["description"]))
+        rows.sort()
+        with open(args.setnames, "w") as fh:
+            fh.write("# setname\tdriver_file\tdrc\tfallback\ttitle\n")
+            for row in rows:
+                fh.write("\t".join(row) + "\n")
+        print(f"{len(rows)} parent romsets written to {args.setnames}",
+              file=sys.stderr)
 
     if args.sources:
         with open(args.sources, "w") as fh:
