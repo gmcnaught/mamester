@@ -248,7 +248,15 @@ if [ "$HOST" != "1" ]; then
     else
         COMPAT_DIR=/src
     fi
-    MAKE_VARS+=("LDOPTS=$COMPAT_DIR/.glibc231-compat.o -lpthread")
+    # --no-undefined, because genie does NOT pass it for this configuration and
+    # a .so with unresolved internal references LINKS CLEANLY. The failure then
+    # surfaces either when the host binary is linked against it or, worse, at
+    # runtime in whichever driver touches the missing code. That is exactly what
+    # SOURCES= filtering produces when a driver's implementation spans files
+    # that #include-following does not reach -- cave/cv1k.cpp and its nine
+    # cv1k_v_blit*.cpp. tools/lrmame-subset.py adds those files; this makes the
+    # next one that slips through a build error instead of a shipped defect.
+    MAKE_VARS+=("LDOPTS=$COMPAT_DIR/.glibc231-compat.o -lpthread -Wl,--no-undefined")
 fi
 
 # The build configuration is not tracked by genie's dependency graph any better

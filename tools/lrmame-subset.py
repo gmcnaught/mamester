@@ -57,7 +57,19 @@ The filters, in order, each reported with what it dropped:
    `--skip-unproven-drc` drops the non-SH families again. A board being PS1- or
    Dreamcast-class still excludes it (filter 3), which is a question about the
    class of machine, not about its back-end.
-5. **Parent closure.** A clone whose parent lives in another file produces
+5. **Sibling implementation files.** A full MAME build enumerates whole
+   directories (`scripts/target/mame/mame.lua:46`, `os.matchfiles(dir/**.cpp)`),
+   but `SOURCES=` derives its file list by following `#include`s
+   (`makedep.py`'s `line_hook`), adding only `x.cpp` and the `x_a`/`x_v`/`x_m`
+   aspect siblings of each included header. A file reachable by neither is
+   silently dropped -- and the link still SUCCEEDS, producing a `.so` with
+   undefined references that fails only when the host is linked against it, or
+   at runtime. `cave/cv1k.cpp` is the case that found this: its blitter lives in
+   nine `cv1k_v_blit0..8.cpp`, which are a suffix below `cv1k_v` and so match no
+   rule. Every sibling `.cpp` whose basename starts with a selected file's stem
+   and which is not itself a driver is therefore listed explicitly.
+
+6. **Parent closure.** A clone whose parent lives in another file produces
    `Driver is a clone of nonexistent driver` and is unrunnable (30 of them in the
    gate build). Any file holding a retained set's parent is pulled in, iterated
    to a fixed point, and reported separately -- those files are build cost with
@@ -364,7 +376,32 @@ def main():
         frontier = need
 
     extra = {f for f in args.extra if f not in kept and f not in closure}
-    subset = sorted(set(kept) | set(closure) | extra)
+    selected = set(kept) | set(closure) | extra
+
+    # Sibling implementation files (see filter 5). Only stems of files already
+    # selected are considered, and a file that is itself a driver is never
+    # claimed -- it belongs to its own family and is in or out on its own merits.
+    all_drivers = set(by_family)
+    siblings = set()
+    by_dir = collections.defaultdict(set)
+    for family_raw in selected:
+        by_dir[os.path.dirname(family_raw)].add(
+            os.path.basename(family_raw)[:-len(".cpp")])
+    for directory, stems in by_dir.items():
+        try:
+            entries = os.listdir(os.path.join(src_root, directory))
+        except OSError:
+            continue
+        for entry in entries:
+            if not entry.endswith(".cpp"):
+                continue
+            rel = f"{directory}/{entry}"
+            if rel in all_drivers or rel in selected:
+                continue
+            if any(entry[:-len(".cpp")].startswith(stem + "_") for stem in stems):
+                siblings.add(rel)
+
+    subset = sorted(selected | siblings)
 
     if args.sources:
         with open(args.sources, "w") as fh:
@@ -379,7 +416,9 @@ def main():
     add(f"- **{len(subset)} driver files** = {len(kept)} carrying coverage "
         f"+ {len(closure)} pulled in only to close clone→parent links"
         + (f" + {len(extra)} added with `--extra` ({', '.join(sorted(extra))})"
-           if extra else ""))
+           if extra else "")
+        + f" + {len(siblings)} sibling implementation files that `#include`"
+          " following does not reach")
     add(f"- **{total_parents} parent romsets** of coverage value")
     sh_files = sum(1 for v in kept.values() if "sh" in v["drc"])
     other_drc = sum(1 for v in kept.values()
