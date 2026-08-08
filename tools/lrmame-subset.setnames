@@ -1,0 +1,2018 @@
+setname	driver_file	drc	fallback	chd	title
+005	sega/segag80r.cpp	-	mame4all	-	005
+10yard	irem/m58.cpp	-	-	-	10-Yard Fight (World, set 1)
+119	galaxian/119.cpp	-	-	-	119 (bootleg?)
+1945kiii	promat/1945kiii.cpp	-	-	-	1945k III (newer, OPCX2 PCB)
+20pacgal	namco/20pacgal.cpp	-	-	-	Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)
+30test	namco/30test.cpp	-	-	-	30 Test (remake)
+39in1	misc/39in1.cpp	-	-	-	39 in 1 MAME bootleg (GNO-V000)
+3in1mbc	sega/megadriv_acbl.cpp	-	-	-	Gunstar Heroes / Snake Rattle n' Roll / Joe & Mac (Conny bootleg of Mega Drive versions)
+3kokushi	metro/metro.cpp	-	-	-	Sankokushi (Japan)
+3on3dunk	vsystem/inufuku.cpp	-	-	-	3 On 3 Dunk Madness (US, prototype? 1997/02/04)
+3x3puzzl	promat/3x3puzzl.cpp	-	-	-	3X3 Puzzle (Enterprise)
+40love	taito/40love.cpp	-	-	-	Forty-Love (World)
+4enraya	misc/4enraya.cpp	-	-	-	4 En Raya (set 1)
+4in1	galaxian/galaxold.cpp	-	mame4all	-	4 Fun in 1
+500gp	namco/namcos23.cpp	mips/sh	-	-	500 GP (US, 5GP3 Ver. C)
+5clown	igs/5clown.cpp	-	-	-	Five Clown (English, set 1)
+720	atari/atarisy2.cpp	-	mame4all	-	720 Degrees (rev 4)
+7mezzo	misc/magicfly.cpp	-	-	-	7 e Mezzo
+7ordi	yunsung/nmg5.cpp	-	-	-	7 Ordi (Korea)
+88games	konami/88games.cpp	-	mame4all	-	'88 Games
+8ball	misc/cvs.cpp	-	-	-	Video Eight Ball
+9ballsht	misc/coolpool.cpp	-	-	-	9-Ball Shootout (set 1)
+aafb	cinematronics/leland.cpp	-	mame4all	-	All American Football (Leland, rev E)
+abaseb	atari/atarifb.cpp	-	mame4all	-	Atari Baseball (set 1)
+abcheck	namco/namcond1.cpp	-	-	-	Abnormal Check
+abcop	sega/segaxbd.cpp	-	-	-	A.B. Cop (World) (FD1094 317-0169b)
+aburner	sega/segaxbd.cpp	-	-	-	After Burner (VER 1.32, deluxe/upright)
+aburner2	sega/segaxbd.cpp	-	-	-	After Burner II (VER 2.00, deluxe/upright)
+acchi	dataeast/deco_mlc.cpp	sh	-	-	Janken Game Acchi Muite Hoi! (Japan 1.3)
+ace	alliedleisure/ace.cpp	-	-	-	Ace
+acrobatm	nmk/nmk16.cpp	-	mame4all	-	Acrobat Mission
+actionhw	tch/kickgoal.cpp	-	-	-	Action Hollywood
+aerofgt	vsystem/aerofgt.cpp	-	mame4all	-	Aero Fighters (World / USA + Canada / Korea / Hong Kong / Taiwan) (newer hardware)
+agress	technos/blockout.cpp	-	mame4all	-	Agress - Missile Daisenryaku (Japan)
+airattck	nmk/nmk16.cpp	-	mame4all	-	Air Attack (set 1)
+airbustr	kaneko/airbustr.cpp	-	mame4all	-	Air Buster: Trouble Specialty Raid Unit (World)
+aircomb	namco/namcos21_c67.cpp	-	-	-	Air Combat (AC2, US)
+airrace	atari/atarisy4.cpp	-	-	-	Air Race (prototype)
+akatana	cave/cv1k.cpp	sh	-	-	Akai Katana (Japan, 2010/ 8/13 MASTER VER.)
+akazukin	orca/akazukin.cpp	-	-	-	Akazukin (Japan)
+aking	namco/namcos23.cpp	mips/sh	-	-	Angler King (Japan, AG1 Ver. A)
+akiss	jaleco/ms32.cpp	-	-	-	Mahjong Angel Kiss (ver 1.0, 92047-01 version)
+akkaarrh	atari/akkaarrh.cpp	-	-	-	Akka Arrh (prototype)
+aladmdb	sega/megadriv_acbl.cpp	-	-	-	Aladdin (bootleg of Mega Drive version)
+alantin	misc/carrera.cpp	-	-	-	Alantin - Aladdin's Magic Lamp
+alien3	sega/segas32.cpp	-	-	-	Alien3: The Gun (World)
+aliencha	igs/lordgun.cpp	-	-	-	Alien Challenge (World)
+aliencr	pce/uapce.cpp	-	-	-	Alien Crush (United Amusements PC Engine)
+aligator	gaelco/gaelco2.cpp	-	-	-	Alligator Hunt (World, protected, checksum 2B34128B)
+alinvade	misc/alinvade.cpp	-	-	-	Alien Invaders
+alphaxz	taito/tsamurai.cpp	-	mame4all	-	The Alphax Z (Japan)
+altair	efo/cidelsa.cpp	-	-	-	Altair
+altair2	efo/cidelsa.cpp	-	-	-	Altair II
+ambush	tecfri/ambush.cpp	-	mame4all	-	Ambush
+amerdart	misc/coolpool.cpp	-	-	-	Ameri Darts (set 1)
+amspdwy	misc/amspdwy.cpp	-	-	-	American Speedway (set 1)
+androidp	nasco/himesiki.cpp	-	-	-	Android (prototype, later build)
+andromed	irem/m10.cpp	-	mame4all	-	Andromeda SS (Japan?)
+angelkds	sega/angelkds.cpp	-	-	-	Angel Kids (Japan)
+animalc	sigma/sammymdl.cpp	-	-	-	Animal Catch
+aoh	misc/vamphalf.cpp	e132xs	-	-	Age Of Heroes - Silkroad 2 (v0.63 - 2001/02/07)
+apb	atari/atarisy2.cpp	-	mame4all	-	APB - All Points Bulletin (rev 7)
+appoooh	sanritsu/appoooh.cpp	-	mame4all	-	Appoooh
+aquajack	taito/taito_z.cpp	-	-	-	Aqua Jack (World)
+aquarium	excellent/aquarium.cpp	-	-	-	Aquarium (US)
+ar_airh	amiga/arsystems.cpp	-	-	-	SportTime Table Hockey (Arcadia, set 1, V 2.1)
+ar_argh	amiga/arsystems.cpp	-	-	-	Aaargh (Arcadia)
+ar_blast	amiga/arsystems.cpp	-	-	-	Blastaball (Arcadia, V 2.1)
+ar_bowl	amiga/arsystems.cpp	-	-	-	SportTime Bowling (Arcadia, V 2.1)
+ar_dart	amiga/arsystems.cpp	-	-	-	World Darts (Arcadia, set 1, V 2.1)
+ar_dlta	amiga/arsystems.cpp	-	-	-	Delta Command (Arcadia)
+ar_fast	amiga/arsystems.cpp	-	-	-	Magic Johnson's Fast Break (Arcadia, V 2.8)
+ar_ldrb	amiga/arsystems.cpp	-	-	-	Leader Board Golf (Arcadia, set 1, V 2.5)
+ar_ninj	amiga/arsystems.cpp	-	-	-	Ninja Mission (Arcadia, set 1, V 2.5)
+ar_pm	amiga/arsystems.cpp	-	-	-	Pharaohs Match (Arcadia)
+ar_rdwr	amiga/arsystems.cpp	-	-	-	RoadWars (Arcadia, V 2.3)
+ar_sdwr	amiga/arsystems.cpp	-	-	-	Sidewinder (Arcadia, set 1, V 2.1)
+ar_socc	amiga/arsystems.cpp	-	-	-	World Trophy Soccer (Arcadia, V 3.0)
+ar_spot	amiga/arsystems.cpp	-	-	-	Spot (Arcadia, V 2.0)
+ar_sprg	amiga/arsystems.cpp	-	-	-	Space Ranger (Arcadia, V 2.0)
+ar_xeon	amiga/arsystems.cpp	-	-	-	Xenon (Arcadia, V 2.3)
+arabfgt	sega/segas32.cpp	-	-	-	Arabian Fight (World)
+arabian	sunelectronics/arabian.cpp	-	mame4all	-	Arabian
+arabianm	taito/taito_f3.cpp	-	-	-	Arabian Magic (Ver 1.0O 1992/07/06)
+arcadecl	atari/arcadecl.cpp	-	mame4all	-	Arcade Classics (prototype)
+arcadian	nmk/nmk16.cpp	-	mame4all	-	Arcadia (NMK)
+archrivl	bally/mcr68.cpp	-	mame4all	-	Arch Rivals (rev 4.0 6/29/89)
+area51	atari/jaguar.cpp	mips	-	chd	Area 51 (R3000)
+area51mx	atari/jaguar.cpp	mips	-	chd	Area 51 / Maximum Force Duo v2.0
+arescue	sega/segas32.cpp	-	-	-	Air Rescue (World)
+argus	jaleco/argus.cpp	-	mame4all	-	Argus
+arkarea	upl/ninjakd2.cpp	-	mame4all	-	Ark Area
+arkretrn	taito/taito_f3.cpp	-	-	-	Arkanoid Returns (Ver 2.02O 1997/02/10)
+arlingtn	itech/itech8.cpp	-	-	-	Arlington Horse Racing (v1.40-D)
+armora	cinematronics/cinemat.cpp	-	mame4all	-	Armor Attack
+armwrest	nintendo/punchout.cpp	-	mame4all	-	Arm Wrestling
+ashura	taito/taito_b.cpp	-	mame4all	-	Ashura Blaster (World)
+assault	namco/namcos2.cpp	-	mame4all	-	Assault (Rev B)
+asterix	konami/asterix.cpp	-	-	-	Asterix (ver EAD)
+astrob	sega/segag80r.cpp	-	mame4all	-	Astro Blaster (version 3)
+astrof	dataeast/astrof.cpp	-	mame4all	-	Astro Fighter (set 1)
+astrowar	zaccaria/galaxia.cpp	-	-	-	Astro Wars (set 1)
+asuka	taito/asuka.cpp	-	-	-	Asuka & Asuka (World)
+asurabld	fuuki/fuukifg3.cpp	-	-	-	Asura Blade - Sword of Dynasty (Japan)
+asurabus	fuuki/fuukifg3.cpp	-	-	-	Asura Buster - Eternal Warriors (USA)
+asylum	cinematronics/leland.cpp	-	mame4all	-	Asylum (prototype)
+atarifb	atari/atarifb.cpp	-	mame4all	-	Atari Football (revision 2)
+ataxx	cinematronics/leland.cpp	-	mame4all	-	Ataxx (rev 5)
+atehate	seta/seta.cpp	-	mame4all	-	Athena no Hatena?
+attckufo	misc/attckufo.cpp	-	-	-	Attack UFO
+avalnche	atari/avalnche.cpp	-	mame4all	-	Avalanche
+avengrgs	dataeast/deco_mlc.cpp	sh	-	-	Avengers In Galactic Storm (US/Europe 1.0)
+aztarac	alliedleisure/aztarac.cpp	-	mame4all	-	Aztarac
+b3rinsya	sigma/sigmab98.cpp	-	-	-	Burning Sanrinsya - Burning Tricycle
+backfire	dataeast/backfire.cpp	-	-	-	Backfire! (Data East, Japan, set 1)
+badlands	atari/badlands.cpp	-	mame4all	-	Bad Lands
+balcube	metro/metro.cpp	-	-	-	Bal Cube (Japan)
+ballbros	taito/taito_x.cpp	-	mame4all	-	Balloon Brothers
+banbam	sunelectronics/markham.cpp	-	-	-	BanBam
+bang	gaelco/gaelco2.cpp	-	-	-	Bang! (version 2, checksum 140E)
+bangball	metro/metro.cpp	-	-	-	Bang Bang Ball (v1.05)
+barata	matic/barata.cpp	-	-	-	Dona Barata (early prototype)
+barek2ch	sega/megadriv_acbl.cpp	-	-	-	Bare Knuckle II (scrambled bootleg of Mega Drive version)
+barek2mb	sega/megadriv_acbl.cpp	-	-	-	Bare Knuckle II (bootleg of Mega Drive version)
+barek3mb	sega/megadriv_acbl.cpp	-	-	-	Bare Knuckle III (scrambled bootleg of Mega Drive version)
+barek3mbc	sega/megadriv_acbl.cpp	-	-	-	Bare Knuckle III (Conny bootleg of Mega Drive version)
+barekch	sega/megadriv_acbl.cpp	-	-	-	Bare Knuckle (scrambled bootleg of Mega Drive version)
+barricad	ramtek/hitme.cpp	-	-	-	Barricade
+barrier	cinematronics/cinemat.cpp	-	mame4all	-	Barrier
+baryon	misc/dreamwld.cpp	-	-	-	Baryon - Future Assault (set 1)
+basebal2	cinematronics/leland.cpp	-	mame4all	-	Baseball: The Season II
+batman	atari/batman.cpp	-	mame4all	-	Batman
+batsugun	toaplan/batsugun.cpp	-	mame4all	-	Batsugun
+battlane	technos/battlane.cpp	-	mame4all	-	Battle Lane! Vol. 5 (set 1)
+battlera	dataeast/battlera.cpp	-	mame4all	-	Battle Rangers (World)
+battlex	omori/battlex.cpp	-	-	-	Battle Cross
+battlnts	konami/battlnts.cpp	-	mame4all	-	Battlantis (version G)
+bballoon	eolith/ghosteo.cpp	-	-	-	BnB Arcade (V1.0005 World)
+bbbxing	jaleco/ms32.cpp	-	-	-	Best Bout Boxing (ver 1.3)
+bbh	itech/iteagle.cpp	mips	-	chd	Big Buck Hunter (v1.00.14)
+bbh2sp	itech/iteagle.cpp	mips	-	chd	Big Buck Hunter II - Sportsman's Paradise (v2.02.11)
+bbhcotw	itech/iteagle.cpp	mips	-	chd	Big Buck Hunter Call of the Wild (v3.02.5)
+bbhsc	itech/iteagle.cpp	mips	-	chd	Big Buck Hunter - Shooter's Challenge (v1.60.01)
+bbonk	meadows/lazercmd.cpp	-	mame4all	-	Bigfoot Bonkers
+bbprot	nix/fitfight.cpp	-	-	-	unknown fighting game 'BB' (prototype)
+bbust2	snk/hng64.cpp	mips	-	-	Beast Busters: Second Nightmare
+bbusters	snk/bbusters.cpp	-	-	-	Beast Busters (World)
+bchance	misc/magicfly.cpp	-	-	-	Bonne Chance! (French/English)
+bcruzm12	orca/marineb.cpp	-	mame4all	-	Battle Cruiser M-12
+bcstry	dataeast/tumbleb.cpp	-	-	-	B.C. Story (set 1)
+beaminv	misc/beaminv.cpp	-	-	-	Beam Invader
+beathead	atari/beathead.cpp	-	-	-	BeatHead (prototype)
+beezer	misc/beezer.cpp	-	-	-	Beezer (version 9.0)
+bejpoker	misc/miniboy7.cpp	-	-	-	Bonanza's Joker Poker
+benberob	taito/halleys.cpp	-	-	-	Ben Bero Beh (Japan)
+berenstn	misc/tugboat.cpp	-	-	-	The Berenstain Bears in Bigpaw's Cave
+berlwall	kaneko/kaneko16.cpp	-	mame4all	-	The Berlin Wall
+bestbest	suna/suna16.cpp	-	-	-	Best Of Best
+bestri	f32/crospang.cpp	-	-	-	Bestri (Korea, set 1)
+big10	success/big10.cpp	-	-	-	Big 10 (1985, Success)
+big10a	success/big10.cpp	-	-	-	Big 10 (1986, System Make)
+bigevglf	taito/bigevglf.cpp	-	-	-	Big Event Golf (US)
+bigfight	tatsumi/cyclwarr.cpp	-	-	-	Big Fight - Big Trouble In The Atlantic Ocean
+bigprowr	technos/tagteam.cpp	-	mame4all	-	The Big Pro Wrestling! (set 1)
+bigrun	jaleco/cischeat.cpp	-	mame4all	-	Big Run (11th Rallye version, Europe?)
+bigtwin	playmark/playmark.cpp	-	-	-	Big Twin
+biohzdmb	sega/megadriv_acbl.cpp	-	-	-	Bio-Hazard Battle (scrambled bootleg of Mega Drive version)
+bioship	nmk/nmk16.cpp	-	mame4all	-	Bio-ship Paladin
+bishi	konami/bishi.cpp	-	-	-	Bishi Bashi Champ Mini Game Senshuken (ver JAA, 3 Players)
+bjtwin	nmk/nmk16.cpp	-	mame4all	-	Bombjack Twin (set 1)
+bking	taito/bking.cpp	-	mame4all	-	Birdie King
+bking2	taito/bking.cpp	-	mame4all	-	Birdie King 2
+bking3	taito/bking.cpp	-	mame4all	-	Birdie King 3
+bkrtmaq	namco/namcona1.cpp	-	-	-	Bakuretsu Quiz Ma-Q Dai Bouken (Japan)
+black	misc/photon2.cpp	-	-	-	Czernyj Korabl (Arcade bootleg of ZX Spectrum 'Blackbeard')
+blackhol	misc/efg8080.cpp	-	-	-	Black Hole (EFG Sanremo)
+blackt96	dgrm/blackt96.cpp	-	-	-	Black Touch '96
+bladestl	konami/bladestl.cpp	-	mame4all	-	Blades of Steel (version T, Joystick)
+blandia	seta/seta.cpp	-	mame4all	-	Blandia
+blasted	bally/mcr68.cpp	-	mame4all	-	Blasted
+blazeon	kaneko/kaneko16.cpp	-	mame4all	-	Blaze On (World)
+blazlaz	pce/uapce.cpp	-	-	-	Blazing Lazers (United Amusements PC Engine)
+blkheart	nmk/nmk16.cpp	-	mame4all	-	Black Heart
+blktch2	sunelectronics/shanghai.cpp	-	mame4all	-	Black Touch II (Korea)
+blmbycar	gaelco/blmbycar.cpp	-	-	-	Blomby Car (Version 1P0)
+blockcar	seta/seta.cpp	-	mame4all	-	Block Carnival / Thunder & Lightning 2
+blocken	sunelectronics/shangha3.cpp	-	mame4all	-	Blocken (Japan)
+blockfvr	nintendo/blockfvr.cpp	-	-	-	Block Fever
+blockhl	konami/blockhl.cpp	-	mame4all	-	Block Hole
+blockout	technos/blockout.cpp	-	mame4all	-	Block Out (set 1)
+bloodstm	itech/itech32.cpp	-	-	-	BloodStorm (v2.22)
+bloodwar	kaneko/kaneko16.cpp	-	mame4all	-	Blood Warrior
+blstroid	atari/blstroid.cpp	-	mame4all	-	Blasteroids (rev 4)
+bluehawk	dooyong/dooyong.cpp	-	-	-	Blue Hawk
+blzntrnd	metro/metro.cpp	-	-	-	Blazing Tornado
+bm1stmix	konami/djmain.cpp	-	-	chd	beatmania (ver JA-B)
+bm2ndmix	konami/djmain.cpp	-	-	chd	beatmania 2nd MIX (ver JA-B)
+bm3	konami/firebeat.cpp	powerpc	-	chd	Beatmania III
+bm36th	konami/firebeat.cpp	powerpc	-	chd	Beatmania III Append 6th Mix
+bm37th	konami/firebeat.cpp	powerpc	-	chd	Beatmania III Append 7th Mix
+bm3core	konami/firebeat.cpp	powerpc	-	chd	Beatmania III Append Core Remix
+bm3final	konami/firebeat.cpp	powerpc	-	chd	Beatmania III The Final
+bm3rdmix	konami/djmain.cpp	-	-	chd	beatmania 3rd MIX (ver JA-B)
+bm4thmix	konami/djmain.cpp	-	-	chd	beatmania 4th MIX (ver JA-A)
+bm5thmix	konami/djmain.cpp	-	-	chd	beatmania 5th MIX (ver JA-A)
+bm6thmix	konami/djmain.cpp	-	-	chd	beatmania 6th MIX (ver JA-A)
+bm7thmix	konami/djmain.cpp	-	-	chd	beatmania 7th MIX (ver JA-B)
+bmclubmx	konami/djmain.cpp	-	-	chd	beatmania Club MIX (ver JA-A)
+bmcompm2	konami/djmain.cpp	-	-	chd	beatmania complete MIX 2 (ver JA-A)
+bmcompmx	konami/djmain.cpp	-	-	chd	beatmania complete MIX (ver JA-C)
+bmcorerm	konami/djmain.cpp	-	-	chd	beatmania CORE REMIX (ver JA-A)
+bmdct	konami/djmain.cpp	-	-	chd	beatmania featuring Dreams Come True (ver JA-A)
+bmfinal	konami/djmain.cpp	-	-	chd	beatmania THE FINAL (ver JA-A)
+bngotime	alpha/equites.cpp	-	-	-	Bingo Time
+bogeyman	technos/bogeyman.cpp	-	mame4all	-	Bogey Manor
+boggy84	galaxian/fastfred.cpp	-	mame4all	-	Boggy '84
+bombbee	namco/warpwarp.cpp	-	mame4all	-	Bomb Bee
+bombkick	yunsung/yunsun16.cpp	-	-	-	Bomb Kick (set 1)
+bonanza	pc/pcat_nit.cpp	-	-	-	Touchstar Bonanza (Revision 3)
+bonkadv	kaneko/kaneko16.cpp	-	mame4all	-	B.C. Kid (Europe) / Bonk's Adventure: Arcade Version (US, China, Korea) / Kyukyoku!! PC Genjin: Special Arcade Version (Japan)
+bonzeadv	taito/asuka.cpp	-	-	-	Bonze Adventure (World, rev 1)
+boomrang	dataeast/liberate.cpp	-	-	-	Boomer Rang'r / Genesis (set 1)
+boonggab	misc/vamphalf.cpp	e132xs	-	-	Boong-Ga Boong-Ga (Spank'em!)
+borntofi	edevices/fantland.cpp	-	-	-	Born To Fight (set 1)
+botss	misc/micro3d.cpp	-	-	-	Battle of the Solar System (rev. 1.1a 7/23/92)
+bottom9	konami/bottom9.cpp	-	mame4all	-	Bottom of the Ninth (version T)
+bounty	orca/zodiack.cpp	-	mame4all	-	The Bounty (set 1)
+bowl3d	meadows/meadows.cpp	-	mame4all	-	3-D Bowling
+bowlgum	misc/4enraya.cpp	-	-	-	Bowling Gum
+bowlrama	itech/capbowl.cpp	-	mame4all	-	Bowl-O-Rama (Rev 1.0)
+boxer	atari/boxer.cpp	-	-	-	Boxer (prototype)
+boxingb	cinematronics/cinemat.cpp	-	mame4all	-	Boxing Bugs
+brapboys	kaneko/kaneko16.cpp	-	mame4all	-	B.Rap Boys (World)
+brickzn	suna/suna8.cpp	-	mame4all	-	Brick Zone (v6.0, Joystick)
+brival	sega/segas32.cpp	-	-	-	Burning Rival (World)
+brkthru	dataeast/brkthru.cpp	-	mame4all	-	Break Thru (World)
+brod	misc/photon2.cpp	-	-	-	Brodjaga (Arcade bootleg of ZX Spectrum 'Inspector Gadget and the Circus of Fear')
+brutforc	cinematronics/leland.cpp	-	mame4all	-	Brute Force
+bs94	misc/re900.cpp	-	-	-	Buena Suerte '94
+bshark	taito/taito_z.cpp	-	-	-	Battle Shark (World)
+bsktball	atari/bsktball.cpp	-	mame4all	-	Atari Basketball
+bssoccer	suna/suna16.cpp	-	-	-	Back Street Soccer (KRB-0031 PCB)
+bsuprem	misc/babysuprem.cpp	-	-	-	Baby Suprem
+btlkroad	psikyo/psikyo.cpp	-	mame4all	-	Battle K-Road
+btoads	rare/btoads.cpp	-	-	-	Battletoads
+bubblem	taito/taito_f3.cpp	-	-	-	Bubble Memories: The Story Of Bubble Bobble III (Ver 2.4O 1996/02/15)
+bubbletr	namco/namcos2.cpp	-	mame4all	-	Bubble Trouble - Golly! Ghost! 2 (World, Rev B)
+bubl2000	nmk/nmk16.cpp	-	mame4all	-	Bubble 2000
+bublbob2	taito/taito_f3.cpp	-	-	-	Bubble Bobble II (Ver 2.6O 1994/12/16)
+buckrog	sega/turbo.cpp	-	mame4all	-	Buck Rogers: Planet of Zoom
+bucky	konami/moo.cpp	-	-	-	Bucky O'Hare (ver EAB)
+buggyboy	tatsumi/tx1.cpp	-	-	-	Buggy Boy/Speed Buggy (cockpit, rev. D)
+buggychl	taito/buggychl.cpp	-	-	-	Buggy Challenge
+bullfgtr	alpha/equites.cpp	-	-	-	Bull Fighter
+burgkids	toaplan/sunwise.cpp	-	-	-	Burger Kids (Japan)
+burglarx	unico/unico.cpp	-	-	-	Burglar X
+buriki	snk/hng64.cpp	mips	-	-	Buriki One: World Grapple Tournament '99 in Tokyo (rev.B)
+burnforc	namco/namcos2.cpp	-	mame4all	-	Burning Force (Japan, new version (Rev C))
+butasan	jaleco/argus.cpp	-	mame4all	-	Butasan - Pig's & Bomber's (Japan, English)
+buttobi	konami/konmedal.cpp	-	-	-	Buttobi Striker
+bwings	dataeast/bwing.cpp	-	-	-	B-Wings (Japan new Ver.)
+bygone	taito/lkage.cpp	-	mame4all	-	Bygone (prototype)
+cachat	taito/taito_l.cpp	-	mame4all	-	Cachat (Japan)
+cadash	taito/asuka.cpp	-	-	-	Cadash (World)
+cairblad	seta/ssv.cpp	-	-	-	Change Air Blade (Japan)
+calcune	sega/calcune.cpp	-	-	-	Calcune (Japan, prototype)
+candy	eolith/eolith.cpp	e132xs	-	-	Candy Candy
+cannball	yunsung/yunsung8.cpp	-	mame4all	-	Cannon Ball (Yun Sung, horizontal)
+canvas	snk/mainsnk.cpp	-	-	-	Canvas Croquis
+capbowl	itech/capbowl.cpp	-	mame4all	-	Capcom Bowling (set 1)
+captflag	jaleco/scudhamm.cpp	-	-	-	Captain Flag (Japan)
+cardline	misc/cardline.cpp	-	-	-	Card Line
+carjmbre	omori/carjmbre.cpp	-	-	-	Car Jamboree
+carket	dataeast/tumbleb.cpp	-	-	-	Carket Ball
+carniv37	skeleton/carnival37.cpp	-	-	-	Carnival 37
+carnking	itech/iteagle.cpp	mips	-	chd	Carnival King (v1.00.11)
+carpolo	exidy/carpolo.cpp	-	-	-	Car Polo
+carrera	misc/carrera.cpp	-	-	-	Carrera (Version 6.7)
+casanova	promat/3x3puzzl.cpp	-	-	-	Casanova
+catchp	atari/avalnche.cpp	-	mame4all	-	Catch (prototype)
+catnmous	zaccaria/laserbat.cpp	-	-	-	Cat and Mouse (type 02 program)
+cball	atari/cball.cpp	-	-	-	Cannonball (Atari, prototype)
+cbasebal	capcom/cbasebal.cpp	-	mame4all	-	Capcom Baseball (Japan)
+cbombers	taito/undrfire.cpp	-	-	-	Chase Bombers (World)
+cchance	taito/cchance.cpp	-	-	-	Cherry Chance
+cchasm	cinematronics/cchasm.cpp	-	mame4all	-	Cosmic Chasm (set 1)
+cclownz	ice/lethalj.cpp	-	-	-	Crazzy Clownz (Version 1.0)
+cecmatch	misc/dcheese.cpp	-	-	-	ChuckECheese's Match Game
+cerberus	cinematronics/leland.cpp	-	mame4all	-	Cerberus
+cfarm	ice/lethalj.cpp	-	-	-	Chicken Farm (Version 2.0)
+cgangpzl	namco/namcona1.cpp	-	-	-	Cosmo Gang the Puzzle (US)
+chainrec	dataeast/simpl156.cpp	-	-	-	Chain Reaction (World, Master Version 2.2, 1995.09.25)
+chaknpop	taito/chaknpop.cpp	-	-	-	Chack'n Pop
+challeng	alliedleisure/killcom.cpp	-	mame4all	-	Challenger
+champbas	alpha/champbas.cpp	-	mame4all	-	Champion Base Ball
+champbb2	alpha/champbas.cpp	-	mame4all	-	Champion Base Ball Part-2 (set 1)
+champbwl	seta/champbwl.cpp	-	-	-	Championship Bowling
+champwr	taito/taito_l.cpp	-	mame4all	-	Champion Wrestler (World)
+chanbara	dataeast/chanbara.cpp	-	-	-	Chanbara (Japan)
+chance32	misc/chance32.cpp	-	-	-	Chance Thirty Two
+changela	taito/changela.cpp	-	-	-	Change Lanes
+changes	orca/marineb.cpp	-	mame4all	-	Changes
+charlien	dataeast/simpl156.cpp	-	-	-	Charlie Ninja
+chasehq	taito/taito_z.cpp	-	-	-	Chase H.Q. (World)
+chboxing	sega/sg1000a.cpp	-	-	-	Champion Boxing
+cheekyms	universal/cheekyms.cpp	-	mame4all	-	Cheeky Mouse
+cheesech	misc/artmagic.cpp	-	-	-	Cheese Chase
+chewheel	misc/mil4000.cpp	-	-	-	Cherry Wheel (Version 1.7)
+cheyenne	exidy/exidy440.cpp	-	mame4all	-	Cheyenne (version 1.0)
+chicgum	misc/4enraya.cpp	-	-	-	Chic Gum Video
+chiller	exidy/exidy440.cpp	-	mame4all	-	Chiller (version 3.0)
+chinhero	misc/shangkid.cpp	-	-	-	Chinese Hero
+chinsan	sanritsu/chinsan.cpp	-	-	-	Ganbare Chinsan Ooshoubu (MC-8123A, 317-5012)
+chokchok	dataeast/tumbleb.cpp	-	-	-	Choky! Choky!
+chqflag	konami/chqflag.cpp	-	-	-	Chequered Flag
+chsuper3	misc/chsuper.cpp	-	-	-	Champion Super 3 (V0.35)
+chusenoh	konami/konmedal.cpp	-	-	-	Chusenoh
+chwrestl	sega/sg1000a.cpp	-	-	-	Champion Pro Wrestling
+circus	exidy/circus.cpp	-	mame4all	-	Circus / Acrobat TV
+cischeat	jaleco/cischeat.cpp	-	mame4all	-	Cisco Heat
+claypign	exidy/exidy440.cpp	-	mame4all	-	Clay Pigeon (version 2.0)
+clayshoo	alliedleisure/clayshoo.cpp	-	-	-	Clay Shoot
+cleopatr	taito/taito_f3.cpp	-	-	-	Cleopatra Fortune (Ver 2.1J 1996/09/05)
+cliffhgr	stern/cliffhgr.cpp	-	-	chd	Cliff Hanger (set 1)
+cloak	atari/cloak.cpp	-	mame4all	-	Cloak & Dagger (rev 5)
+cloud9	atari/cloud9.cpp	-	mame4all	-	Cloud 9 (prototype)
+clshroad	nichibutsu/clshroad.cpp	-	-	-	Clash-Road
+cndypuzl	amiga/cubo.cpp	-	-	chd	Candy Puzzle (v1.0)
+cntrygrl	nichibutsu/jangou.cpp	-	-	-	Country Girl (Japan set 1)
+cocoloco	misc/cocoloco.cpp	-	-	-	Coco Loco (set 1)
+codemagik	misc/lependu.cpp	-	-	-	Code Magik (Ver 5.5) / Super 7 (stealth game)
+combat	exidy/exidy440.cpp	-	mame4all	-	Combat (version 3.0)
+commandw	taito/taito_f3.cpp	-	-	-	Command War - Super Special Battle & War Game (Ver 0.0J, prototype)
+compgolf	dataeast/compgolf.cpp	-	-	-	Competition Golf Final Round (World?, revision 3)
+contcirc	taito/taito_z.cpp	-	-	-	Continental Circus (World)
+contrambc	sega/megadriv_acbl.cpp	-	-	-	Contra (Conny bootleg of Mega Drive version)
+cookbib	dataeast/tumbleb.cpp	-	-	-	Cookie & Bibi (set 1)
+coolmini	misc/vamphalf.cpp	e132xs	-	-	Cool Minigame Collection
+coolpool	misc/coolpool.cpp	-	-	-	Cool Pool
+coolridr	sega/coolridr.cpp	sh	-	-	Cool Riders
+cop01	nichibutsu/cop01.cpp	-	mame4all	-	Cop 01 (set 1)
+copsnrob	atari/copsnrob.cpp	-	mame4all	-	Cops'n Robbers
+cosmogng	namco/namcos2.cpp	-	mame4all	-	Cosmo Gang the Video (US)
+cosmos	misc/cvs.cpp	-	-	-	Cosmos
+cothello	nintendo/cothello.cpp	-	-	-	Computer Othello
+cpoker2	igs/igs017.cpp	-	-	-	Champion Poker 2 (V100A)
+cracksht	exidy/exidy440.cpp	-	mame4all	-	Crackshot (version 2.0)
+crash	exidy/circus.cpp	-	mame4all	-	Crash (set 1)
+crazyfgt	seta/seta.cpp	-	mame4all	-	Crazy Fight
+crazywar	eolith/vegaeo.cpp	e132xs	-	-	Crazy War
+crgolf	nasco/crgolf.cpp	-	-	-	Crowns Golf (834-5419-04)
+crgolfhi	nasco/crgolf.cpp	-	-	-	Crowns Golf in Hawaii
+crimec	taito/taito_b.cpp	-	mame4all	-	Crime City (World)
+croquis	sega/deniam.cpp	-	mame4all	-	Croquis (Korea)
+crospang	f32/crospang.cpp	-	-	-	Cross Pang
+crossbow	exidy/exidy440.cpp	-	mame4all	-	Crossbow (version 2.0)
+crshrace	vsystem/crshrace.cpp	-	-	-	Lethal Crash Race / Bakuretsu Crash Race (set 1)
+crszone	namco/namcos23.cpp	mips/sh	-	-	Crisis Zone (World, CSZO4 Ver. B)
+crusnusa	williams/midvunit.cpp	-	-	-	Cruis'n USA (v4.5)
+crusnwld	williams/midvunit.cpp	-	-	-	Cruis'n World (v2.5)
+crysking	misc/crystal.cpp	-	-	-	The Crystal of Kings
+crzcross	konami/konamigx.cpp	-	-	-	Crazy Cross (ver EAA)
+crzrally	tecfri/holeland.cpp	-	-	-	Crazy Rally (set 1)
+crzybugs	igs/igs_m027xa.cpp	-	-	-	Crazy Bugs (V204US)
+csdaruma	misc/banpresto_bpsc68000.cpp	-	-	-	Crayon Shin-chan no Daruma Otoshi da Zo
+cshift	bally/balsente.cpp	-	mame4all	-	Chicken Shift (11/23/84)
+csprint	atari/atarisy2.cpp	-	mame4all	-	Championship Sprint (rev 3)
+ctribe	technos/ddragon3.cpp	-	mame4all	-	The Combatribes (US, rev 2, set 1)
+cubeqst	misc/cubeqst.cpp	-	-	chd	Cube Quest (01/04/84)
+cubybop	taito/taito_l.cpp	-	mame4all	-	Cuby Bop (Japan, location test)
+cupfinal	taito/taito_f3.cpp	-	-	-	Taito Cup Finals (Ver 1.0O 1993/02/28)
+cutefght	misc/dreamwld.cpp	-	-	-	Cute Fighter
+cutieq	namco/warpwarp.cpp	-	mame4all	-	Cutie Q
+cyberbal	atari/cyberbal.cpp	-	mame4all	-	Cyberball (rev 4)
+cybertnk	misc/cybertnk.cpp	-	-	-	Cyber Tank (v1.4)
+cybsled	namco/namcos21_c67.cpp	-	-	-	Cyber Sled (CY2, World)
+cybstorm	atari/cybstorm.cpp	-	-	-	Cyberstorm (prototype)
+cyclemb	taito/cyclemb.cpp	-	-	-	Cycle Maabou (Japan)
+cyvern	kaneko/suprnova.cpp	sh	-	-	Cyvern - The Dragon Weapons (US)
+d9final	excellent/d9final.cpp	-	-	-	Dream 9 Final (v2.24)
+dacholer	nichibutsu/dacholer.cpp	-	-	-	Dacholer
+dai3wksi	sunelectronics/dai3wksi.cpp	-	-	-	Dai 3 Wakusei (Japan)
+daifugo	seta/speedatk.cpp	-	-	-	Daifugo (Japan)
+daikaiju	taito/lsasquad.cpp	-	mame4all	-	Daikaiju no Gyakushu (rev 1)
+daioh	seta/seta.cpp	-	mame4all	-	Daioh
+daiskiss	konami/konamigx.cpp	-	-	-	Daisu-Kiss (ver JAA)
+daitorid	metro/metro.cpp	-	-	-	Daitoride (Japan)
+dambustr	galaxian/dambustr.cpp	-	-	-	Dambusters (US, set 1)
+dangerex	atari/atarig42.cpp	-	-	-	Danger Express (prototype)
+dangerz	cinematronics/leland.cpp	-	mame4all	-	Danger Zone (rev 2)
+dankuga	taito/taito_f3.cpp	-	-	-	Dan-Ku-Ga (Ver 0.0J 1994/12/13, prototype)
+daraku	psikyo/psikyosh.cpp	sh	-	-	The Fallen Angels (World) / Daraku Tenshi: The Fallen Angels (Japan)
+dariusg	taito/taito_f3.cpp	-	-	-	Darius Gaiden - Silver Hawk (Ver 2.5O 1994/09/19)
+dariusgx	taito/taito_f3.cpp	-	-	-	Darius Gaiden - Silver Hawk Extra Version (Ver 2.7J 1995/03/06) (Official Hack)
+darkedge	sega/segas32.cpp	-	-	-	Dark Edge (World)
+darkmist	seibu/darkmist.cpp	-	-	-	The Lost Castle In Darkmist
+darkwar	misc/cvs.cpp	-	-	-	Dark Warrior
+darwin	dataeast/brkthru.cpp	-	mame4all	-	Darwin 4078 (Japan)
+dazzler	misc/cvs.cpp	-	-	-	Dazzler
+dblaxle	taito/taito_z.cpp	-	-	-	Double Axle (US, Rev 1, set 1)
+dblcrown	excellent/dblcrown.cpp	-	-	-	Double Crown (v1.0.3)
+dbldynj	seibu/dynduke.cpp	-	mame4all	-	The Double Dynamites (Japan, 13NOV89)
+dblewing	dataeast/dblewing.cpp	-	-	-	Double Wings (set 1)
+dblplay	cinematronics/leland.cpp	-	mame4all	-	Super Baseball Double Play Home Run Derby
+dblpoint	misc/gumbo.cpp	-	-	-	Double Point
+dbz	konami/dbz.cpp	-	-	-	Dragon Ball Z (rev B)
+dbz2	konami/dbz.cpp	-	-	-	Dragon Ball Z 2 - Super Battle
+dbzvrvs	sega/segas32.cpp	-	-	-	Dragon Ball Z: V.R. V.S. (Japan, Rev A)
+dcclub	sega/segas24.cpp	-	-	-	Dynamic Country Club (World, ROM Based)
+dcheese	misc/dcheese.cpp	-	-	-	Double Cheese
+dday	olympia/dday.cpp	-	mame4all	-	D-Day (Olympia)
+ddayjlc	jaleco/dday.cpp	-	-	-	D-Day (Jaleco, set 1)
+ddboy	konami/konmedal.cpp	-	-	-	Dam Dam Boy (on dedicated PCB)
+ddealer	nmk/ddealer.cpp	-	-	-	Double Dealer
+ddpdfk	cave/cv1k.cpp	sh	-	-	DoDonPachi Dai-Fukkatsu Ver 1.5 (Japan, 2008/06/23 MASTER VER 1.5)
+ddpdojt	igs/pgm2.cpp	-	-	-	DoDonPachi Dai-Ou-Jou Tamashii (V201, China)
+ddpsdoj	cave/cv1k.cpp	sh	-	-	DoDonPachi SaiDaiOuJou (Japan, 2012/ 4/20)
+ddragon3	technos/ddragon3.cpp	-	mame4all	-	Double Dragon 3: The Rosetta Stone (US)
+deadang	seibu/deadang.cpp	-	-	-	Dead Angle
+deadeye	meadows/meadows.cpp	-	mame4all	-	Dead Eye
+deathsml	cave/cv1k.cpp	sh	-	-	Deathsmiles (Japan, 2007/10/09 MASTER VER)
+deerhunt	seta/seta2.cpp	-	-	-	Deer Hunting USA V4.3
+deluxe5	misc/esd16.cpp	-	-	-	Deluxe 5 (ver. 0107, 07/01/2000, set 1)
+demon	cinematronics/cinemat.cpp	-	mame4all	-	Demon
+dendego	taito/taitojc.cpp	-	-	-	Densha de GO! (Ver 2.3 J)
+dendego2	taito/taitojc.cpp	-	-	-	Densha de GO! 2 Kousoku-hen (Ver 2.5 J)
+denseib	nintendo/snesb.cpp	-	-	-	Ghost Chaser Densei (SNES bootleg, set 1)
+deroon	tecmo/tecmosys.cpp	-	-	-	Deroon DeroDero (earlier, set 1)
+desertwr	jaleco/ms32.cpp	-	-	-	Desert War / Wangan Sensou (ver 1.0)
+destroyr	atari/destroyr.cpp	-	-	-	Destroyer (Atari, version O2)
+destryer	efo/cidelsa.cpp	-	-	-	Destroyer (Cidelsa, set 1)
+devstors	konami/mainevt.cpp	-	mame4all	-	Devastators (ver. Z)
+dfkbl	cave/cv1k.cpp	sh	-	-	DoDonPachi Dai-Fukkatsu Black Label (Japan, 2010/1/18 BLACK LABEL)
+dfruit	misc/dfruit.cpp	-	-	-	Fruit Dream (Japan, Ver. 1.20)
+dharma	metro/metro.cpp	-	-	-	Dharma Doujou
+dietgo	dataeast/dietgo.cpp	-	-	-	Diet Go Go (Europe v1.1 1992.09.26, set 1)
+diggerc	misc/cvs.cpp	-	-	-	Digger (CVS)
+dindice	ussr/special_gambl.cpp	-	-	-	Dice game
+dirtfoxj	namco/namcos2.cpp	-	mame4all	-	Dirt Fox (Japan)
+discoboy	misc/discoboy.cpp	-	-	-	Disco Boy
+divebomb	konami/divebomb.cpp	-	-	-	Kyuukoukabakugekitai - Dive Bomber Squad (Japan, prototype)
+diverboy	edevices/diverboy.cpp	-	-	-	Diver Boy
+djboy	kaneko/djboy.cpp	-	-	-	DJ Boy (World)
+dkmb	namco/dkmb.cpp	powerpc	-	-	Donkey Kong / Donkey Kong Jr / Mario Bros
+dlair	cinematronics/dlair.cpp	-	-	chd	Dragon's Lair (US Rev. F2)
+dleague	taito/taito_h.cpp	-	-	-	Dynamite League (US)
+docastle	universal/docastle.cpp	-	mame4all	-	Mr. Do's Castle (set 1)
+dodgem	zaccaria/zac1b1120.cpp	-	-	-	Dodgem
+dodgeman	omori/battlex.cpp	-	-	-	Dodge Man
+dodghero	sigma/sigmab98.cpp	-	-	-	Minna Atsumare! Dodge Hero
+dogfgt	technos/dogfgt.cpp	-	-	-	Acrobatic Dog-Fight
+dogfight	orca/zodiack.cpp	-	mame4all	-	Dog Fight (Thunderbolt)
+dogyuun	toaplan/dogyuun.cpp	-	mame4all	-	Dogyuun
+dokidoki	sega/sg1000a.cpp	-	-	-	Doki Doki Penguin Land
+dokyusei	metro/metro.cpp	-	-	-	Mahjong Doukyuusei (Japan)
+dokyusp	metro/metro.cpp	-	-	-	Mahjong Doukyuusei Special (Japan)
+dolmen	nmk/nmk16.cpp	-	mame4all	-	Dolmen
+dominob	misc/dominob.cpp	-	-	-	Domino Block
+dorachan	misc/dorachan.cpp	-	-	-	Dora-chan (Japan)
+dorunrun	universal/docastle.cpp	-	mame4all	-	Do! Run Run (set 1)
+dowild	universal/docastle.cpp	-	mame4all	-	Mr. Do's Wild Ride
+downhill	namco/namcos23.cpp	mips/sh	-	-	Downhill Bikers (World, DH2 Ver. A)
+dquizgo	dataeast/tumbleb.cpp	-	-	-	Date Quiz Go Go (Korea)
+dquizgo2	misc/vamphalf.cpp	e132xs	-	-	Date Quiz Go Go Episode 2
+draco	efo/cidelsa.cpp	-	-	-	Draco
+dragnblz	psikyo/psikyosh.cpp	sh	-	-	Dragon Blaze
+dragngun	dataeast/dragngun.cpp	-	-	-	Dragon Gun (US, LTEST-02 Version 0.00, 1992-12-08)
+dragoona	konami/konamigx.cpp	-	-	-	Dragoon Might (ver AAB)
+dragrace	atari/dragrace.cpp	-	-	-	Drag Race
+drderby	snk/drderby.cpp	-	-	-	Derby Derby
+dreambal	dataeast/dreambal.cpp	-	-	-	Dream Ball (Japan V2.4)
+dreamwld	misc/dreamwld.cpp	-	-	-	Dream World
+drgnbstr	namco/skykid.cpp	-	mame4all	-	Dragon Buster
+drgnmst	unico/drgnmst.cpp	-	-	-	Dragon Master (set 1)
+drgnunit	seta/seta.cpp	-	mame4all	-	Dragon Unit / Castle of Dragon
+drgnwrld	igs/igs011.cpp	-	-	-	Dragon World (World, V040O)
+dribling	modelracing/dribling.cpp	-	-	-	Dribbling (set 1)
+drifto94	seta/ssv.cpp	-	-	-	Drift Out '94 - The Hard Order (Japan)
+drivedge	itech/itech32.cpp	-	-	-	Driver's Edge (v1.6)
+drkseal	misc/carrera.cpp	-	-	-	Dark Seal (8-liner)
+drmicro	sanritsu/drmicro.cpp	-	-	-	Dr. Micro
+drtomy	playmark/drtomy.cpp	-	-	-	Dr. Tomy
+dsaber	namco/namcos2.cpp	-	mame4all	-	Dragon Saber (World, DO2)
+dsmbl	cave/cv1k.cpp	sh	-	-	Deathsmiles MegaBlack Label (Japan, 2008/10/06 MEGABLACK LABEL VER)
+dtfamily	misc/vamphalf.cpp	e132xs	-	-	Diet Family
+dynabomb	misc/limenko.cpp	e132xs	-	-	Dynamite Bomber (Korea, Rev 1.5)
+dynadice	misc/dynadice.cpp	-	-	-	Dynamic Dice
+dynagear	seta/ssv.cpp	-	-	-	Dyna Gear
+dynamski	misc/shangkid.cpp	-	-	-	Dynamic Ski
+dynashot	jaleco/homerun.cpp	-	-	-	Dynamic Shoot Kyousou
+dynduke	seibu/dynduke.cpp	-	mame4all	-	Dynamite Duke (Europe, 03SEP89)
+eaglshot	seta/ssv.cpp	-	-	-	Eagle Shot Golf (US)
+earthjkr	taito/asuka.cpp	-	-	-	U.N. Defense Force: Earth Joker (US / Japan, set 1)
+efdt	misc/efdt.cpp	-	-	-	El Fin Del Tiempo
+egghunt	capcom/egghunt.cpp	-	-	-	Egg Hunt
+eggventr	ice/lethalj.cpp	-	-	-	Egg Venture (Release 10)
+eibise	taito/taito_o.cpp	-	-	-	Eibise (Japan)
+eightfrc	seta/seta.cpp	-	mame4all	-	Eight Forces
+ejanhs	seibu/seibuspi.cpp	-	-	-	E Jong High School (Japan)
+ejsakura	seibu/seibuspi.cpp	-	-	-	E-Jan Sakurasou (Japan, SYS386F V2.0)
+elfin	misc/dgpix.cpp	e132xs	-	-	Elfin
+elim2	sega/segag80v.cpp	-	mame4all	-	Eliminator (2 Players, set 1)
+elvactr	taito/taito_f3.cpp	-	-	-	Elevator Action Returns (Ver 2.2O 1995/02/20)
+embargo	cinematronics/embargo.cpp	-	-	-	Embargo
+emeralda	namco/namcona1.cpp	-	-	-	Emeraldia (World)
+empcity	seibu/stfight.cpp	-	mame4all	-	Empire City: 1931 (bootleg?)
+endless	nintendo/snesb.cpp	-	-	-	Gundam Wing: Endless Duel (SNES bootleg, set 1)
+endrichs	seta/seta2.cpp	-	-	-	Endless Riches (Ver 1.21)
+enduror	sega/segahang.cpp	-	mame4all	-	Enduro Racer (Rev A, YM2151, FD1089B 317-0013A)
+enforce	taito/taito_z.cpp	-	-	-	Enforce (World)
+enigma2	misc/enigma2.cpp	-	-	-	Enigma II
+enmadaio	toaplan/enmadaio.cpp	-	-	-	Enma Daio (Japan)
+eprom	atari/eprom.cpp	-	mame4all	-	Escape from the Planet of the Robot Monsters (set 1)
+equites	alpha/equites.cpp	-	-	-	Equites
+ertictac	acorn/ertictac.cpp	-	-	-	Erotictac/Tactic
+espgal2	cave/cv1k.cpp	sh	-	-	Espgaluda II (Japan, 2005/11/14.MASTER VER.)
+espial	orca/espial.cpp	-	mame4all	-	Espial (Europe)
+eto	taito/asuka.cpp	-	-	-	Kokontouzai Eto Monogatari (Japan)
+evilngt	konami/konamim2.cpp	dspp/powerpc	-	chd	Evil Night (ver UBA)
+evilston	taito/taito_l.cpp	-	mame4all	-	Evil Stone
+evosocc	misc/crystal.cpp	-	-	-	Evolution Soccer
+excelsr	playmark/playmark.cpp	-	-	-	Excelsior (set 1)
+exctscc2	alpha/champbas.cpp	-	mame4all	-	Exciting Soccer II
+exctsccr	alpha/champbas.cpp	-	mame4all	-	Exciting Soccer
+explbrkr	kaneko/kaneko16.cpp	-	mame4all	-	Explosive Breaker (World)
+extdwnhl	seta/seta.cpp	-	mame4all	-	Extreme Downhill (v1.5)
+exterm	gottlieb/exterm.cpp	-	mame4all	-	Exterminator
+exvania	namco/namcona1.cpp	-	-	-	Exvania (World)
+exzisus	taito/exzisus.cpp	-	-	-	Exzisus (Japan, dedicated)
+f15se	misc/micro3d.cpp	-	-	-	F-15 Strike Eagle (rev. 2.2 02/25/91, 29K ver. 3.1f)
+f1en	sega/segas32.cpp	-	-	-	F1 Exhaust Note (World, Rev A)
+f1gp	vsystem/f1gp.cpp	-	-	-	F-1 Grand Prix (set 1)
+f1gp2	vsystem/f1gp.cpp	-	-	-	F-1 Grand Prix Part II
+f1gpstar	jaleco/cischeat.cpp	-	mame4all	-	Grand Prix Star (ver 4.0)
+f1gpstr2	jaleco/cischeat.cpp	-	mame4all	-	F-1 Grand Prix Star II
+f1lap	sega/segas32.cpp	-	-	-	F1 Super Lap (World)
+failgate	seibu/airraid.cpp	-	-	-	Fail Gate
+famibox	nintendo/famibox.cpp	-	-	-	FamicomBox
+fantasia	kaneko/expro02.cpp	-	-	-	Fantasia (940429 PCB, set 1)
+fantjour	konami/konamigx.cpp	-	-	-	Fantastic Journey (ver EAA)
+fantland	edevices/fantland.cpp	-	-	-	Fantasy Land (set 1)
+fantsia2	kaneko/expro02.cpp	-	-	-	Fantasia II (Explicit)
+fatfurwa	snk/hng64.cpp	mips	-	-	Fatal Fury: Wild Ambition / Garou Densetsu: Wild Ambition (rev.A)
+fcombat	jaleco/fcombat.cpp	-	-	-	Field Combat
+fearless	igs/igs_fear.cpp	-	-	-	Fearless Pinocchio (V101US)
+fever13	excellent/lastbank.cpp	-	-	-	Fever 13 (Japan, v1.3)
+feversoc	seibu/feversoc.cpp	sh	-	-	Fever Soccer
+ffight2b	nintendo/snesb.cpp	-	-	-	Final Fight 2 (SNES bootleg)
+ffight3b	nintendo/snesb.cpp	-	-	-	Final Fight 3 (SNES bootleg, set 1)
+fghtatck	namco/namcona1.cpp	-	-	-	Fighter & Attacker (US)
+fghtbskt	irem/m63.cpp	-	-	-	Fighting Basketball
+fgoal	taito/fgoal.cpp	-	-	-	Field Goal (set 1)
+fhawk	taito/taito_l.cpp	-	mame4all	-	Fighting Hawk (World)
+fieldday	taito/40love.cpp	-	-	-	Field Day
+fightrol	taito/rollrace.cpp	-	-	-	Fighting Roller
+filetto	pc/filetto.cpp	-	-	-	Filetto (v1.05 901009)
+finalap2	namco/namcos2.cpp	-	mame4all	-	Final Lap 2 (World, Rev B)
+finalap3	namco/namcos2.cpp	-	mame4all	-	Final Lap 3 (World, Rev C)
+finalapr	namco/namcofl.cpp	-	-	-	Final Lap R (Rev. B)
+finalgdr	misc/vamphalf.cpp	e132xs	-	-	Final Godori (Korea, version 2.20.5915)
+finallap	namco/namcos2.cpp	-	mame4all	-	Final Lap (Rev E)
+finehour	namco/namcos2.cpp	-	mame4all	-	Finest Hour (Japan)
+finfurl	namco/namcos23.cpp	mips/sh	-	-	Final Furlong (World, FF2 Ver. A)
+finfurl2	namco/namcos23.cpp	mips/sh	-	-	Final Furlong 2 (World, FFS2 Ver. A)
+firebatl	nichibutsu/clshroad.cpp	-	-	-	Fire Battle
+firebeas	atari/cloud9.cpp	-	mame4all	-	Firebeast (prototype)
+firefox	atari/firefox.cpp	-	-	chd	Fire Fox (set 1)
+fireone	exidy/starfire.cpp	-	mame4all	-	Fire One
+firetrap	dataeast/firetrap.cpp	-	mame4all	-	Fire Trap (US, rev A)
+firetrk	atari/firetrk.cpp	-	mame4all	-	Fire Truck / Smokey Joe (PROM version)
+fishfren	atari/jaguar.cpp	mips	-	-	Fishin' Frenzy (prototype)
+fitfight	nix/fitfight.cpp	-	-	-	Fit of Fighting
+fiveside	konami/ultrsprt.cpp	powerpc	-	-	Five a Side Soccer (ver UAA)
+fixeight	toaplan/fixeight.cpp	-	-	-	FixEight (Europe)
+flagrall	promat/1945kiii.cpp	-	-	-	'96 Flag Rally
+flipjack	misc/flipjack.cpp	-	-	-	Flipper Jack
+flower	misc/flower.cpp	-	-	-	Flower (US)
+flsbeats	sega/flashbeats.cpp	-	-	-	Flash Beats
+flyball	atari/flyball.cpp	-	-	-	Flyball (rev 2)
+flyboy	galaxian/fastfred.cpp	-	mame4all	-	Fly-Boy
+flytiger	dooyong/dooyong.cpp	-	-	-	Flying Tiger (set 1)
+fmaniac2p	misc/dgpix.cpp	e132xs	-	-	Fishing Maniac 2+
+fmaniac3	misc/dgpix.cpp	e132xs	-	-	Fishing Maniac 3
+fncywld	dataeast/tumbleb.cpp	-	-	-	Fancy World - Earth of Crisis (set 1)
+foolrace	misc/efg8080.cpp	-	-	-	Fool Race
+footbpow	gaelco/gaelco3d.cpp	-	-	-	Football Power (version 4.6)
+formatz	jaleco/aeroboto.cpp	-	mame4all	-	Formation Z
+fort2b	eolith/eolith.cpp	e132xs	-	-	Fortress 2 Blue Arcade (World) (ver 1.01 / pcb ver 3.05)
+fortecrd	misc/fortecar.cpp	-	-	-	Forte Card (Ver 110, Spanish)
+fourtrax	namco/namcos2.cpp	-	mame4all	-	Four Trax (World)
+fredmem	misc/dcheese.cpp	-	-	-	Fred Flintstone's Memory Match (World?, Ticket version, 3/17/95)
+freekick	misc/freekick.cpp	-	-	-	Free Kick (NS6201-A 1987.10)
+freezeat	atari/jaguar.cpp	mips	-	-	Freeze (Atari) (prototype, English voice, 96/10/25)
+friskyt	nichibutsu/seicross.cpp	-	mame4all	-	Frisky Tom (set 1)
+fruitstb	misc/mpu12wbk.cpp	-	-	-	Fruit Star Bonus (Ver 8.2.00ITL)
+fspiderb	taito/jollyjgr.cpp	-	-	-	Frog & Spiders (bootleg?)
+fstarfrc	tecmo/tecmo16.cpp	-	mame4all	-	Final Star Force (US)
+funcube	namco/funcube.cpp	-	-	-	Funcube (v1.5)
+funcube2	namco/funcube.cpp	-	-	-	Funcube 2 (v1.1)
+funcube3	namco/funcube.cpp	-	-	-	Funcube 3 (v1.1)
+funcube4	namco/funcube.cpp	-	-	-	Funcube 4 (v1.0)
+funcube5	namco/funcube.cpp	-	-	-	Funcube 5 (v1.0)
+funkybee	orca/funkybee.cpp	-	mame4all	-	Funky Bee
+funkyjet	dataeast/funkyjet.cpp	-	-	-	Funky Jet (World, rev 1)
+funybubl	comad/funybubl.cpp	-	-	-	Funny Bubble
+futari15	cave/cv1k.cpp	sh	-	-	Mushihime-Sama Futari Ver 1.5 (Japan, 2006/12/8.MASTER VER. 1.54.)
+futaribl	cave/cv1k.cpp	sh	-	-	Mushihime-Sama Futari Black Label - Another Ver (World, 2009/11/27 INTERNATIONAL BL)
+futflash	misc/laserbas.cpp	-	-	-	Future Flash (set 1)
+fuusenpn	konami/konmedal.cpp	-	-	-	Fuusen Pentai
+ga2	sega/segas32.cpp	-	-	-	Golden Axe: The Revenge of Death Adder (World, Rev B)
+gaialast	misc/dreamwld.cpp	-	-	-	Gaia - The Last Choice of Earth
+gaiapols	konami/mystwarr.cpp	-	-	-	Gaiapolis (ver EAF)
+gakupara	nmk/quizdna.cpp	-	-	-	Quiz Gakuen Paradise (Japan, ver. 1.04)
+gakusai	metro/metro.cpp	-	-	-	Mahjong Gakuensai (Japan, set 1)
+gakusai2	metro/metro.cpp	-	-	-	Mahjong Gakuensai 2 (Japan)
+galastrm	taito/galastrm.cpp	-	-	-	Galactic Storm (Japan)
+galaxi	misc/galaxi.cpp	-	-	-	Galaxi (v2.0)
+galaxia	zaccaria/galaxia.cpp	-	-	-	Galaxia (set 1)
+galaxygn	edevices/fantland.cpp	-	-	-	Galaxy Gunners
+galgame	misc/galgame.cpp	-	-	-	Galaxy Game
+galgame2	ces/galgames.cpp	-	-	-	Galaxy Games + StarPak 2 cartridge
+galgame3	ces/galgames.cpp	-	-	-	Galaxy Games + StarPak 3 cartridge
+galgame4	ces/galgames.cpp	-	-	-	Galaxy Games + StarPak 4 cartridge
+galmedes	taito/asuka.cpp	-	-	-	Galmedes (Japan)
+galpani3	kaneko/galpani3.cpp	-	-	-	Gals Panic 3 (Euro)
+galpani4	kaneko/suprnova.cpp	sh	-	-	Gals Panic 4 (Europe)
+galpanis	kaneko/suprnova.cpp	sh	-	-	Gals Panic S - Extra Edition (Europe, revision 1)
+galpans2	kaneko/suprnova.cpp	sh	-	-	Gals Panic S2 (Europe, version 3)
+galpans3	kaneko/suprnova.cpp	sh	-	-	Gals Panic S3 (Japan)
+galsnew	kaneko/expro02.cpp	-	-	-	Gals Panic (Export, EXPRO-02 PCB)
+galspnbl	comad/galspnbl.cpp	-	-	-	Gals Pinball
+gametngk	jaleco/ms32.cpp	-	-	-	The Game Paradise - Master of Shooting! / Game Tengoku - The Game Paradise (ver 1.0)
+ganjaja	jaleco/homerun.cpp	-	-	-	Ganbare Jajamaru Saisho wa Goo / Ganbare Jajamaru Hop Step & Jump
+garogun	yunsung/nmg5.cpp	-	-	-	Garogun Seroyang (Korea)
+gcpinbal	excellent/gcpinbal.cpp	-	-	-	Grand Cross (v1.02F)
+gdfs	seta/ssv.cpp	-	-	-	Mobile Suit Gundam Final Shooting (Japan)
+geebee	namco/warpwarp.cpp	-	mame4all	-	Gee Bee (Japan)
+gegege	sigma/sigmab98.cpp	-	-	-	GeGeGe no Kitarou Youkai Slot
+gekiretu	nmk/quizdna.cpp	-	-	-	Quiz Gekiretsu Scramble (Japan)
+gekiridn	taito/taito_f3.cpp	-	-	-	Gekirindan (Ver 2.3O 1995/09/21)
+gekisou	alpha/equites.cpp	-	-	-	Gekisou (Japan)
+gemcrush	misc/dfruit.cpp	-	-	-	Gemcrush (Japan, prototype)
+genius6	igs/igs017.cpp	-	-	-	Genius 6 (V110F)
+genix	nix/pirates.cpp	-	-	-	Genix Family
+getaway	universal/getaway.cpp	-	-	-	Get A Way (upright)
+gfire2	misc/mosaic.cpp	-	-	-	Golden Fire II
+gforce2	sega/segaybd.cpp	-	-	-	Galaxy Force 2
+gghost	bally/balsente.cpp	-	mame4all	-	Goalie Ghost
+ggoemon	konami/konmedal68k.cpp	-	-	-	Ganbare Goemon
+ghoshunt	misc/tickee.cpp	-	-	-	Ghost Hunter
+ghox	toaplan/ghox.cpp	-	mame4all	-	Ghox (spinner)
+gigandes	taito/taito_x.cpp	-	mame4all	-	Gigandes
+gigas	misc/freekick.cpp	-	-	-	Gigas (MC-8123, 317-5002)
+gigasm2	misc/freekick.cpp	-	-	-	Gigas Mark II (MC-8123, 317-5002)
+gijoe	konami/gijoe.cpp	-	-	-	G.I. Joe (World, EAB)
+gimeabrk	bally/balsente.cpp	-	mame4all	-	Gimme A Break (7/7/85)
+ginganin	jaleco/ginganin.cpp	-	mame4all	-	Ginga Ninkyouden (set 1)
+ginkun	tecmo/tecmo16.cpp	-	mame4all	-	Ganbare Ginkun
+gladiatr	taito/gladiatr.cpp	-	mame4all	-	Gladiator (US)
+glass	gaelco/glass.cpp	-	-	-	Glass (ver 1.1, Break Edition, checksum 49D5E66B, Version 1994, set 1)
+gldarrow	misc/meyc8088.cpp	-	-	-	Golden Arrow (Standard G8-03)
+gloc	sega/segaybd.cpp	-	-	-	G-LOC Air Battle (World)
+gluck2	misc/gluck2.cpp	-	-	-	Good Luck II
+gnbarich	psikyo/psikyosh.cpp	sh	-	-	Gunbarich
+go2000	suna/go2000.cpp	-	-	-	Go 2000
+gocowboy	sigma/sammymdl.cpp	-	-	-	Go Go Cowboy (English, prize)
+gogomile	fuuki/fuukifg2.cpp	-	-	-	Susume! Mile Smile / Go Go! Mile Smile (newer)
+goindol	suna/goindol.cpp	-	mame4all	-	Goindol (SunA, World)
+goldbug	misc/cvs.cpp	-	-	-	Gold Bug
+goldnjkr	misc/mpu12wbk.cpp	-	-	-	Golden Joker (Ver 16.06UNG-25, set 1)
+goldstrk	excellent/lastbank.cpp	-	-	-	Gold Strike (Japan, v1.1.1 - location test)
+gollygho	namco/namcos2.cpp	-	mame4all	-	Golly! Ghost!
+gomoku	nichibutsu/gomoku.cpp	-	-	-	Gomoku Narabe Renju
+good	misc/good.cpp	-	-	-	Good (Korea)
+goori	unico/goori.cpp	-	-	-	Goori Goori
+gostop	seta/simple_st0016.cpp	-	-	-	Kankoku Hanafuda Go-Stop
+gotcha	misc/gotcha.cpp	-	-	-	Got-cha Mini Game Festival
+gp98	igs/igs009.cpp	-	-	-	Grand Prix '98 (V100K, set 1)
+gpgolf	itech/itech8.cpp	-	-	-	Golden Par Golf (Joystick, v1.1)
+gprider	sega/segaxbd.cpp	-	-	-	GP Rider (World, FD1094 317-0163) (Twin setup)
+gratia	jaleco/ms32.cpp	-	-	-	Gratia - Second Earth (ver 1.0, 92047-01 version)
+grchamp	taito/grchamp.cpp	-	-	-	Grand Champion (set 1)
+grdians	seta/seta2.cpp	-	-	-	Guardians / Denjin Makai II (P-FG01-1 PCB)
+grdnstrm	nmk/nmk16.cpp	-	mame4all	-	Guardian Storm (horizontal, not encrypted)
+greatgun	stern/mazerbla.cpp	-	-	-	Great Guns
+greenber	irem/m10.cpp	-	mame4all	-	Green Beret (Irem)
+gridlee	bally/gridlee.cpp	-	-	-	Gridlee
+grindstm	toaplan/vfive.cpp	-	mame4all	-	Grind Stormer
+grmatch	itech/itech8.cpp	-	-	-	Grudge Match (Yankee Game Technology)
+grndtour	igs/iqblock.cpp	-	-	-	Grand Tour (V100U)
+groundfx	taito/groundfx.cpp	-	-	-	Ground Effects / Super Ground Effects (Japan)
+grudge	bally/balsente.cpp	-	mame4all	-	Grudge Match (v00.90, prototype)
+gseeker	taito/taito_f3.cpp	-	-	-	Grid Seeker: Project Storm Hammer (Ver 1.3O)
+gslgr94u	namco/namconb1.cpp	-	-	-	Great Sluggers '94
+gslugrsj	namco/namconb1.cpp	-	-	-	Great Sluggers (Japan)
+gstream	promat/gstream.cpp	e132xs	-	-	G-Stream G2020
+gstrik2	metro/metro.cpp	-	-	-	Grand Striker 2 (Europe and Oceania)
+gsword	taito/gsword.cpp	-	mame4all	-	Great Swordsman (World?)
+gt2k	itech/itech32.cpp	-	-	-	Golden Tee 2K (v1.00)
+gt3d	itech/itech32.cpp	-	-	-	Golden Tee 3D Golf (v1.93N)
+gt97	itech/itech32.cpp	-	-	-	Golden Tee '97 (v1.30)
+gt98	itech/itech32.cpp	-	-	-	Golden Tee '98 (v1.10)
+gt99	itech/itech32.cpp	-	-	-	Golden Tee '99 (v1.00)
+gtclassc	itech/itech32.cpp	-	-	-	Golden Tee Classic (v1.00)
+gtfore01	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! (v1.00.25)
+gtfore02	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! 2002 (v2.01.06)
+gtfore03	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! 2003 (v3.00.10)
+gtfore04	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! 2004 Extra (v4.00.08)
+gtfore05	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! 2005 Extra (v5.01.06)
+gtfore06	itech/iteagle.cpp	mips	-	chd	Golden Tee Fore! 2006 Complete (v6.00.01)
+gtg	itech/itech8.cpp	-	-	-	Golden Tee Golf (Joystick, v3.3)
+gtg2	itech/itech8.cpp	-	-	-	Golden Tee Golf II (Trackball, v2.2)
+gtmr	kaneko/kaneko16.cpp	-	mame4all	-	1000 Miglia: Great 1000 Miles Rally (Taiwan 94/07/18)
+gtmr2	kaneko/kaneko16.cpp	-	mame4all	-	Mille Miglia 2: Great 1000 Miles Rally (95/05/24)
+guardian	atari/atarig42.cpp	-	-	-	Guardians of the 'Hood
+gulfstrm	dooyong/dooyong.cpp	-	-	-	Gulf Storm (set 1)
+gumbo	misc/gumbo.cpp	-	-	-	Gumbo
+gunbird	psikyo/psikyo.cpp	-	mame4all	-	Gunbird (World)
+gunbird2	psikyo/psikyosh.cpp	sh	-	-	Gunbird 2 (set 1)
+gunbustr	taito/gunbustr.cpp	-	-	-	Gunbuster (World)
+gundamex	seta/seta2.cpp	-	-	-	Mobile Suit Gundam EX Revue
+gundealr	dooyong/gundealr.cpp	-	mame4all	-	Gun Dealer
+gundhara	seta/seta.cpp	-	mame4all	-	Gundhara
+gundl94	dooyong/dooyong.cpp	-	-	-	Gun Dealer '94
+gunkids	sigma/sammymdl.cpp	-	-	-	Hayauchi Gun Kids
+gunlock	taito/taito_f3.cpp	-	-	-	Gunlock (Ver 2.3O 1994/01/20)
+gunmast	metro/metro.cpp	-	-	-	Gun Master
+gunnail	nmk/nmk16.cpp	-	mame4all	-	GunNail (28th May. 1992)
+gunpey	misc/gunpey.cpp	-	-	-	Gunpey (Japan)
+gunwars	namco/namcos23.cpp	mips/sh	-	-	Gunmen Wars (Japan, GM1 Ver. B)
+guts	atari/eprom.cpp	-	mame4all	-	Guts n' Glory (prototype)
+gutsn	kaneko/suprnova.cpp	sh	-	-	Guts'n (Japan)
+gypsyjug	meadows/meadows.cpp	-	mame4all	-	Gypsy Juggler
+hachamf	nmk/nmk16.cpp	-	mame4all	-	Hacha Mecha Fighter (19th Sep. 1991, protected, set 1)
+haekaka	sigma/sammymdl.cpp	-	-	-	Hae Hae Ka Ka Ka
+halleysc	taito/halleys.cpp	-	-	-	Halley's Comet (US)
+hamboy	misc/megaphx.cpp	-	-	-	Hammer Boy
+hammer	snk/midas.cpp	-	-	-	Hammer
+hana6pt2	seta/albazg.cpp	-	-	-	Hana Awase 6 Part II
+hanaawas	seta/hanaawas.cpp	-	mame4all	-	Hana Awase (set 1)
+hanaroku	seta/albazc.cpp	-	-	-	Hanaroku
+hangon	sega/segahang.cpp	-	mame4all	-	Hang-On (Rev A)
+hangzo	dataeast/rohga.cpp	-	-	-	Hangzo (Japan, prototype)
+happyskl	igs/igs017.cpp	-	-	-	Happy Skill (Italy, V611IT)
+hapytour	eolith/ghosteo.cpp	-	-	-	Happy Tour (V1.12)
+harddriv	atari/harddriv.cpp	-	-	-	Hard Drivin' (cockpit, rev 7)
+harddunk	sega/segas32.cpp	-	-	-	Hard Dunk (World)
+hardhea2	suna/suna8.cpp	-	mame4all	-	Hard Head 2 (v2.0, Music Program v2.4)
+hardhead	suna/suna8.cpp	-	mame4all	-	Hard Head
+hardyard	itech/itech32.cpp	-	-	-	Hard Yardage (v1.20)
+haremchl	amiga/cubo.cpp	-	-	chd	Harem Challenge
+hatris	vsystem/pipedrm.cpp	-	mame4all	-	Hatris (US)
+hattrick	bally/balsente.cpp	-	mame4all	-	Hat Trick (11/12/84)
+haunthig	igs/igs_m027xa.cpp	-	-	-	Haunted House (IGS, V109US)
+hayaosi2	jaleco/ms32.cpp	-	-	-	Hayaoshi Quiz Grand Champion Taikai
+hayaosi3	jaleco/ms32.cpp	-	-	-	Hayaoshi Quiz Nettou Namahousou (ver 1.5)
+hdrivair	atari/harddriv.cpp	-	-	-	Hard Drivin's Airborne (prototype, rev 2.7)
+headoni	irem/m10.cpp	-	mame4all	-	Head On (Irem, M-15 Hardware)
+heartatk	misc/cvs.cpp	-	-	-	Heart Attack
+heberpop	sunelectronics/shangha3.cpp	-	mame4all	-	Hebereke no Popoon (Japan)
+hedpanic	misc/esd16.cpp	-	-	-	Head Panic (ver. 0117, 17/01/2000)
+helifire	nintendo/n8080.cpp	-	mame4all	-	HeliFire (set 1)
+hero	misc/cvs.cpp	-	-	-	Hero
+heuksun	f32/crospang.cpp	-	-	-	Heuk Sun Baek Sa (Korea)
+hexion	konami/hexion.cpp	-	-	-	Hexion (Japan ver JAB)
+hgkairak	psikyo/psikyo4.cpp	sh	-	-	Taisen Hot Gimmick Kairakuten (Japan)
+hidctch2	eolith/eolith.cpp	e132xs	-	-	Hidden Catch 2 (pcb ver 3.03) (Kor/Eng) (AT89c52 protected)
+hidctch3	eolith/eolith.cpp	e132xs	-	-	Hidden Catch 3 (ver 1.00 / pcb ver 3.05)
+hidnc2k	eolith/eolith.cpp	e132xs	-	-	Hidden Catch 2000 (AT89c52 protected)
+hidnctch	eolith/eolith.cpp	e132xs	-	-	Hidden Catch (World) / Tul Lin Gu Lim Chat Ki '98 (Korea) (pcb ver 3.03)
+highsplt	nintendo/n8080.cpp	-	mame4all	-	SF-HiSplitter (set 1)
+hiimpact	williams/midyunit.cpp	-	mame4all	-	High Impact Football (rev LA5 02/15/91)
+himesiki	nasco/himesiki.cpp	-	-	-	Himeshikibu (Japan)
+histryma	nix/fitfight.cpp	-	-	-	The History of Martial Arts (set 1)
+hitice	taito/taito_b.cpp	-	mame4all	-	Hit the Ice (US)
+hitme	ramtek/hitme.cpp	-	-	-	Hit Me (set 1)
+hitnmiss	exidy/exidy440.cpp	-	mame4all	-	Hit 'n Miss (version 3.0)
+hoccer	orca/marineb.cpp	-	mame4all	-	Hoccer (newer)
+holeland	tecfri/holeland.cpp	-	-	-	Hole Land (Japan)
+holo	sega/segas32.cpp	-	-	-	Holosseum (US, Rev A)
+hoops96	dataeast/deco_mlc.cpp	sh	-	-	Hoops '96 (Europe/Asia 2.0)
+hopprobo	orca/marineb.cpp	-	mame4all	-	Hopper Robo
+horshoes	taito/taito_l.cpp	-	mame4all	-	American Horseshoes (US)
+hotblock	misc/hotblock.cpp	-	-	-	Hot Blocks - Tetrix II (set 1)
+hotbody	misc/gameace.cpp	-	-	-	Hot Body I
+hotchase	konami/wecleman.cpp	-	mame4all	-	Hot Chase (set 1)
+hotchili	misc/hotchili.cpp	-	-	-	Hot Chilli (95103, v0104)
+hotdebut	psikyo/psikyo4.cpp	sh	-	-	Quiz de Idol! Hot Debut (Japan)
+hotgm4ev	psikyo/psikyo4.cpp	sh	-	-	Taisen Hot Gimmick 4 Ever (Japan)
+hotgmck	psikyo/psikyo4.cpp	sh	-	-	Taisen Hot Gimmick (Japan)
+hotgmck3	psikyo/psikyo4.cpp	sh	-	-	Taisen Hot Gimmick 3 Digital Surfing (Japan)
+hotgmcki	psikyo/psikyo4.cpp	sh	-	-	Mahjong Hot Gimmick Integral (Japan)
+hotmind	playmark/playmark.cpp	-	-	-	Hot Mind (Hard Times hardware, set 1)
+hotpinbl	comad/galspnbl.cpp	-	-	-	Hot Pinball
+hotsmash	taito/superqix.cpp	-	-	-	Vs. Hot Smash
+hrdtimes	playmark/playmark.cpp	-	-	-	Hard Times (set 1)
+hrthouse	misc/limenko.cpp	e132xs	-	-	To Heart House
+hstennis	itech/itech8.cpp	-	-	-	Hot Shots Tennis (v1.1)
+htchctch	dataeast/tumbleb.cpp	-	-	-	Hatch Catch
+huahuas5	igs/igs_m027_033vid.cpp	-	-	-	Huahua Shijie 5 / Feixing Shijie (V107CN)
+hunchbak	misc/cvs.cpp	-	-	-	Hunchback (set 1)
+huncholy	misc/cvs.cpp	-	-	-	Hunchback Olympic
+hvoltage	alpha/splendor.cpp	-	-	-	High Voltage
+hvysmsh	dataeast/hvysmsh.cpp	-	-	-	Heavy Smash (Europe version -2, 1993/06/30)
+hvyunit	kaneko/hvyunit.cpp	-	-	-	Heavy Unit (World)
+hydra	atari/atarig1.cpp	-	mame4all	-	Hydra
+hyhoo	nichibutsu/hyhoo.cpp	-	-	-	Hayaoshi Taisen Quiz Hyhoo (Japan)
+hyhoo2	nichibutsu/hyhoo.cpp	-	-	-	Hayaoshi Taisen Quiz Hyhoo 2 (Japan)
+hyprduel	metro/hyprduel.cpp	-	-	-	Hyper Duel (Japan set 1)
+hypreac2	seta/ssv.cpp	-	-	-	Mahjong Hyper Reaction 2 (Japan)
+hypreact	seta/ssv.cpp	-	-	-	Mahjong Hyper Reaction (Japan)
+ibara	cave/cv1k.cpp	sh	-	-	Ibara (Japan, 2005/03/22 MASTER VER.., '06. 3. 7 ver.)
+ibarablk	cave/cv1k.cpp	sh	-	-	Ibara Kuro Black Label (Japan, 2006/02/06. MASTER VER.)
+idsoccer	universal/docastle.cpp	-	mame4all	-	Indoor Soccer (set 1)
+ikki	sunelectronics/ikki.cpp	-	-	-	Ikki (Japan)
+imago	galaxian/fastfred.cpp	-	mame4all	-	Imago (cocktail set)
+imolagp	misc/imolagp.cpp	-	-	-	Imola Grand Prix (set 1)
+indyheat	cinematronics/leland.cpp	-	mame4all	-	Danny Sullivan's Indy Heat (rev 1)
+intcup94	taito/taito_f3.cpp	-	-	-	International Cup '94 (Ver 2.2O 1994/05/26)
+inufuku	vsystem/inufuku.cpp	-	-	-	Quiz & Variety Sukusuku Inufuku (Japan)
+invasnab	williams/midzeus.cpp	-	-	-	Invasion: The Abductors (version 5.0)
+invqix	taito/invqix.cpp	-	-	-	Space Invaders / Qix Silver Anniversary Edition (Ver. 2.03)
+ipminvad	irem/m10.cpp	-	mame4all	-	IPM Invader (M10, set 1)
+iqblock	igs/iqblock.cpp	-	-	-	IQ-Block (V100U)
+irobot	atari/irobot.cpp	-	mame4all	-	I, Robot
+iron	nintendo/snesb.cpp	-	-	-	Iron (SNES bootleg)
+ironfort	eolith/eolith.cpp	e132xs	-	-	Iron Fortress
+issdxb	nintendo/snesb.cpp	-	-	-	International Superstar Soccer Deluxe (SNES bootleg)
+istreb	ussr/istrebiteli.cpp	-	-	-	Istrebiteli
+itaten	nichibutsu/dacholer.cpp	-	-	-	Itazura Tenshi (Japan)
+itazuram	sigma/sammymdl.cpp	-	-	-	Itazura Monkey
+jackhous	misc/jackhouse.cpp	-	-	-	Jack House
+jackie	igs/jackie.cpp	-	-	-	Happy Jackie (v119U)
+jackrabt	zaccaria/zaccaria.cpp	-	mame4all	-	Jack Rabbit (set 1)
+jangou	nichibutsu/jangou.cpp	-	-	-	Jangou (Japan)
+janjans1	seta/ssv.cpp	-	-	-	Lovely Pop Mahjong JangJang Shimasho (Japan)
+janjans2	seta/ssv.cpp	-	-	-	Lovely Pop Mahjong JangJang Shimasho 2 (Japan)
+jchan	kaneko/jchan.cpp	-	-	-	Jackie Chan - The Kung-Fu Master (rev 4?)
+jchan2	kaneko/jchan.cpp	-	-	-	Jackie Chan in Fists of Fire
+jclub2v112	seta/jclub2.cpp	-	-	-	Jockey Club II (v1.12X, older hardware)
+jdreddp	williams/midtunit.cpp	-	mame4all	-	Judge Dredd (rev TA1 7/12/92, location test)
+jedi	atari/jedi.cpp	-	mame4all	-	Return of the Jedi
+jjack	universal/docastle.cpp	-	mame4all	-	Jumping Jack
+jjparad2	kaneko/suprnova.cpp	sh	-	-	Jan Jan Paradise 2
+jjparads	kaneko/suprnova.cpp	sh	-	-	Jan Jan Paradise
+jjsquawk	seta/seta.cpp	-	mame4all	-	J. J. Squawkers
+jking04	igs/igs_m027xa.cpp	-	-	-	Jungle King 2004 (V101US)
+jking302us	igs/igs017.cpp	-	-	-	Jungle King (V302US)
+jmpbreak	misc/vamphalf.cpp	e132xs	-	-	Jumping Break (set 1)
+jngolady	nichibutsu/jangou.cpp	-	-	-	Jangou Lady (Japan)
+jockeyc	seta/seta.cpp	-	mame4all	-	Jockey Club (v1.18)
+joemacr	dataeast/simpl156.cpp	-	-	-	Joe & Mac Returns (World, Master Version 1.1, 1994.05.27)
+jollyjgr	taito/jollyjgr.cpp	-	-	-	Jolly Jogger
+joyfulr	snk/munchmo.cpp	-	mame4all	-	Joyful Road (Japan)
+jpark	sega/segas32.cpp	-	-	-	Jurassic Park (World, Rev A)
+jparkmb	sega/megadriv_acbl.cpp	-	-	-	Jurassic Park (bootleg of Mega Drive version)
+jsk	seta/ssv.cpp	-	-	-	Joryuu Syougi Kyoushitsu (Japan)
+jumpcoas	galaxian/fastfred.cpp	-	mame4all	-	Jump Coaster (World)
+jumpjump	misc/dgpix.cpp	e132xs	-	-	Jump Jump
+jumpkids	dataeast/tumbleb.cpp	-	-	-	Jump Kids
+jumpkun	taito/pitnrun.cpp	-	-	-	Jump Kun (prototype)
+jumppop	misc/esd16.cpp	-	-	-	Jumping Pop (set 1)
+jwildb52	sigma/sigmab52.cpp	-	-	-	Joker's Wild (B52 system, BP55114-V1104, Ver.054NMV)
+jzth	sega/megadriv_ybox.cpp	-	-	-	Juezhan Tianhuang
+kaiserkn	taito/taito_f3.cpp	-	-	-	Kaiser Knuckle (Ver 2.1O 1994/07/29)
+kaitei	namco/warpwarp.cpp	-	mame4all	-	Kaitei Takara Sagashi
+kamenrid	seta/seta.cpp	-	mame4all	-	Masked Riders Club Battle Race / Kamen Rider Club Battle Racer
+kamikaze	stern/astinvad.cpp	-	mame4all	-	Kamikaze
+kamikcab	dataeast/liberate.cpp	-	-	-	Kamikaze Cabbie
+kaos	alliedleisure/killcom.cpp	-	mame4all	-	Kaos
+karatblz	vsystem/pspikes.cpp	-	mame4all	-	Karate Blazers (World, set 1)
+karatour	metro/metro.cpp	-	-	-	The Karate Tournament
+karianx	sega/deniam.cpp	-	mame4all	-	Karian Cross (Rev. 1.0)
+kas89	misc/kas89.cpp	-	-	-	Kasino '89
+kattobas	konami/konmedal68k.cpp	-	-	-	Kattobase Power Pro Kun
+kbash	toaplan/kbash.cpp	-	mame4all	-	Knuckle Bash
+kbash2	toaplan/kbash.cpp	-	mame4all	-	Knuckle Bash 2 (bootleg of Knuckle Bash)
+kbm	konami/firebeat.cpp	powerpc	-	chd	Keyboardmania
+kbm2nd	konami/firebeat.cpp	powerpc	-	chd	Keyboardmania 2nd Mix
+kbm3rd	konami/firebeat.cpp	powerpc	-	chd	Keyboardmania 3rd Mix
+kdynastg	misc/dgpix.cpp	e132xs	-	-	King of Dynast Gear (version 1.8)
+keirind2	excellent/es9606.cpp	-	-	-	Keirin Derby II
+keirinou	excellent/witch.cpp	-	-	-	Keirin Ou
+keith	pce/uapce.cpp	-	-	-	Keith Courage In Alpha Zones (United Amusements PC Engine)
+keithlcy	seta/ssv.cpp	-	-	-	Dramatic Adventure Quiz Keith & Lucy (Japan)
+kenseim	capcom/kenseim.cpp	-	-	-	Ken Sei Mogura: Street Fighter II (Japan 940418, Ver 1.00)
+keroppi	seta/seta.cpp	-	mame4all	-	Kero Kero Keroppi's Let's Play Together (USA, Version 2.0)
+kf2k3pcb	snk/neopcb.cpp	-	-	-	The King of Fighters 2003 (Japan, JAMMA PCB)
+kickball	vsystem/pspikes.cpp	-	mame4all	-	Kick Ball
+kickboy	nichibutsu/dacholer.cpp	-	-	-	Kick Boy
+kickgoal	tch/kickgoal.cpp	-	-	-	Kick Goal (set 1)
+kickridr	universal/docastle.cpp	-	mame4all	-	Kick Rider
+killcom	alliedleisure/killcom.cpp	-	mame4all	-	Killer Comet
+kingdrby	tatsumi/kingdrby.cpp	-	-	-	King Derby (1981)
+kingofb	dataeast/kingofb.cpp	-	mame4all	-	King of Boxer (World)
+kingpin	misc/kingpin.cpp	-	-	-	Kingpin
+kingyosu	sigma/sammymdl.cpp	-	-	-	Dokidoki Kingyo Sukui
+kinst	rare/kinst.cpp	mips	-	chd	Killer Instinct
+kinst2	rare/kinst.cpp	mips	-	chd	Killer Instinct 2
+kinstb	nintendo/snesb.cpp	-	-	-	Killer Instinct (SNES bootleg)
+kirameki	taito/taito_f3.cpp	-	-	-	Kirameki Star Road (Ver 2.10J 1997/08/29)
+kirarast	jaleco/ms32.cpp	-	-	-	Ryuusei Janshi Kirara Star (ver 1.0, 92047-01 version)
+klax	atari/klax.cpp	-	mame4all	-	Klax (version 6)
+klondkp	eolith/eolith16.cpp	e132xs	-	-	KlonDike+
+knckhead	namco/namcona1.cpp	-	-	-	Knuckle Heads (World)
+kncljoe	seibu/kncljoe.cpp	-	mame4all	-	Knuckle Joe (set 1)
+kof98umh	igs/pgm2.cpp	-	-	-	The King of Fighters '98: Ultimate Match HERO (China, V100, 09-08-23)
+koikoip2	sanritsu/koikoi.cpp	-	-	-	Koi Koi Part 2
+koikois	seta/simple_st0016.cpp	-	-	-	Koi Koi Shimasho - Super Real Hanafuda
+koikois2	seta/ssv.cpp	-	-	-	Koi Koi Shimasho 2 - Super Real Hanafuda (Japan)
+kok	misc/photon2.cpp	-	-	-	Povar / Sobrat' Buran / Agroprom (Arcade multi-game bootleg of ZX Spectrum 'Cookie', 'Jetpac' & 'Pssst')
+kokoroj2	sega/segas32.cpp	-	-	chd	Soreike Kokology Vol. 2 - Kokoro no Tanteikyoku
+kontest	konami/kontest.cpp	-	-	-	Konami Test Board (GX800, Japan)
+koropens	konami/konmedal68k.cpp	-	-	-	Korokoro Pensuke
+kotekita	sigma/sammymdl.cpp	-	-	-	Kotekitai Slot
+kothello	sunelectronics/shanghai.cpp	-	mame4all	-	Kyuukyoku no Othello
+kouyakyu	alpha/equites.cpp	-	-	-	The Koukou Yakyuu
+kov2nl	igs/pgm2.cpp	-	-	-	Knights of Valour 2 New Legend / Sanguo Zhan Ji 2 Guang Sao Yu Jun (V302, Oversea)
+kov3	igs/pgm2.cpp	-	-	-	Knights of Valour 3 / Sanguo Zhan Ji 3 (V104, China, Hong Kong, Taiwan)
+krzybowl	seta/seta.cpp	-	mame4all	-	Krazy Bowl
+ksayakyu	taito/ksayakyu.cpp	-	-	-	Kusayakyuu
+kungfur	namco/kungfur.cpp	-	-	-	Kung-Fu Roushi
+kungfut	seibu/wiz.cpp	-	mame4all	-	Kung-Fu Taikun (set 1)
+kurikint	taito/taito_l.cpp	-	mame4all	-	Kuri Kinton (World)
+kurukuru	success/kurukuru.cpp	-	-	-	Kuru Kuru Pyon Pyon (Japan)
+kuzmich	apple/superga2.cpp	-	-	-	Kuzmich-Egorych
+kyukaidk	namco/namcos2.cpp	-	mame4all	-	Kyuukai Douchuuki (Japan, new version (Rev B))
+kyustrkr	taito/taito_x.cpp	-	mame4all	-	Last Striker / Kyuukyoku no Striker
+kzaurus	konami/konmedal68k.cpp	-	-	-	Pittanko Zaurus
+ladyfrog	misc/ladyfrog.cpp	-	-	-	Lady Frog
+ladygum	misc/videosaa.cpp	-	-	-	Lady Gum
+ladykill	metro/metro.cpp	-	-	-	Lady Killer
+ladymstr	taito/tsamurai.cpp	-	mame4all	-	Lady Master of Kung Fu (rev 1)
+landbrk	eolith/eolith.cpp	e132xs	-	-	Land Breaker (World) / Miss Tang Ja Ru Gi (Korea) (pcb ver 3.02)
+landgear	taito/taitojc.cpp	-	-	-	Landing Gear (Ver 4.2 O)
+landmakr	taito/taito_f3.cpp	-	-	-	Land Maker (Ver 2.02O 1998/06/02)
+laserbat	zaccaria/laserbat.cpp	-	-	-	Laser Battle
+lasstixx	amiga/cubo.cpp	-	-	chd	Laser Strixx 2
+lastbank	excellent/lastbank.cpp	-	-	-	Last Bank (v1.16)
+lastday	dooyong/dooyong.cpp	-	-	-	The Last Day (set 1)
+lastduel	capcom/lastduel.cpp	-	mame4all	-	Last Duel (US New Ver.)
+lastfort	metro/metro.cpp	-	-	-	Last Fortress - Toride (Japan, VG420 PCB)
+lastfour	misc/galaxi.cpp	-	-	-	Last Four (09:12 16/01/2001)
+laststar	atari/atarisy4.cpp	-	-	-	The Last Starfighter (prototype)
+lastsurv	sega/segaxbd.cpp	-	-	-	Last Survivor (Japan) (FD1094 317-0083)
+lazercmd	meadows/lazercmd.cpp	-	mame4all	-	Lazer Command
+lbeach	olympia/lbeach.cpp	-	-	-	Long Beach
+le2	konami/konamigx.cpp	-	-	-	Lethal Enforcers II: Gun Fighters (ver EAA)
+leds2011	capcom/lastduel.cpp	-	mame4all	-	Led Storm Rally 2011 (World)
+legendoh	misc/limenko.cpp	e132xs	-	-	Legend of Heroes
+legendsb	nintendo/snesb.cpp	-	-	-	Legend (SNES bootleg)
+legrandc	misc/corona.cpp	-	-	-	Le Grandchamps
+lemmings	dataeast/lemmings.cpp	-	-	-	Lemmings (US prototype)
+lependu	misc/lependu.cpp	-	-	-	Le Pendu (Bilingue, Version 04)
+leprechn	alliedleisure/killcom.cpp	-	mame4all	-	Leprechaun (set 1)
+lethalen	konami/lethal.cpp	-	-	-	Lethal Enforcers (ver UAE, 11/19/92 15:04)
+lethalj	ice/lethalj.cpp	-	-	-	Lethal Justice (Version 2.3)
+lhb	igs/igs011.cpp	-	-	-	Long Hu Bang (China, V035C)
+lhb2	igs/igs011.cpp	-	-	-	Lung Fu Bong II (Hong Kong, V185H)
+lhzb	igs/igs017.cpp	-	-	-	Long Hu Zhengba (China, VS105M, set 1)
+lhzb2	igs/igs017.cpp	-	-	-	Long Hu Zhengba 2 (China, set 1)
+liberate	dataeast/liberate.cpp	-	-	-	Liberation
+liberatr	atari/liberatr.cpp	-	mame4all	-	Liberator (version 2)
+liblrabl	namco/toypop.cpp	-	mame4all	-	Libble Rabble
+lightbr	taito/taito_f3.cpp	-	-	-	Light Bringer (Ver 2.2O 1994/04/08)
+linkypip	eolith/eolith.cpp	e132xs	-	-	Linky Pipe
+littlerb	tch/littlerb.cpp	-	-	-	Little Robin
+livequiz	snk/midas.cpp	-	-	-	Live Quiz Show
+lkage	taito/lkage.cpp	-	mame4all	-	The Legend of Kage (rev 2)
+lnumbers	misc/banpresto_bpsc68000.cpp	-	-	-	Ultraman Club - Lucky Numbers
+lockon	tatsumi/lockon.cpp	-	-	-	Lock-On (rev. E)
+loderndf	psikyo/psikyo4.cpp	sh	-	-	Lode Runner - The Dig Fight (ver. B)
+loffire	sega/segaxbd.cpp	-	-	-	Line of Fire / Bakudan Yarou (World) (FD1094 317-0136)
+logger	misc/cvs.cpp	-	-	-	Logger (Rev.3)
+logicpr2	sega/deniam.cpp	-	mame4all	-	Logic Pro 2 (Japan)
+looping	videogames/looping.cpp	-	-	-	Looping (Europe)
+lordgun	igs/lordgun.cpp	-	-	-	Lord of Gun (World)
+lottof2	misc/dcheese.cpp	-	-	-	Lotto Fun 2
+lpierrot	excellent/lastbank.cpp	-	-	-	Lucky Pierrot (Japan, v1.1.0B)
+lsasquad	taito/lsasquad.cpp	-	mame4all	-	Land Sea Air Squad / Riku Kai Kuu Saizensen
+luckboom	playmark/sderby.cpp	-	-	-	Lucky Boom
+luckybal	misc/luckybal.cpp	-	-	-	Lucky Ball 96 (Ver 4.01)
+luckygrl	nichibutsu/jangou.cpp	-	-	-	Lucky Girl (Wing)
+luckyrlt	misc/corona.cpp	-	-	-	Lucky Roulette Plus (6-players, Spanish)
+luckywld	namco/namcos2.cpp	-	mame4all	-	Lucky & Wild
+lufykzku	sigma/sigmab98.cpp	-	-	-	Otakara Itadaki Luffy Kaizoku-Dan! (Japan, v1.02)
+lvcards	tecmo/lvcards.cpp	-	-	-	Lovely Cards
+lvgirl94	comad/zerozone.cpp	-	mame4all	-	Las Vegas Girl (Girl '94)
+m660	taito/tsamurai.cpp	-	mame4all	-	Mission 660 (US)
+m79amb	ramtek/m79amb.cpp	-	mame4all	-	M-79 Ambush
+macha	nichibutsu/jangou.cpp	-	-	-	Monoshiri Quiz Oshaberi Macha (Japan)
+machbrkr	namco/namconb1.cpp	-	-	-	Mach Breakers (World, MB2)
+macross	nmk/nmk16.cpp	-	mame4all	-	Super Spacefortress Macross / Chou-Jikuu Yousai Macross
+macross2	nmk/nmk16.cpp	-	mame4all	-	Super Spacefortress Macross II / Chou-Jikuu Yousai Macross II
+macrossp	nmk/macrossp.cpp	-	-	-	Macross Plus
+madalien	dataeast/madalien.cpp	-	-	-	Mad Alien (set 1)
+madball	yunsung/paradise.cpp	-	-	-	Mad Ball (V2.0)
+maddonna	misc/oneshot.cpp	-	-	-	Mad Donna (Tuning, set 1)
+madgear	capcom/lastduel.cpp	-	mame4all	-	Mad Gear (US)
+madmotor	dataeast/madmotor.cpp	-	mame4all	-	Mad Motor (prototype, set 1)
+madshark	seta/seta.cpp	-	mame4all	-	Mad Shark
+mag_boob	efo/cedar_magnet.cpp	-	-	-	Booby Kids (Magnet System)
+mag_burn	efo/cedar_magnet.cpp	-	-	-	The Burning Cavern (31/03/87)
+mag_day	efo/cedar_magnet.cpp	-	-	-	A Day In Space (31/03/87)
+mag_exzi	efo/cedar_magnet.cpp	-	-	-	Exzisus (EX 1.0, Magnet System)
+mag_pdak	efo/cedar_magnet.cpp	-	-	-	Paris Dakar (31/03/87, Spanish)
+mag_time	efo/cedar_magnet.cpp	-	-	-	Time Scanner (TS 2.0, Magnet System)
+mag_war	efo/cedar_magnet.cpp	-	-	-	War Mission (WM 04/06/87)
+mag_xain	efo/cedar_magnet.cpp	-	-	-	Xain'd Sleena (SC 3.0, Magnet System)
+magerror	metro/hyprduel.cpp	-	-	-	Magical Error wo Sagase
+magic10	misc/magic10.cpp	-	-	-	Magic's 10 (ver. 16.55)
+magicbal	dataeast/tumbleb.cpp	-	-	-	Magicball Fighting (Korea)
+magicbub	yunsung/yunsun16.cpp	-	-	-	Magic Bubble
+magicfly	misc/magicfly.cpp	-	-	-	Magic Fly
+magicstk	playmark/powerbal.cpp	-	-	-	Magic Sticks
+magipur	dataeast/tumbleb.cpp	-	-	-	Magic Purple
+magix	yunsung/yunsung8.cpp	-	mame4all	-	Magix / Rock
+magjoker	misc/galaxi.cpp	-	-	-	Magic Joker (v1.25.10.2000)
+magmax	nichibutsu/magmax.cpp	-	-	-	Mag Max (set 1)
+magspeed	seta/seta.cpp	-	mame4all	-	Magical Speed
+magtouch	misc/magtouch.cpp	-	-	-	Magical Touch
+mahmajn	sega/segas24.cpp	-	-	-	Tokoro San no MahMahjan (Japan, ROM Based)
+mahmajn2	sega/segas24.cpp	-	-	-	Tokoro San no MahMahjan 2 (Japan, ROM Based)
+mainevt	konami/mainevt.cpp	-	mame4all	-	The Main Event (4 Players ver. Y)
+mainsnk	snk/mainsnk.cpp	-	-	-	Main Event (1984)
+maletmad	misc/tickee.cpp	-	-	-	Mallet Madness (v2.1)
+mangchi	nmk/nmk16.cpp	-	mame4all	-	Mang-Chi
+maniacsq	gaelco/gaelco2.cpp	-	-	-	Maniac Square (unprotected, version 1.0, checksum BB73)
+manybloc	nmk/nmk16.cpp	-	mame4all	-	Many Block
+marblmd2	atari/marblmd2.cpp	-	-	-	Marble Madness II (prototype)
+marineb	orca/marineb.cpp	-	mame4all	-	Marine Boy
+mariorou	konami/konmedal.cpp	-	-	-	Mario Roulette
+markham	sunelectronics/markham.cpp	-	-	-	Markham
+marvland	namco/namcos2.cpp	-	mame4all	-	Marvel Land (Japan)
+mastboy	gaelco/mastboy.cpp	-	-	-	Master Boy (Spain, set 1, checksum E49B)
+mastboyo	gaelco/mastboyo.cpp	-	-	-	Master Boy (1987, Z80 hardware, Covielsa, set 1)
+masterw	taito/taito_b.cpp	-	mame4all	-	Master of Weapon (World)
+mastfury	unico/drgnmst.cpp	-	-	-	Master's Fury
+matchit	irem/m80.cpp	-	mame4all	-	Match It
+maxforce	atari/jaguar.cpp	mips	-	chd	Maximum Force v1.05
+maxideal	misc/kingpin.cpp	-	-	-	Maxi-Dealer
+mayhem	cinematronics/leland.cpp	-	mame4all	-	Mayhem 2002
+mayjisn2	seta/simple_st0016.cpp	-	-	-	Mayjinsen 2
+mayumi	sanritsu/chinsan.cpp	-	-	-	Kiki-Ippatsu Mayumi-chan
+mazerbla	stern/mazerbla.cpp	-	-	-	Mazer Blazer (set 1)
+mcatadv	misc/mcatadv.cpp	-	-	-	Magical Cat Adventure
+mchampdx	misc/esd16.cpp	-	-	-	Multi Champ Deluxe (ver. 0106, 06/01/2000)
+mechatt	snk/mechatt.cpp	-	-	-	Mechanized Attack (World)
+medlanes	meadows/lazercmd.cpp	-	mame4all	-	Meadows Lanes
+megaphx	misc/megaphx.cpp	-	-	-	Mega Phoenix
+megatack	alliedleisure/killcom.cpp	-	mame4all	-	Megatack (set 1)
+megazone	konami/megazone.cpp	-	mame4all	-	Mega Zone (version L)
+meijinsn	alpha/meijinsn.cpp	-	-	-	Meijinsen (set 1)
+meosism	seta/ssv.cpp	-	-	-	Meosis Magic (Japan)
+mermaid	sanritsu/mermaid.cpp	-	mame4all	-	Mermaid
+metamrph	konami/mystwarr.cpp	-	-	-	Metamorphic Force (ver EAA)
+metlclsh	dataeast/metlclsh.cpp	-	-	-	Metal Clash (Japan)
+metlfrzr	seibu/metlfrzr.cpp	-	-	-	Metal Freezer (Japan)
+metlhawk	namco/namcos2.cpp	-	mame4all	-	Metal Hawk (Rev C)
+metlsavr	dataeast/tumbleb.cpp	-	-	-	Metal Saver
+mf_achas	atari/maxaflex.cpp	-	-	-	Astro Chase (Max-A-Flex)
+mf_bdash	atari/maxaflex.cpp	-	-	-	Boulder Dash (Max-A-Flex)
+mf_brist	atari/maxaflex.cpp	-	-	-	Bristles (Max-A-Flex)
+mf_flip	atari/maxaflex.cpp	-	-	-	Flip & Flop (Max-A-Flex)
+mgcrystl	kaneko/kaneko16.cpp	-	mame4all	-	Magical Crystals (World, 92/01/10)
+mgcs	igs/igs017.cpp	-	-	-	Manguan Caishen (China, V103CS)
+mgdh	igs/igs017.cpp	-	-	-	Manguan Daheng (Taiwan, V125T1)
+mgnumber	amiga/cubo.cpp	-	-	chd	Magic Number
+mgolf	atari/mgolf.cpp	-	-	-	Mini Golf (Atari, prototype)
+mgprem11	amiga/cubo.cpp	-	-	chd	Magic Premium (v1.1)
+mickeycmb	sega/megadriv_acbl.cpp	-	-	-	The Great Hongyun Shu 1996 (Conny bootleg of Mega Drive version)
+micon2	snk/miconkit.cpp	-	-	-	Micon-Kit Part II
+mightguy	nichibutsu/cop01.cpp	-	mame4all	-	Mighty Guy
+mil4000	misc/mil4000.cpp	-	-	-	Millennium Nuovo 4000 (Version 2.0)
+minferno	meadows/meadows.cpp	-	mame4all	-	Inferno (Meadows)
+miniboy7	misc/miniboy7.cpp	-	-	-	Mini-Boy 7 (set 1)
+minigolf	bally/balsente.cpp	-	mame4all	-	Mini Golf (set 1)
+minivadr	taito/minivadr.cpp	-	mame4all	-	Mini Vaders
+mir7hg	excellent/lastbank.cpp	-	-	-	Miracle Seven - Heaven's Gate (Japan, v1.0.2)
+mir7hgt	excellent/lastbank.cpp	-	-	-	Miracle Seven - Heaven's Gate Turbo (Japan, v2.0.0)
+mirax	misc/mirax.cpp	-	-	-	Mirax (set 1)
+mirninja	namco/namcos2.cpp	-	mame4all	-	Mirai Ninja (Japan, set 1)
+misncrft	misc/vamphalf.cpp	e132xs	-	-	Mission Craft (version 2.7)
+missb2	taito/missb2.cpp	-	-	-	Miss Bubble II
+missw02	kaneko/expro02.cpp	-	-	-	Miss World 2002
+missw96	kaneko/expro02.cpp	-	-	-	Miss World '96 (Nude) (C-3000A PCB, set 1)
+mj4simai	seta/seta2.cpp	-	-	-	Wakakusamonogatari Mahjong Yonshimai (Japan)
+mjgtaste	psikyo/psikyosh.cpp	sh	-	-	Mahjong G-Taste
+mjzb	igs/igs_fear.cpp	-	-	-	Majiang Zhengba (V103CN)
+mk	williams/midtunit.cpp	-	mame4all	-	Mortal Kombat (rev 5.0 T-Unit 03/19/93)
+mk2	williams/midtunit.cpp	-	mame4all	-	Mortal Kombat II (rev L3.1)
+mk3mdb	sega/megadriv_acbl.cpp	-	-	-	Mortal Kombat 3 (scrambled bootleg of Mega Drive version)
+mk4	williams/midzeus.cpp	-	-	-	Mortal Kombat 4 (version 3.0)
+mlanding	taito/mlanding.cpp	-	-	-	Midnight Landing (Germany)
+mmagic	nintendo/mmagic.cpp	-	-	-	Monkey Magic
+mmaulers	konami/mystwarr.cpp	-	-	-	Monster Maulers (ver EAA)
+mmpork	cave/cv1k.cpp	sh	-	-	Muchi Muchi Pork! (Japan, 2007/ 4/17 MASTER VER.)
+mnight	upl/ninjakd2.cpp	-	mame4all	-	Mutant Night
+mnrockman	sigma/sigmab98.cpp	-	-	-	Medal Network: Rockman EXE
+mofflott	taito/asuka.cpp	-	-	-	Maze of Flott (Japan)
+moguchan	orca/zodiack.cpp	-	mame4all	-	Mogu Chan (bootleg?)
+mogura	konami/mogura.cpp	-	-	-	Mogura Desse (Japan)
+mole	yachiyo/mole.cpp	-	mame4all	-	Mole Attack
+momoko	jaleco/momoko.cpp	-	mame4all	-	Momoko 120% (Japanese text)
+monkichi	toaplan/sunwise.cpp	-	-	-	Monkichicchi no Fuwafuwa Puzzle (Japan, prototype?)
+monsterb	sega/segag80r.cpp	-	mame4all	-	Monster Bash
+montecar	atari/firetrk.cpp	-	mame4all	-	Monte Carlo
+monymony	zaccaria/zaccaria.cpp	-	mame4all	-	Money Money (set 1)
+moomesa	konami/moo.cpp	-	-	-	Wild West C.O.W.-Boys of Moo Mesa (ver EAB)
+mortalr	edevices/stlforce.cpp	-	-	-	Mortal Race
+mosaic	misc/mosaic.cpp	-	-	-	Mosaic
+mosaicf2	f32/f-32.cpp	e132xs	-	-	Mosaic (F2 System)
+motofren	atari/atarigx2.cpp	-	-	-	Moto Frenzy
+motoxgo	namco/namcos23.cpp	mips/sh	-	-	Motocross Go! (World, MG3 Ver. A)
+mouja	metro/metro.cpp	-	-	-	Mouja (Japan)
+mouseatk	misc/tickee.cpp	-	-	-	Mouse Attack
+mouser	upl/mouser.cpp	-	-	-	Mouser
+mrdig	misc/vamphalf.cpp	e132xs	-	-	Mr. Dig
+mrflea	pacific/mrflea.cpp	-	-	-	The Amazing Adventures of Mr. F. Lea
+mrkicker	misc/vamphalf.cpp	e132xs	-	-	Mr. Kicker (F-E1-16-010 PCB)
+mrsdyna	universal/sraider.cpp	-	-	-	Mrs. Dynamite
+ms5pcb	snk/neopcb.cpp	-	-	-	Metal Slug 5 (JAMMA PCB)
+msbingo	misc/gumbo.cpp	-	-	-	Miss Bingo
+msgogo	metro/metro.cpp	-	-	-	Mouse Shooter GoGo
+msgundam	seta/seta.cpp	-	mame4all	-	Mobile Suit Gundam
+msisaac	taito/msisaac.cpp	-	-	-	Metal Soldier Isaac II
+mslider	seta/ssv.cpp	-	-	-	Monster Slider (Japan)
+mspuzzle	misc/gumbo.cpp	-	-	-	Miss Puzzle
+mtlchamp	konami/mystwarr.cpp	-	-	-	Martial Champion (ver EAB)
+mugsmash	edevices/mugsmash.cpp	-	-	-	Mug Smashers
+multchmp	misc/esd16.cpp	-	-	-	Multi Champ (World, ver. 9.6)
+multigam	nintendo/multigam.cpp	-	-	-	Multi Game (set 1)
+multigm2	nintendo/multigam.cpp	-	-	-	Multi Game 2
+multigm3	nintendo/multigam.cpp	-	-	-	Multi Game III
+multigmt	nintendo/multigam.cpp	-	-	-	Multi Game (Tung Sheng Electronics)
+murogem	misc/murogem.cpp	-	-	-	Muroge Monaco (set 1)
+musclem	misc/musclem.cpp	-	-	-	Muscle Master
+mushisam	cave/cv1k.cpp	sh	-	-	Mushihime-Sama (Japan, 2004/10/12.MASTER VER.)
+mushitam	cave/cv1k.cpp	sh	-	-	Puzzle! Mushihime-Tama (Japan, 2005/09/09.MASTER VER)
+musicbal	tecfri/speedbal.cpp	-	mame4all	-	Music Ball
+musicsrt	misc/magic10.cpp	-	-	-	Music Sort (ver. 2.02)
+mustache	seibu/mustache.cpp	-	-	-	Mustache Boy (Japan)
+mustang	nmk/nmk16.cpp	-	mame4all	-	US AAF Mustang (25th May. 1990)
+mwarr	edevices/mwarr.cpp	-	-	-	Mighty Warriors (24/1)
+mxsqy	igs/igs_m027_023vid.cpp	-	-	-	Mingxing San Que Yi (China, V201CN)
+myangel	seta/seta2.cpp	-	-	-	Kosodate Quiz My Angel (Japan)
+myangel2	seta/seta2.cpp	-	-	-	Kosodate Quiz My Angel 2 (Japan)
+mystston	technos/mystston.cpp	-	mame4all	-	Mysterious Stones: Dr. John's Adventure
+mystwarr	konami/mystwarr.cpp	-	-	-	Mystic Warriors (ver EAA)
+nametune	bally/balsente.cpp	-	mame4all	-	Name That Tune (Bally, 3/31/86)
+naname	atlus/ohmygod.cpp	-	mame4all	-	Naname de Magic! (Japan)
+narc	williams/midyunit.cpp	-	mame4all	-	Narc (rev 7.00)
+nastar	taito/taito_b.cpp	-	mame4all	-	Nastar (World)
+natodef	pacific/thief.cpp	-	mame4all	-	NATO Defense
+navarone	namco/warpwarp.cpp	-	mame4all	-	Navarone
+nbajam	williams/midtunit.cpp	-	mame4all	-	NBA Jam (rev 3.01 4/07/93)
+nbajamte	williams/midtunit.cpp	-	mame4all	-	NBA Jam Tournament Edition (rev 4.0 3/23/94)
+ncv1	namco/namcond1.cpp	-	-	-	Namco Classic Collection Vol.1
+ncv2	namco/namcond1.cpp	-	-	-	Namco Classic Collection Vol.2
+nebulray	namco/namconb1.cpp	-	-	-	Nebulas Ray (World, NR2)
+neckneck	itech/itech8.cpp	-	-	-	Neck-N-Neck (v1.2)
+neobattl	seta/seta.cpp	-	mame4all	-	SD Gundam Neo Battling (Japan)
+netwars	orca/espial.cpp	-	mame4all	-	Net Wars
+newfant	kaneko/expro02.cpp	-	-	-	New Fantasia (1995 copyright)
+news	misc/news.cpp	-	-	-	News (set 1)
+newxpang	misc/vamphalf.cpp	e132xs	-	-	New Cross Pang (set 1)
+ngalsumr	nichibutsu/nightgal.cpp	-	-	-	Night Gal Summer (Japan 850702 NGS 0-01)
+ngtbunny	nichibutsu/nightgal.cpp	-	-	-	Night Bunny (Japan 840601 MRN 2-10)
+nhidctch	eolith/eolith.cpp	e132xs	-	-	New Hidden Catch (World) / New Tul Lin Gu Lim Chat Ki '98 (Korea) (pcb ver 3.02)
+nhomerun	jaleco/homerun.cpp	-	-	-	NEW Moero!! Pro Yakyuu Homerun Kyousou
+nightgal	nichibutsu/nightgal.cpp	-	-	-	Night Gal (Japan 840920 AG 1-00)
+nightmare	efo/nightmare.cpp	-	-	-	Night Mare (Spain)
+nightstr	taito/taito_z.cpp	-	-	-	Night Striker (World)
+ninclown	itech/itech8.cpp	-	-	-	Ninja Clowns (27 oct 91)
+ninjakd2	upl/ninjakd2.cpp	-	mame4all	-	Ninja-Kid II / NinjaKun Ashura no Shou (set 1)
+nitedrvr	atari/nitedrvr.cpp	-	mame4all	-	Night Driver
+nitrobal	dataeast/rohga.cpp	-	-	-	Nitro Ball (World, set 1)
+nmg5	yunsung/nmg5.cpp	-	-	-	Multi 5 / New Multi Game 5 (set 1)
+noahsark	misc/tugboat.cpp	-	-	-	Noah's Ark
+nost	misc/mcatadv.cpp	-	-	-	Nostradamus
+nouryoku	nmk/nmk16.cpp	-	mame4all	-	Nouryoku Koujou Iinkai
+nratechu	seta/simple_st0016.cpp	-	-	-	Neratte Chu (ver. 1.10)
+nstocker	bally/balsente.cpp	-	mame4all	-	Night Stocker (10/6/86)
+numanath	namco/namcona1.cpp	-	-	-	Numan Athletics (World)
+number1	misc/sanremo.cpp	-	-	-	Number One
+nyny	sigma/nyny.cpp	-	-	-	New York! New York!
+offroad	cinematronics/leland.cpp	-	mame4all	-	Ironman Ivan Stewart's Super Off-Road (rev 4)
+offroadc	williams/midvunit.cpp	-	-	-	Off Road Challenge (v1.63)
+offroadt	cinematronics/leland.cpp	-	mame4all	-	Ironman Ivan Stewart's Super Off-Road Track-Pak (rev 4?)
+offtwall	atari/offtwall.cpp	-	mame4all	-	Off the Wall (2/3-player upright)
+ohmygod	atlus/ohmygod.cpp	-	mame4all	-	Oh My God! (Japan)
+oisipuzl	seta/seta.cpp	-	mame4all	-	Oishii Puzzle Ha Irimasenka
+olibochu	irem/olibochu.cpp	-	mame4all	-	Oli-Boo-Chu (USA)
+omega	misc/freekick.cpp	-	-	-	Omega
+omegaf	upl/ninjakd2.cpp	-	mame4all	-	Omega Fighter (set 1)
+omegrace	bally/omegrace.cpp	-	mame4all	-	Omega Race (set 1)
+oneshot	misc/oneshot.cpp	-	-	-	One Shot One Kill
+onetwo	dgrm/onetwo.cpp	-	-	-	One + Two
+opwolf3	taito/slapshot.cpp	-	-	-	Operation Wolf 3 (World)
+orbit	atari/orbit.cpp	-	-	-	Orbit
+orbs	seta/seta.cpp	-	mame4all	-	Orbs (10/7/94 prototype?)
+ordyne	namco/namcos2.cpp	-	mame4all	-	Ordyne (World)
+orleg2	igs/pgm2.cpp	-	-	-	Oriental Legend 2 (V104, Oversea)
+orunners	sega/segas32.cpp	-	-	-	OutRunners (World)
+osman	dataeast/simpl156.cpp	-	-	-	Osman (World)
+othello	success/othello.cpp	-	-	-	Othello (version 3.0)
+othldrby	toaplan/sunwise.cpp	-	-	-	Othello Derby (Japan)
+othunder	taito/othunder.cpp	-	-	-	Operation Thunderbolt (World, rev 1)
+otwalls	bally/balsente.cpp	-	mame4all	-	Off the Wall (Sente) (10/16/84)
+outfxies	namco/namconb1.cpp	-	-	-	The Outfoxies (World, OU2)
+p47aces	jaleco/ms32.cpp	-	-	-	P-47 Aces (ver 1.1)
+pachifev	misc/pachifev.cpp	-	-	-	Pachifever
+packbang	kaneko/kaneko16.cpp	-	mame4all	-	Pack'n Bang Bang
+paclandp	pce/uapce.cpp	-	-	-	Pac-Land (United Amusements PC Engine)
+pairlove	seta/seta.cpp	-	mame4all	-	Pairs Love
+pairs	itech/itech32.cpp	-	-	-	Pairs (V1.2, 09/30/94)
+pairsred	itech/itech32.cpp	-	-	-	Pairs Redemption (V1.0, 10/25/94)
+palamed	taito/taito_l.cpp	-	mame4all	-	Palamedes (US)
+pandoras	konami/pandoras.cpp	-	mame4all	-	Pandora's Palace
+pangpang	dataeast/tumbleb.cpp	-	-	-	Pang Pang
+pangpoms	metro/metro.cpp	-	-	-	Pang Pom's
+panicprk	namco/namcos23.cpp	mips/sh	-	-	Panic Park (World, PNP2 Ver. A)
+panicstr	kaneko/suprnova.cpp	sh	-	-	Panic Street (Japan)
+panther	irem/redalert.cpp	-	mame4all	-	Panther (bootleg?)
+paperboy	atari/atarisy2.cpp	-	mame4all	-	Paperboy (rev 3)
+paprazzi	yunsung/yunsun16.cpp	-	-	-	Paparazzi
+para2dx	yunsung/paradise.cpp	-	-	-	Paradise 2 Deluxe
+paraca	misc/paracaidista.cpp	-	-	-	Paracaidista
+paradise	yunsung/paradise.cpp	-	-	-	Paradise (set 1)
+paradlx	yunsung/paradise.cpp	-	-	-	Paradise Deluxe
+parentj	taito/taito_o.cpp	-	-	-	Parent Jack (Japan)
+pasha2	misc/pasha2.cpp	e132xs	-	-	Pasha Pasha 2
+pass	misc/pass.cpp	-	-	-	Pass
+pastelis	seta/ssv.cpp	-	-	-	Pastel Island (Japan, prototype)
+patapata	atlus/patapata.cpp	-	-	-	Pata Pata Panic
+pbaction	tecmo/pbaction.cpp	-	mame4all	-	Pinball Action (set 1)
+pbancho	fuuki/fuukifg2.cpp	-	-	-	Gyakuten!! Puzzle Bancho (Japan, set 1)
+pbillian	taito/superqix.cpp	-	-	-	Prebillian
+pbillrd	misc/freekick.cpp	-	-	-	Perfect Billiard
+pbobble	taito/taito_b.cpp	-	mame4all	-	Puzzle Bobble (Japan, B-System)
+pbobble2	taito/taito_f3.cpp	-	-	-	Puzzle Bobble 2 (Ver 2.3O 1995/07/31)
+pbobble3	taito/taito_f3.cpp	-	-	-	Puzzle Bobble 3 (Ver 2.1O 1996/09/27)
+pbobble4	taito/taito_f3.cpp	-	-	-	Puzzle Bobble 4 (Ver 2.04O 1997/12/19)
+pclubys	yunsung/nmg5.cpp	-	-	-	Puzzle Club (Yun Sung, set 1)
+pdrift	sega/segaybd.cpp	-	-	-	Power Drift (World, Rev A)
+pdriftl	sega/segaybd.cpp	-	-	-	Power Drift - Link Version (Japan, Rev A)
+peggle	itech/itech8.cpp	-	-	-	Peggle (Joystick, v1.0)
+penbros	seta/seta2.cpp	-	-	-	Penguin Brothers (Japan)
+penfan	eolith/eolith.cpp	e132xs	-	-	Penfan Girls - Step1. Mild Mind (set 1)
+pengadvb	msx/pengadvb.cpp	-	-	-	Penguin Adventure (bootleg of MSX version, encrypted)
+penky	yunsung/paradise.cpp	-	-	-	Penky
+pepsiman	sigma/sigmab98.cpp	-	-	-	PEPSI Man
+percuss	orca/zodiack.cpp	-	mame4all	-	The Percussor
+perestro	taito/superqix.cpp	-	-	-	Perestroika Girls
+pesadelo	msx/forte2.cpp	-	-	-	Pesadelo (bootleg of Konami Knightmare)
+pgalvip	kaneko/expro02.cpp	-	-	-	Pocket Gals V.I.P (set 1)
+phelios	namco/namcos2.cpp	-	mame4all	-	Phelios
+phklad	misc/photon.cpp	-	-	-	Klad / Labyrinth (Photon System)
+phpython	misc/photon.cpp	-	-	-	Python (Photon System)
+phtetris	misc/photon.cpp	-	-	-	Tetris (Photon System)
+pignewt	sega/segag80r.cpp	-	mame4all	-	Pig Newton (version C)
+pigout	cinematronics/leland.cpp	-	mame4all	-	Pig Out: Dine Like a Swine! (rev 2?)
+pigskin	bally/mcr68.cpp	-	mame4all	-	Pigskin 621AD (rev 1.1K 8/01/90)
+pikkaric	konami/konmedal68k.cpp	-	-	-	Pikkari Chance
+pinkswts	cave/cv1k.cpp	sh	-	-	Pink Sweets: Ibara Sorekara (Japan, 2006/04/06 MASTER VER....)
+pipedrm	vsystem/pipedrm.cpp	-	mame4all	-	Pipe Dream (World)
+pipeline	misc/pipeline.cpp	-	-	-	Pipeline
+piratdwb	nintendo/snesb.cpp	-	-	-	The Pirates of Dark Water (SNES bootleg)
+pirates	nix/pirates.cpp	-	-	-	Pirates (set 1)
+piratesh	konami/piratesh.cpp	-	-	-	Pirate Ship (ver UAA)
+piratetr	alliedleisure/killcom.cpp	-	mame4all	-	Pirate Treasure
+pitapat	f32/crospang.cpp	-	-	-	Pitapat Puzzle (set 1)
+pitfight	atari/atarig1.cpp	-	mame4all	-	Pit Fighter (rev 9)
+pitnrun	taito/pitnrun.cpp	-	-	-	Pit & Run - F-1 Race (rev 1)
+pkscram	misc/pkscram.cpp	-	-	-	PK Scramble
+pktgaldx	dataeast/pktgaldx.cpp	-	-	-	Pocket Gal Deluxe (Europe v3.00)
+play2000	gaelco/gaelco2.cpp	-	-	-	Play 2000 (Super Slot & Gran Tesoro) (v7.0i) (Italy)
+plgirls	taito/taito_l.cpp	-	mame4all	-	Play Girls
+plgirls2	taito/taito_l.cpp	-	mame4all	-	Play Girls 2 (Europe)
+plotting	taito/taito_l.cpp	-	mame4all	-	Plotting (World set 1)
+plygonet	konami/plygonet.cpp	-	-	-	Polygonet Commanders (ver UAA)
+poitto	metro/metro.cpp	-	-	-	Poitto! (Japan revision D)
+poizone	acorn/ertictac.cpp	-	-	-	Poizone
+pokechmp	dgrm/pokechmp.cpp	-	-	-	Poke Champ (set 1)
+pokrdice	itech/itech8.cpp	-	-	-	Poker Dice (v1.7)
+polepos	namco/polepos.cpp	-	mame4all	-	Pole Position (World)
+polepos2	namco/polepos.cpp	-	mame4all	-	Pole Position II (Japan)
+policetr	misc/policetr.cpp	mips	-	-	Police Trainer (Rev 1.3B, Rev 0.3 PCB)
+pollux	dooyong/dooyong.cpp	-	-	-	Pollux (set 1)
+polynetw	konami/plygonet.cpp	-	-	-	Poly-Net Warriors (ver JAA)
+polystar	konami/konamim2.cpp	dspp/powerpc	-	chd	Tobe! Polystars (ver JAA)
+ponttehk	tecmo/lvcards.cpp	-	-	-	Pontoon (Tehkan)
+poolshrk	atari/poolshrk.cpp	-	-	-	Poolshark
+poosho	misc/vamphalf.cpp	e132xs	-	-	Poosho Poosho
+popbingo	dooyong/dooyong.cpp	-	-	-	Pop Bingo
+popn1	konami/djmain.cpp	-	-	chd	Pop'n Music (ver TA-A, HDD 1.01)
+popn2	konami/djmain.cpp	-	-	chd	Pop'n Music 2 (ver JA-A)
+popn3	konami/djmain.cpp	-	-	chd	Pop'n Music 3 (ver JA-A)
+popn4	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music 4
+popn5	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music 5
+popn6	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music 6
+popn7	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music 7
+popn8	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music 8
+popnanm	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music Animelo
+popnanm2	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music Animelo 2 (JAC)
+popnmt	konami/firebeat.cpp	powerpc	-	chd	Pop'n Music Mickey Tunes
+popnpop	taito/taito_f3.cpp	-	-	-	Pop'n Pop (Ver 2.07O 1998/02/09)
+popnstex	konami/djmain.cpp	-	-	chd	Pop'n Stage EX (ver JB-A)
+popper	omori/popper.cpp	-	-	-	Popper
+popspops	nmk/nmk16.cpp	-	mame4all	-	Pop's Pop's
+powerbal	playmark/powerbal.cpp	-	-	-	Power Balls
+powerins	nmk/nmk16.cpp	-	mame4all	-	Power Instinct (USA)
+powrplay	cinematronics/leland.cpp	-	mame4all	-	Power Play
+ppcar	acorn/ssfindo.cpp	-	-	-	Pang Pang Car
+ppd	konami/firebeat.cpp	powerpc	-	chd	ParaParaDancing
+ppj	success/kurukuru.cpp	-	-	-	Pyon Pyon Jump (V1.40, Japan)
+ppking	taito/gladiatr.cpp	-	mame4all	-	Ping-Pong King
+ppmast93	edevices/ppmast93.cpp	-	-	-	Ping Pong Masters '93
+ppp	konami/firebeat.cpp	powerpc	-	chd	ParaParaParadise
+ppp11	konami/firebeat.cpp	powerpc	-	chd	ParaParaParadise v1.1
+predtors	williams/predators.cpp	-	-	-	The Predators (prototype)
+primrage	atari/atarigt.cpp	-	-	-	Primal Rage (version 2.3, Jan 1995)
+progolf	dataeast/progolf.cpp	-	-	-	18 Holes Pro Golf (set 1)
+progress	misc/timelimt.cpp	-	-	-	Progress
+promutrv	misc/ettrivia.cpp	-	-	-	Progressive Music Trivia (Question set 1)
+prosoccr	dataeast/liberate.cpp	-	-	-	Pro Soccer
+prosport	dataeast/liberate.cpp	-	-	-	Pro Sports - Bowling, Tennis, and Golf
+prtytime	dataeast/simpl156.cpp	-	-	-	Party Time: Gonta the Diver II / Ganbare! Gonta!! 2 (World Release)
+pspikes	vsystem/pspikes.cpp	-	mame4all	-	Power Spikes (World)
+ptblank	namco/namconb1.cpp	-	-	-	Point Blank (World, GN2 Rev B, set 1)
+pturn	jaleco/pturn.cpp	-	-	-	Parallel Turn
+pubball	itech/itech32.cpp	-	-	-	Power Up Baseball (prototype)
+puchicar	taito/taito_f3.cpp	-	-	-	Puchi Carat (Ver 2.02O 1997/10/29)
+puckpkmn	sega/megadriv_ybox.cpp	-	-	-	Puckman Pockimon Genie 2000
+punchout	nintendo/punchout.cpp	-	mame4all	-	Punch-Out!! (Rev B)
+pururun	metro/metro.cpp	-	-	-	Pururun (Japan set 1)
+puzlwrld	nmk/nmk16.cpp	-	mame4all	-	Puzzle World
+puzzlekg	eolith/eolith.cpp	e132xs	-	-	Puzzle King (Dance & Puzzle)
+puzzli	metro/metro.cpp	-	-	-	Puzzli (Japan revision B)
+puzzloop	kaneko/suprnova.cpp	sh	-	-	Puzz Loop (Europe, v0.94)
+puzzlove	f32/silvmil.cpp	-	-	-	PuzzLove
+puzznic	taito/taito_l.cpp	-	mame4all	-	Puzznic (World)
+pwrflip	excellent/gcpinbal.cpp	-	-	-	Power Flipper Pinball Shooting (v1.33)
+pwrgoal	taito/taito_f3.cpp	-	-	-	Taito Power Goal (Ver 2.5O 1994/11/03)
+pwrkick	toaplan/sunwise.cpp	-	-	-	Power Kick (Japan)
+pyenaget	sigma/sammymdl.cpp	-	-	-	Pye-nage Taikai
+pyutakun	toaplan/sunwise.cpp	-	-	-	Pyuuta-kun (Japan)
+pzlbowl	seta/seta2.cpp	-	-	-	Puzzle De Bowling (Japan)
+pzlestar	msx/sangho.cpp	-	-	-	Puzzle Star (Sang Ho Soft)
+pzletime	edevices/pzletime.cpp	-	-	-	Puzzle Time (prototype)
+qb3	cinematronics/cinemat.cpp	-	mame4all	-	QB-3 (prototype)
+qdrmfgp	konami/qdrmfgp.cpp	-	-	chd	Quiz Do Re Mi Fa Grand Prix (Japan)
+qdrmfgp2	konami/qdrmfgp.cpp	-	-	chd	Quiz Do Re Mi Fa Grand Prix 2 - Shin-Kyoku Nyuukadayo (Japan)
+qgh	sega/segas24.cpp	-	-	-	Quiz Ghost Hunter (Japan, ROM Based)
+qiji6	igs/igs_m027_033vid.cpp	-	-	-	Qiji 6 (V118CN)
+qrouka	sega/segas24.cpp	-	-	-	Quiz Rouka Ni Tattenasai (Japan, ROM Based)
+qtheater	taito/taito_f3.cpp	-	-	-	Quiz Theater - 3tsu no Monogatari (Ver 2.3J 1994/11/10)
+quantum	atari/quantum.cpp	-	mame4all	-	Quantum (rev 2)
+quarterb	cinematronics/leland.cpp	-	mame4all	-	Quarterback (rev 5)
+quasar	zaccaria/quasar.cpp	-	-	-	Quasar (set 1)
+quickp5	konami/quickpick5.cpp	-	-	-	Quick Pick 5
+quiz18k	vsystem/welltris.cpp	-	-	-	Miyasu Nonki no Quiz 18-Kin
+quizard	philips/cdi.cpp	-	-	-	Quizard (v1.8, German, i8751 DE 11 D3)
+quizard2	philips/cdi.cpp	-	-	chd	Quizard 2 (v2.3, German, i8751 DN 122 D3)
+quizard3	philips/cdi.cpp	-	-	chd	Quizard 3 (v3.4, German, i8751 DE 132 D3)
+quizard4	philips/cdi.cpp	-	-	chd	Quizard 4 Rainbow (v4.2, German, i8751 DE 142 D3)
+quizdna	nmk/quizdna.cpp	-	-	-	Quiz DNA no Hanran (Japan)
+quizhuhu	taito/taito_f3.cpp	-	-	-	Moriguchi Hiroko no Quiz de Hyuu!Hyuu! (Ver 2.2J 1995/05/25)
+quizmeku	sega/segas24.cpp	-	-	-	Quiz Mekurumeku Story (Japan, ROM Based)
+quizmoon	nmk/macrossp.cpp	-	-	-	Quiz Bishoujo Senshi Sailor Moon - Chiryoku Tairyoku Toki no Un
+quizo	misc/quizo.cpp	-	-	-	Quiz Olympic (set 1)
+quizpani	nmk/quizpani.cpp	-	-	-	Quiz Panicuru Fantasy
+quiztou	namco/namcona1.cpp	-	-	-	Nettou! Gekitou! Quiztou!! (Japan)
+qwak	atari/runaway.cpp	-	-	-	Qwak (prototype)
+qzkklgy2	seta/seta.cpp	-	mame4all	-	Quiz Kokology 2
+qzkklogy	seta/seta.cpp	-	mame4all	-	Quiz Kokology
+qzshowby	taito/taito_b.cpp	-	mame4all	-	Quiz Sekai wa SHOW by shobai (Japan)
+r2dtank	sigma/r2dtank.cpp	-	-	-	R2D Tank
+r2dx_v33	seibu/r2dx_v33.cpp	-	-	-	Raiden II New / Raiden DX (newer V33 PCB) (Raiden DX EEPROM)
+rabbit	metro/rabbit.cpp	-	-	-	Rabbit (Asia 3/6)
+rabiolep	vsystem/rpunch.cpp	-	mame4all	-	Rabio Lepus (Japan)
+racedriv	atari/harddriv.cpp	-	-	-	Race Drivin' (cockpit, rev 5)
+raceon	namco/namcos23.cpp	mips/sh	-	-	Race On! (World, RO2 Ver. A)
+rachero	sega/segaxbd.cpp	-	-	-	Racing Hero (FD1094 317-0144)
+racingb	taito/taito_z.cpp	-	-	-	Racing Beat (World)
+rackemup	konami/battlnts.cpp	-	mame4all	-	Rack 'em Up (version L)
+racknrol	galaxian/galaxold.cpp	-	mame4all	-	Rack + Roll
+radarzon	misc/cvs.cpp	-	-	-	Radar Zone
+radikalb	gaelco/gaelco3d.cpp	-	-	-	Radikal Bikers (version 2.02)
+radm	sega/segas32.cpp	-	-	-	Rad Mobile (World)
+radr	sega/segas32.cpp	-	-	-	Rad Rally (World)
+radrad	nichibutsu/seicross.cpp	-	mame4all	-	Radical Radial (US)
+raiden2	seibu/raiden2.cpp	-	-	-	Raiden II (US, set 1)
+raidendx	seibu/raiden2.cpp	-	-	-	Raiden DX (UK)
+raiders	misc/cvs.cpp	-	-	-	Raiders
+raimais	taito/taito_l.cpp	-	mame4all	-	Raimais (World, rev 1)
+rambo3	taito/taito_b.cpp	-	mame4all	-	Rambo III (Europe)
+rampart	atari/rampart.cpp	-	mame4all	-	Rampart (Trackball)
+rapidfir	misc/tickee.cpp	-	-	-	Rapid Fire (v1.1, Build 239)
+rapidrvr	namco/namcos23.cpp	mips/sh	-	-	Rapid River (US, RD3 Ver. C)
+rbisland	taito/rbisland.cpp	-	mame4all	-	Rainbow Islands (rev 1)
+rbislande	taito/rbisland.cpp	-	mame4all	-	Rainbow Islands - Extra Version
+rchase	sega/segaybd.cpp	-	-	-	Rail Chase (World)
+rcirulet	misc/corona.cpp	-	-	-	Ruleta RCI (6-players, Spanish)
+rdft	seibu/seibuspi.cpp	-	-	-	Raiden Fighters (Germany)
+rdft2	seibu/seibuspi.cpp	-	-	-	Raiden Fighters 2 - Operation Hell Dive (Germany)
+re800v1	misc/corona.cpp	-	-	-	Ruleta RE-800 (v1.0, set 1)
+re800v3	misc/corona.cpp	-	-	-	Ruleta RE-800 (v3.0)
+re900	misc/re900.cpp	-	-	-	Ruleta RE-900
+recalh	taito/taito_f3.cpp	-	-	-	Recalhorn (Ver 1.42J 1994/5/11, prototype)
+recordbr	taito/taito_h.cpp	-	-	-	Recordbreaker (World)
+redalert	irem/redalert.cpp	-	mame4all	-	Red Alert
+redclash	universal/zerohour.cpp	-	-	-	Red Clash
+redlin2p	cinematronics/leland.cpp	-	mame4all	-	Redline Racer (2 players)
+redrobin	galaxian/fastfred.cpp	-	mame4all	-	Red Robin
+reelquak	seta/seta2.cpp	-	-	-	Reel'N Quake! (Version 1.05)
+relief	atari/relief.cpp	-	mame4all	-	Relief Pitcher (Rev D, 07 Jun 1992 / 28 May 1992)
+renju	seta/simple_st0016.cpp	-	-	-	Renju Kizoku - Kira Kira Gomoku Narabe (ver. 1.0)
+rescraid	bally/balsente.cpp	-	mame4all	-	Rescue Raider (5/11/87) (non-cartridge)
+retofinv	taito/retofinv.cpp	-	mame4all	-	Return of the Invaders
+revlatns	atari/cops.cpp	-	-	chd	Revelations
+revx	williams/midxunit.cpp	-	-	-	Revolution X (revision 2.0 9/8/94)
+rezon	seta/seta.cpp	-	mame4all	-	Rezon
+rfjet	seibu/seibuspi.cpp	-	-	-	Raiden Fighters Jet (Germany)
+ridingf	taito/taito_f3.cpp	-	-	-	Riding Fight (Ver 1.0O)
+rimrockn	itech/itech8.cpp	-	-	-	Rim Rockin' Basketball (v2.2)
+ringrage	taito/taito_f3.cpp	-	-	-	Ring Rage (Ver 2.3O 1992/08/09)
+riot	tecmo/tecmo16.cpp	-	mame4all	-	Riot (NMK)
+ripcord	exidy/circus.cpp	-	mame4all	-	Rip Cord
+ripoff	cinematronics/cinemat.cpp	-	mame4all	-	Rip Off
+ripribit	ice/lethalj.cpp	-	-	-	Ripper Ribbit (Version 3.5)
+rjammer	nichibutsu/tubep.cpp	-	-	-	Roller Jammer
+rltennis	tch/rltennis.cpp	-	-	-	Reality Tennis (set 1)
+roadedge	snk/hng64.cpp	mips	-	-	Roads Edge / Round Trip RV (rev.B)
+roadriot	atari/atarig42.cpp	-	-	-	Road Riot 4WD (04 Dec 1991, conversion kit)
+robokid	upl/ninjakd2.cpp	-	mame4all	-	Atomic Robo-kid (World, Type-2)
+robotbwl	exidy/circus.cpp	-	mame4all	-	Robot Bowl
+robowres	sanritsu/appoooh.cpp	-	mame4all	-	Robo Wres 2001
+rockclim	galaxian/galaxian_rockclim.cpp	-	-	-	Rock Climber
+rockn	jaleco/tetrisp2.cpp	-	-	-	Rock'n Tread (Japan)
+rockn2	jaleco/tetrisp2.cpp	-	-	-	Rock'n Tread 2 (Japan)
+rockn3	jaleco/tetrisp2.cpp	-	-	-	Rock'n 3 (Japan)
+rockn4	jaleco/tetrisp2.cpp	-	-	-	Rock'n 4 (Japan, prototype)
+rocknms	jaleco/tetrisp2.cpp	-	-	-	Rock'n MegaSession (Japan)
+rockrage	konami/rockrage.cpp	-	mame4all	-	Rock'n Rage (World)
+rocktris	yunsung/yunsung8.cpp	-	mame4all	-	Rock Tris
+rohga	dataeast/rohga.cpp	-	-	-	Rohga: Armor Force (Asia/Europe v5.0)
+rolcrush	misc/dreamwld.cpp	-	-	-	Rolling Crush (version 1.07.E - 1999/02/11, Trust license)
+roldfrog	gaelco/splash.cpp	-	mame4all	-	The Return of Lady Frog (set 1)
+rollerg	konami/rollerg.cpp	-	mame4all	-	Rollergames (US)
+rotaryf	midw8080/rotaryf.cpp	-	-	-	Rotary Fighter
+rougien	sanritsu/mermaid.cpp	-	mame4all	-	Rougien
+route16	sunelectronics/route16.cpp	-	mame4all	-	Route 16 (Sun Electronics, set 1)
+royalqn	nichibutsu/nightgal.cpp	-	-	-	Royal Queen (Japan 841010 RQ 0-07)
+roylcrdn	nichibutsu/jangou.cpp	-	-	-	Royal Card (Nichibutsu HW)
+rshark	dooyong/dooyong.cpp	-	-	-	R-Shark (set 1)
+rthun2	namco/namcos2.cpp	-	mame4all	-	Rolling Thunder 2
+runaway	atari/runaway.cpp	-	-	-	Runaway (Atari, prototype)
+runaways	sunelectronics/dai3wksi.cpp	-	-	-	Runaway (Sun Electronics, Japan)
+rungun2	konami/konamigx.cpp	-	-	-	Run and Gun 2 (ver UAA)
+rushbets	nintendo/snesb.cpp	-	-	-	Rushing Beat Shura (SNES bootleg)
+rushhero	konami/konamigx.cpp	-	-	-	Rushing Heroes (ver UAB)
+ryorioh	seta/ssv.cpp	-	-	-	Gourmet Battle Quiz Ryohrioh CooKing (Japan)
+ryouran	kaneko/suprnova.cpp	sh	-	-	VS Mahjong Otome Ryouran (revision 2)
+ryujin	taito/taito_b.cpp	-	mame4all	-	Ryu Jin (Japan, ET910000B PCB)
+s1945	psikyo/psikyo.cpp	-	mame4all	-	Strikers 1945 (World)
+s1945ii	psikyo/psikyosh.cpp	sh	-	-	Strikers 1945 II
+s1945iii	psikyo/psikyosh.cpp	sh	-	-	Strikers 1945 III (World) / Strikers 1999 (Japan)
+sabotenb	nmk/nmk16.cpp	-	mame4all	-	Saboten Bombers (set 1)
+sadari	dooyong/dooyong.cpp	-	-	-	Sadari (Japan, NTC license)
+safarir	phoenix/safarir.cpp	-	mame4all	-	Safari Rally (World)
+salmndr2	konami/konamigx.cpp	-	-	-	Salamander 2 (ver JAA)
+sams64	snk/hng64.cpp	mips	-	-	Samurai Shodown 64 / Samurai Spirits / Paewang Jeonseol 64
+sams64_2	snk/hng64.cpp	mips	-	-	Samurai Shodown 64: Warriors Rage / Samurai Spirits 2: Asura Zanmaden
+samuraia	psikyo/psikyo.cpp	-	mame4all	-	Samurai Aces (World)
+sandscrp	kaneko/sandscrp.cpp	-	-	-	Sand Scorpion
+satsf3d	dataeast/astrof.cpp	-	mame4all	-	Saturn: Space Fighter 3D
+sauro	tecfri/sauro.cpp	-	mame4all	-	Sauro (set 1)
+sb2003	misc/limenko.cpp	e132xs	-	-	Super Bubble 2003 (World, Ver 1.0)
+sbishi	konami/bishi.cpp	-	-	-	Super Bishi Bashi Champ (ver JAA, 2 Players)
+sblast2b	nintendo/snesb.cpp	-	-	-	Sonic Blast Man II Special Turbo (SNES bootleg)
+sbomber	psikyo/psikyosh.cpp	sh	-	-	Space Bomber (ver. B)
+sbowling	taito/sbowling.cpp	-	-	-	Strike Bowling
+sbubsm	sega/megadriv_sunmix.cpp	-	-	-	Super Bubble Bobble (Sun Mixing, Mega Drive clone hardware)
+scessjoe	taito/ashnojoe.cpp	-	-	-	Success Joe (World)
+scfinals	taito/taito_f3.cpp	-	-	-	Super Cup Finals (Ver 2.2O 1994/01/13, single PCB)
+schmeisr	dataeast/rohga.cpp	-	-	-	Schmeiser Robo (Japan)
+sci	taito/taito_z.cpp	-	-	-	Special Criminal Investigation (World set 1)
+scion	seibu/wiz.cpp	-	mame4all	-	Scion
+scross	sega/segas32.cpp	-	-	-	Stadium Cross (World)
+scudhamm	jaleco/scudhamm.cpp	-	-	-	Scud Hammer (Japan, ver 1.4)
+scyclone	taito/scyclone.cpp	-	-	-	Space Cyclone (Japan)
+sderby	playmark/sderby.cpp	-	-	-	Super Derby (Playmark, v.07.03)
+sdfight	dataeast/tumbleb.cpp	-	-	-	SD Fighters (Korea)
+sdmg2	igs/igs017.cpp	-	-	-	Chaoji Da Manguan II (China, V765C)
+sdmg2p	igs/igs017.cpp	-	-	-	Maque Wangchao / Chaoji Da Manguan 2 - Jiaqiang Ban (China, V100C)
+seabattl	zaccaria/seabattl.cpp	-	-	-	Sea Battle
+searchey	yunsung/nmg5.cpp	-	-	-	Search Eye (English / Korean / Japanese / Italian)
+searchp2	yunsung/nmg5.cpp	-	-	-	Search Eye Plus V2.0
+secondch	misc/smsmcorp.cpp	-	-	-	Second Chance
+segajw	sega/segajw.cpp	-	-	-	Joker's Wild (Rev. B)
+seicross	nichibutsu/seicross.cpp	-	mame4all	-	Seicross (set 1)
+selfeena	taito/taito_b.cpp	-	mame4all	-	Sel Feena
+semibase	dataeast/tumbleb.cpp	-	-	-	MuHanSeungBu (SemiCom Baseball) (Korea)
+sengekis	kaneko/suprnova.cpp	sh	-	-	Sengeki Striker (Asia)
+senknow	kaneko/suprnova.cpp	sh	-	-	Sen-Know (Japan)
+senkyu	seibu/seibuspi.cpp	-	-	-	Senkyu (Japan, newer)
+sentetst	bally/balsente.cpp	-	mame4all	-	Sente Diagnostic Cartridge
+setaroul	seta/seta.cpp	-	mame4all	-	The Roulette (Visco)
+sexyboom	msx/sangho.cpp	-	-	-	Sexy Boom
+sexyparo	konami/konamigx.cpp	-	-	-	Sexy Parodius (ver JAA)
+sfkick	msx/sfkick.cpp	-	-	-	Super Free Kick (set 1)
+sfootbal	bally/balsente.cpp	-	mame4all	-	Street Football (11/12/86)
+sftm	itech/itech32.cpp	-	-	-	Street Fighter: The Movie (v1.12)
+sgmt1	nintendo/multigam.cpp	-	-	-	Super Game Mega Type 1
+sgsafari	misc/magic10.cpp	-	-	-	Super Gran Safari (ver. 3.11)
+sgunner	namco/namcos2.cpp	-	mame4all	-	Steel Gunner (Rev B)
+sgunner2	namco/namcos2.cpp	-	mame4all	-	Steel Gunner 2 (US)
+shadfrce	technos/shadfrce.cpp	-	-	-	Shadow Force (World, Version 3)
+shambros	misc/sttechno.cpp	-	-	chd	Shamisen Brothers Vol 1 (V1.01K)
+shangha2	sunelectronics/shanghai.cpp	-	mame4all	-	Shanghai II (Japan, set 1)
+shangha3	sunelectronics/shangha3.cpp	-	mame4all	-	Shanghai III (World)
+shanghai	sunelectronics/shanghai.cpp	-	mame4all	-	Shanghai (World)
+shangkid	misc/shangkid.cpp	-	-	-	Shanghai Kid
+sharkatt	pacific/thief.cpp	-	mame4all	-	Shark Attack
+sharrier	sega/segahang.cpp	-	mame4all	-	Space Harrier (Rev A, 8751 315-5163A)
+shatekds	sigma/sammymdl.cpp	-	-	-	Shatekids
+sheriff	nintendo/n8080.cpp	-	mame4all	-	Sheriff
+shettle	nichibutsu/shettle.cpp	-	-	-	Alone Shettle Crew
+shimpact	williams/midyunit.cpp	-	mame4all	-	Super High Impact (rev LA2 10/22/91)
+shinygld	playmark/sderby.cpp	-	-	-	Shiny Golds
+shocking	yunsung/yunsun16.cpp	-	-	-	Shocking
+shogwarr	kaneko/kaneko16.cpp	-	mame4all	-	Shogun Warriors (World)
+shootout	dataeast/shootout.cpp	-	mame4all	-	Shoot Out (US)
+shoottv	itech/itech32.cpp	-	-	-	Must Shoot TV (prototype)
+shougi	alpha/shougi.cpp	-	-	-	Shougi
+shougi2	alpha/shougi.cpp	-	-	-	Shougi Part II
+showdown	exidy/exidy440.cpp	-	mame4all	-	Showdown (version 5.0)
+shrike	bally/balsente.cpp	-	mame4all	-	Shrike Avenger (prototype)
+shufshot	itech/itech32.cpp	-	-	-	Shuffleshot (v1.40)
+shuifeng	sega/megadriv_ybox.cpp	-	-	-	Shuihu Feng Yun Zhuan
+shuriboy	konami/konmedal.cpp	-	-	-	Shuriken Boy
+shuuz	atari/shuuz.cpp	-	mame4all	-	Shuuz (version 8.0)
+sidebs	taito/taitojc.cpp	-	-	-	Side by Side (Ver 3.0 OK)
+sidebs2	taito/taitojc.cpp	-	-	-	Side by Side 2 (Ver 2.6 OK)
+sidepckt	dataeast/sidepckt.cpp	-	mame4all	-	Side Pocket (World)
+sidepmbc	sega/megadriv_acbl.cpp	-	-	-	Side Pocket (Conny bootleg of Mega Drive version)
+sidewndr	misc/acefruit.cpp	-	-	-	Sidewinder
+silentd	taito/taito_b.cpp	-	mame4all	-	Silent Dragon (World)
+silkroad	unico/silkroad.cpp	-	-	-	The Legend of Silkroad
+silvmil	f32/silvmil.cpp	-	-	-	Silver Millennium
+simldv1000	virtual/ldplayer.cpp	-	-	chd	Pioneer LDV-1000 Simulator
+simpr8210	virtual/ldplayer.cpp	-	-	chd	Pioneer PR-8210 Simulator
+sindbadm	sega/segag80r.cpp	-	mame4all	-	Sindbad Mystery
+sise7	misc/gluck2.cpp	-	-	-	Si Se 7
+skimaxx	ice/skimaxx.cpp	-	-	-	Skimaxx
+skullxbo	atari/skullxbo.cpp	-	mame4all	-	Skull & Crossbones (rev 5)
+skyalert	metro/metro.cpp	-	-	-	Sky Alert
+skyarmy	misc/skyarmy.cpp	-	-	-	Sky Army
+skybump	videogames/looping.cpp	-	-	-	Sky Bumper
+skychut	irem/m10.cpp	-	mame4all	-	Sky Chuter
+skydest	taito/cyclemb.cpp	-	-	-	Sky Destroyer (Japan)
+skydiver	atari/skydiver.cpp	-	mame4all	-	Sky Diver
+skyfox	jaleco/skyfox.cpp	-	mame4all	-	Sky Fox
+skykid	namco/skykid.cpp	-	mame4all	-	Sky Kid (new version)
+skylancr	orca/funkybee.cpp	-	mame4all	-	Sky Lancer
+skyraid	atari/skyraid.cpp	-	-	-	Sky Raider
+slapshot	taito/slapshot.cpp	-	-	-	Slap Shot (Ver 3.0 O)
+slimekun	konami/konmedal.cpp	-	-	-	Slime Kun
+slipstrm	sega/segas32.cpp	-	-	-	Slip Stream (Brazil 950515)
+sliver	misc/sliver.cpp	-	-	-	Sliver (set 1)
+slotunbl	misc/murogmbl.cpp	-	-	-	Slot (unknown bootleg?)
+slqz2	igs/igs017.cpp	-	-	-	Shuang Long Qiang Zhu 2 VS (China, VS203J, set 1)
+slspirit	promat/1945kiii.cpp	-	-	-	Solite Spirits
+sltpcycl	gaelco/gaelco2.cpp	-	-	-	Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum 02AB)
+sltpstep	gaelco/gaelco2.cpp	-	-	-	Pro Stepper Tele Cardioline (Salter fitness stepper, V.1.0, checksum 2B83)
+smashtv	williams/midyunit.cpp	-	mame4all	-	Smash T.V. (rev 8.00)
+smgp	sega/segaxbd.cpp	-	-	-	Super Monaco GP (World, Rev B) (FD1094 317-0126a)
+smiconk	snk/miconkit.cpp	-	-	-	Space Micon Kit
+sminiboy	misc/miniboy7.cpp	-	-	-	Super Mini-Boy
+smissw	kaneko/expro02.cpp	-	-	-	Super Miss World
+smotor	misc/smotor.cpp	-	-	-	Super Motor (prototype)
+sms4in1	misc/smsmcorp.cpp	-	-	-	4-in-1 (version SWS1-052587)
+smsjoker	misc/smsmcorp.cpp	-	-	-	Joker Poker With Hi-Lo Double-Up (version HL-DLX-T-021286)
+snakepit	bally/balsente.cpp	-	mame4all	-	Snake Pit
+snakjack	bally/balsente.cpp	-	mame4all	-	Snacks'n Jaxson
+snowboar	gaelco/gaelco2.cpp	-	-	-	Snow Board Championship (version 2.1)
+soccer	atari/atarifb.cpp	-	mame4all	-	Atari Soccer
+soccer10	misc/magic10.cpp	-	-	-	Soccer 10 (ver. 16.44)
+soccerss	konami/konamigx.cpp	-	-	-	Soccer Superstars (ver EAC)
+sokonuke	seta/seta.cpp	-	mame4all	-	Sokonuke Taisen Game (Japan)
+solarq	cinematronics/cinemat.cpp	-	mame4all	-	Solar Quest (rev 10 8 81)
+solarwar	atari/videopin.cpp	-	mame4all	-	Solar War
+soldivid	psikyo/psikyosh.cpp	sh	-	-	Sol Divide: Sword Of Darkness
+solitaire	misc/vamphalf.cpp	e132xs	-	-	Solitaire (version 2.5)
+solvalou	namco/namcos21_c67.cpp	-	-	-	Solvalou (SV1, Japan)
+songjang	sega/megadriv_ybox.cpp	-	-	-	Songjiangyanyi Final
+sonic	sega/segas32.cpp	-	-	-	SegaSonic The Hedgehog (Japan, rev. C)
+sonic2mb	sega/megadriv_acbl.cpp	-	-	-	Sonic The Hedgehog 2 (bootleg of Mega Drive version)
+sos	namco/warpwarp.cpp	-	mame4all	-	SOS
+sothello	success/sothello.cpp	-	-	-	Super Othello
+sotsugyo	dataeast/funkyjet.cpp	-	-	-	Sotsugyo Shousho (Japan)
+spacbeam	irem/m10.cpp	-	mame4all	-	Space Beam
+spacedx	taito/taito_b.cpp	-	mame4all	-	Space Invaders DX (US, v2.1)
+spacefev	nintendo/n8080.cpp	-	mame4all	-	Space Fever (new version)
+spacefrt	misc/cvs.cpp	-	-	-	Space Fortress (CVS)
+spaceg	omori/spaceg.cpp	-	-	-	Space Guerrilla
+spacegun	taito/taito_z.cpp	-	-	-	Space Gun (World)
+spaceint	stern/astinvad.cpp	-	mame4all	-	Space Intruder
+spacelnc	nintendo/n8080.cpp	-	mame4all	-	Space Launcher
+spaceod	sega/segag80r.cpp	-	mame4all	-	Space Odyssey (version 2)
+spacewar	cinematronics/cinemat.cpp	-	mame4all	-	Space Wars
+spacewin	playmark/sderby.cpp	-	-	-	Scacco Matto / Space Win
+spacfury	sega/segag80v.cpp	-	mame4all	-	Space Fury (revision C)
+sparkman	suna/suna8.cpp	-	mame4all	-	Spark Man (v2.0, set 1)
+sparkz	atari/arcadecl.cpp	-	mame4all	-	Sparkz (prototype)
+spbactn	tecmo/spbactn.cpp	-	-	-	Super Pinball Action (US)
+spcforce	misc/spcforce.cpp	-	mame4all	-	Space Force (set 1)
+spcinv95	taito/taito_f3.cpp	-	-	-	Space Invaders '95: The Attack Of Lunar Loonies (Ver 2.5O 1995/06/14)
+spcking2	stern/astinvad.cpp	-	mame4all	-	Space King 2
+spclords	atari/atarigx2.cpp	-	-	-	Space Lords (rev C)
+spcpostn	sega/angelkds.cpp	-	-	-	Space Position (Japan)
+spdheat	taito/spdheat.cpp	-	-	-	Super Dead Heat (World)
+spdodgeb	technos/spdodgeb.cpp	-	-	-	Super Dodge Ball (US)
+speakres	sunelectronics/route16.cpp	-	mame4all	-	Speak & Rescue
+spec2k	nmk/nmk16.cpp	-	mame4all	-	Spectrum 2000 (vertical, Korea)
+speedatk	seta/speedatk.cpp	-	-	-	Speed Attack! (Japan)
+speedbal	tecfri/speedbal.cpp	-	mame4all	-	Speed Ball (set 1)
+speedfrk	cinematronics/cinemat.cpp	-	mame4all	-	Speed Freak
+speedrcr	namco/namcofl.cpp	-	-	-	Speed Racer
+speedrs	olympia/lbeach.cpp	-	-	-	Speed Race (Seletron / Olympia)
+speedspn	tch/speedspn.cpp	-	-	-	Speed Spin
+speedup	gaelco/gaelco3d.cpp	-	-	-	Speed Up (version 2.20, checksum 2037)
+speglsht	seta/speglsht.cpp	mips	-	-	Super Eagle Shot
+spellbnd	misc/acefruit.cpp	-	-	-	Spellbound
+spetrix	misc/magic10.cpp	-	-	-	Super Petrix (ver. 1P)
+spfghmk2	dataeast/astrof.cpp	-	mame4all	-	Space Fighter Mark II (set 1)
+spider	edevices/twins.cpp	-	-	-	Spider (Buena Vision, without nudity)
+spiders	sigma/spiders.cpp	-	mame4all	-	Spiders (set 1)
+spidman	sega/segas32.cpp	-	-	-	Spider-Man: The Videogame (World)
+spiker	bally/balsente.cpp	-	mame4all	-	Spiker (6/9/86)
+spinlbrk	vsystem/pspikes.cpp	-	mame4all	-	Spinal Breakers (World)
+splash	gaelco/splash.cpp	-	mame4all	-	Splash! (ver. 1.3, checksum E7BEF3FA, World)
+splndrbt	alpha/splendor.cpp	-	-	-	Splendor Blast (set 1)
+splndrbt2	alpha/splendor.cpp	-	-	-	Splendor Blast II
+spnchout	nintendo/punchout.cpp	-	mame4all	-	Super Punch-Out!! (Rev B)
+spool99	misc/spool99.cpp	-	-	-	Super Pool 99 (Version 0.36)
+spotty	misc/limenko.cpp	e132xs	-	-	Spotty (Ver. 2.0.2)
+sprcros2	sanritsu/sprcros2.cpp	-	-	-	Super Cross II (Japan, set 1)
+springer	orca/marineb.cpp	-	mame4all	-	Springer
+sprint4	atari/sprint4.cpp	-	-	-	Sprint 4 (Rev 03)
+sprint8	atari/sprint8.cpp	-	-	-	Sprint 8
+spy	konami/spy.cpp	-	mame4all	-	S.P.Y.: Special Project Y. (World ver. N)
+spyhunt2	bally/mcr68.cpp	-	mame4all	-	Spy Hunter II (rev 2)
+sqix	taito/superqix.cpp	-	-	-	Super Qix (World/Japan, V1.2)
+sraider	universal/sraider.cpp	-	-	-	Space Raider
+sranger	suna/suna8.cpp	-	mame4all	-	Super Ranger (v2.0)
+srmdb	sega/megadriv_acbl.cpp	-	-	-	Sunset Riders (scrambled bootleg of Mega Drive version)
+srmp4	seta/ssv.cpp	-	-	-	Super Real Mahjong PIV (Japan)
+srmp7	seta/ssv.cpp	-	-	-	Super Real Mahjong P7 (Japan)
+ssf2mdb	sega/megadriv_acbl.cpp	-	-	-	Super Street Fighter II - The New Challengers (scrambled bootleg of Mega Drive version)
+ssfindo	acorn/ssfindo.cpp	-	-	-	See See Find Out
+ssh2000	misc/sshanghai.cpp	-	-	-	Super Shanghai 2000 (set 1, green board)
+ssh2000wf	misc/sshanghai.cpp	-	-	-	Super Shanghai 2000 - Wrestle Fiesta (30% bonus, red board)
+ssh2001	misc/sshanghai.cpp	-	-	-	Super Shanghai 2001 (set 1, red board)
+sshangha	dataeast/sshangha.cpp	-	-	-	Super Shanghai Dragon's Eye (World)
+sshooter	misc/policetr.cpp	mips	-	-	Sharpshooter (Rev 1.9)
+sshot	modelracing/sshot.cpp	-	-	-	Super Shot (set 1)
+ssingles	yachiyo/ssingles.cpp	-	-	-	Swinging Singles (US)
+sslam	playmark/sslam.cpp	-	-	-	Super Slam (set 1)
+ssmissin	nmk/nmk16.cpp	-	mame4all	-	S.S. Mission
+ssozumo	technos/ssozumo.cpp	-	mame4all	-	Syusse Oozumou (Japan)
+sspeedr	taito/sspeedr.cpp	-	-	-	Super Speed Race
+ssprint	atari/atarisy2.cpp	-	mame4all	-	Super Sprint (rev 4)
+ssrj	taito/ssrj.cpp	-	-	-	Super Speed Race Junior (Japan)
+sstrangr	yachiyo/sstrangr.cpp	-	-	-	Space Stranger
+stactics	sega/stactics.cpp	-	mame4all	-	Space Tactics
+stadhero	dataeast/stadhero.cpp	-	mame4all	-	Stadium Hero (Japan)
+stadhr96	dataeast/deco_mlc.cpp	sh	-	-	Stadium Hero '96 (Europe, EAJ, Tuning license)
+stagger1	nmk/nmk16.cpp	-	mame4all	-	Stagger I (Japan)
+stankatk	misc/micro3d.cpp	-	-	-	Super Tank Attack (prototype rev. 1.12)
+starblad	namco/namcos21_c67.cpp	-	-	-	Starblade (ST2, World)
+starcas	cinematronics/cinemat.cpp	-	mame4all	-	Star Castle (version 3)
+starcrus	ramtek/starcrus.cpp	-	mame4all	-	Star Cruiser
+starfigh	suna/suna8.cpp	-	mame4all	-	Star Fighter (v1)
+starfir2	exidy/starfire.cpp	-	mame4all	-	Star Fire 2
+starfire	exidy/starfire.cpp	-	mame4all	-	Star Fire (set 1)
+starhawk	cinematronics/cinemat.cpp	-	mame4all	-	Starhawk
+starshp1	atari/starshp1.cpp	-	-	-	Starship 1
+startrek	sega/segag80v.cpp	-	mame4all	-	Star Trek
+stealsee	eolith/eolith.cpp	e132xs	-	-	Steal See
+steeltal	atari/harddriv.cpp	-	-	-	Steel Talons (rev 2)
+stg	seta/seta.cpp	-	mame4all	-	Strike Gunner S.T.G
+stinger	seibu/wiz.cpp	-	mame4all	-	Stinger
+stlforce	edevices/stlforce.cpp	-	-	-	Steel Force
+stmblade	seta/ssv.cpp	-	-	-	Storm Blade (US)
+stocker	bally/balsente.cpp	-	mame4all	-	Stocker (3/19/85)
+stompin	bally/balsente.cpp	-	mame4all	-	Stompin' (4/4/86)
+stonebal	misc/artmagic.cpp	-	-	-	Stone Ball (4 Players, v1-20 13/12/1994)
+strahl	nmk/nmk16.cpp	-	mame4all	-	Koutetsu Yousai Strahl (World)
+stratab	itech/itech8.cpp	-	-	-	Strata Bowling (v3)
+streetg2	pc/pcat_nit.cpp	-	-	-	Street Games II (Revision 7C)
+strker	misc/4enraya.cpp	-	-	-	Striker
+strkfgtr	sega/segaybd.cpp	-	-	-	Strike Fighter (World)
+strkforc	williams/midyunit.cpp	-	mame4all	-	Strike Force (rev 1 02/25/91)
+strkzone	cinematronics/leland.cpp	-	mame4all	-	Strike Zone Baseball
+strnskil	sunelectronics/markham.cpp	-	-	-	Strength & Skill
+strtdriv	atari/harddriv.cpp	-	-	-	Street Drivin' (prototype)
+strvmstr	misc/ettrivia.cpp	-	-	-	Super Trivia Master
+stunrun	atari/harddriv.cpp	-	-	-	S.T.U.N. Runner (rev 6)
+stuntair	misc/stuntair.cpp	-	-	-	Stunt Air
+sub	orca/sub.cpp	-	-	-	Submarine (Sigma)
+subroc3d	sega/turbo.cpp	-	mame4all	-	Subroc-3D
+suchie2	jaleco/ms32.cpp	-	-	-	Idol Janshi Suchie-Pai II (ver 1.1)
+sunaq	suna/suna16.cpp	-	-	-	SunA Quiz 6000 Academy (940620-6)
+sundance	cinematronics/cinemat.cpp	-	mame4all	-	Sundance
+supduck	capcom/supduck.cpp	-	-	-	Super Duck
+super21	ramtek/hitme.cpp	-	-	-	Super Twenty One
+superbik	misc/cvs.cpp	-	-	-	Superbike
+superbug	atari/firetrk.cpp	-	mame4all	-	Super Bug
+superchs	taito/superchs.cpp	-	-	-	Super Chase - Criminal Termination (World)
+supergm3	nintendo/multigam.cpp	-	-	-	Super Game III
+superkds	igs/igs_fear.cpp	-	-	-	Super Kids / Jiu Nan Xiao Yingxiong (S019CN)
+superman	taito/taito_x.cpp	-	mame4all	-	Superman (World)
+superten	misc/usgames.cpp	-	-	-	Super Ten V8.3
+supertnk	videogames/supertnk.cpp	-	-	-	Super Tank
+superx	dooyong/dooyong.cpp	-	-	-	Super-X (NTC)
+suplup	misc/vamphalf.cpp	e132xs	-	-	Super Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 4.0 / 990518)
+supmodel	kaneko/expro02.cpp	-	-	-	Super Model
+supmodl2	kaneko/expro02.cpp	-	-	-	Super Model II
+suprgolf	nasco/suprgolf.cpp	-	-	-	Super Crowns Golf (World)
+suprridr	taito/suprridr.cpp	-	-	-	Super Rider
+suprslam	vsystem/suprslam.cpp	-	-	-	From TV Animation Slam Dunk - Super Slams
+suprtrio	dataeast/tumbleb.cpp	-	-	-	Super Trio
+sureshot	misc/smsmcorp.cpp	-	-	-	Sure Shot
+surfplnt	gaelco/gaelco3d.cpp	-	-	-	Surf Planet (version 4.1)
+survarts	seta/ssv.cpp	-	-	-	Survival Arts (World)
+sushimar	sigma/sigmab98.cpp	-	-	-	Itazura Daisuki! Sushimaru Kun
+suzuk8h2	namco/namcos2.cpp	-	mame4all	-	Suzuka 8 Hours 2 (World, Rev B)
+suzuka8h	namco/namcos2.cpp	-	mame4all	-	Suzuka 8 Hours (World, Rev C)
+svcpcb	snk/neopcb.cpp	-	-	-	SNK vs. Capcom - SVC Chaos (JAMMA PCB, NEO-MVH MVO PCB)
+svf	sega/segas32.cpp	-	-	-	Super Visual Football: European Sega Cup (Rev A)
+svolley	vsystem/rpunch.cpp	-	mame4all	-	Super Volleyball (Japan)
+swa	sega/model1.cpp	-	-	-	Star Wars (Sega, US)
+swatpolc	misc/esd16.cpp	-	-	-	SWAT Police
+swcourt	namco/namcona1.cpp	-	-	-	Super World Court (World)
+sws	namco/namcos2.cpp	-	mame4all	-	Super World Stadium (Japan)
+sws92	namco/namcos2.cpp	-	mame4all	-	Super World Stadium '92 (Japan)
+sws93	namco/namcos2.cpp	-	mame4all	-	Super World Stadium '93 (Japan)
+sws95	namco/namconb1.cpp	-	-	-	Super World Stadium '95 (Japan)
+sws96	namco/namconb1.cpp	-	-	-	Super World Stadium '96 (Japan)
+sws97	namco/namconb1.cpp	-	-	-	Super World Stadium '97 (Japan)
+sxyreac2	seta/ssv.cpp	-	-	-	Pachinko Sexy Reaction 2 (Japan)
+sxyreact	seta/ssv.cpp	-	-	-	Pachinko Sexy Reaction (Japan)
+syvalion	taito/taito_h.cpp	-	-	-	Syvalion (Japan)
+tacscan	sega/segag80v.cpp	-	mame4all	-	Tac/Scan
+tail2nos	vsystem/tail2nos.cpp	-	mame4all	-	Tail to Nose - Great Championship / Super Formula
+tailg	cinematronics/cinemat.cpp	-	mame4all	-	Tailgunner
+talbot	alpha/champbas.cpp	-	mame4all	-	Talbot
+tangtang	misc/esd16.cpp	-	-	-	Tang Tang (ver. 0526, 26/05/2000, set 1)
+tank8	atari/tank8.cpp	-	-	-	Tank 8 (set 1)
+tankbatl	misc/micro3d.cpp	-	-	-	Tank Battle (prototype rev. 4/21/92)
+tankbust	valadon/tankbust.cpp	-	-	-	Tank Busters
+taotaido	vsystem/taotaido.cpp	-	-	-	Tao Taido (2 button version)
+tapatune	misc/tapatune.cpp	-	-	-	Tap a Tune
+targeth	gaelco/targeth.cpp	-	-	-	Target Hits (ver 1.1, checksum 5152)
+tattack	misc/tattack.cpp	-	-	-	Time Attacker
+taxidriv	misc/taxidriv.cpp	-	-	-	Taxi Driver
+tbeastw2	sigma/sigmab98.cpp	-	-	-	Transformers Beast Wars II
+tbowl	tecmo/tbowl.cpp	-	-	-	Tecmo Bowl (World, set 1)
+tbyahhoo	konami/konamigx.cpp	-	-	-	Twin Bee Yahhoo! (ver JAA)
+tceptor	namco/tceptor.cpp	-	-	-	Thunder Ceptor
+tcobra2	taito/taito_f3.cpp	-	-	-	Twin Cobra II (Ver 2.1O 1995/11/30)
+tdoboon	sigma/sammymdl.cpp	-	-	-	Taihou de Doboon
+tdragon	nmk/nmk16.cpp	-	mame4all	-	Thunder Dragon (8th Jan. 1992, unprotected)
+tdragon2	nmk/nmk16.cpp	-	mame4all	-	Thunder Dragon 2 (9th Nov. 1993)
+teamht	bally/balsente.cpp	-	mame4all	-	Team Hat Trick (11/16/84)
+teamqb	cinematronics/leland.cpp	-	mame4all	-	John Elway's Team Quarterback (rev 3)
+teljan	kaneko/suprnova.cpp	sh	-	-	Tel Jan
+telpacfl	seta/seta2.cpp	-	-	-	TelePachi Fever Lion (V1.0)
+tengai	psikyo/psikyo.cpp	-	mame4all	-	Tengai (World)
+term2	williams/midyunit.cpp	-	mame4all	-	Terminator 2 - Judgment Day (rev LA4 08/03/92)
+tetriskr	pc/tetriskr.cpp	-	-	-	Tetris (Korean bootleg of Mirrorsoft PC-XT Tetris)
+tetrisp	jaleco/ms32.cpp	-	-	-	Tetris Plus (ver 1.0)
+tetrisp2	jaleco/tetrisp2.cpp	-	-	-	Tetris Plus 2 (World, V2.8)
+tgm2	psikyo/psikyosh.cpp	sh	-	-	Tetris: The Absolute - The Grand Master 2
+tgtbal96	yunsung/paradise.cpp	-	-	-	Target Ball '96
+tgtpanic	konami/tgtpanic.cpp	-	-	-	Target Panic
+tharrier	nmk/nmk16.cpp	-	mame4all	-	Task Force Harrier
+thayers	misc/thayers.cpp	-	-	chd	Thayer's Quest (set 1)
+theboat	misc/tvg01.cpp	-	-	-	The Boat
+thedealr	seta/thedealr.cpp	-	-	-	The Dealer (Visco)
+thedeep	dataeast/thedeep.cpp	-	-	-	The Deep (Japan)
+thehand	gametron/gotya.cpp	-	mame4all	-	The Hand
+thief	pacific/thief.cpp	-	mame4all	-	Thief
+thndrbld	sega/segaxbd.cpp	-	-	-	Thunder Blade (upright) (FD1094 317-0056)
+thndzone	dataeast/dassault.cpp	-	-	-	Thunder Zone (World, Rev 1)
+thoop2	gaelco/thoop2.cpp	-	-	-	TH Strikes Back (non North America, version 1.0, checksum 020EB356)
+thunderj	atari/thunderj.cpp	-	mame4all	-	ThunderJaws (rev 3)
+thunderl	seta/seta.cpp	-	mame4all	-	Thunder & Lightning (set 1)
+tickee	misc/tickee.cpp	-	-	-	Tickee Tickats
+timecrs2	namco/namcos23.cpp	mips/sh	-	-	Time Crisis II (US, TSS3 Ver. B)
+timekill	itech/itech32.cpp	-	-	-	Time Killers (v1.32)
+timelimt	misc/timelimt.cpp	-	-	-	Time Limit
+timetrv	sega/timetrv.cpp	-	-	chd	Time Traveler
+tinklpit	namco/namcona1.cpp	-	-	-	Tinkle Pit (Japan)
+tinv2650	zaccaria/zac1b1120.cpp	-	-	-	The Invaders
+titlef	sega/segas32.cpp	-	-	-	Title Fight (World)
+tjsb	igs/igs017.cpp	-	-	-	Tian Jiang Shen Bing (China, V137C)
+tkdensho	tecmo/tecmosys.cpp	-	-	-	Toukidenshou - Angel Eyes (VER. 960614)
+tkmmpzdm	konami/konamigx.cpp	-	-	-	Tokimeki Memorial Taisen Puzzle-dama (ver JAB)
+tm	williams/tmaster.cpp	-	-	-	Touchmaster (v3.00 Euro)
+tm2k	williams/tmaster.cpp	-	-	-	Touchmaster 2000 Plus (v4.63 Standard)
+tm3k	williams/tmaster.cpp	-	-	-	Touchmaster 3000 (v5.02 Standard)
+tm4k	williams/tmaster.cpp	-	-	-	Touchmaster 4000 (v6.03 Standard)
+tm5k	williams/tmaster.cpp	-	-	-	Touchmaster 5000 (v7.10 Standard)
+tm7k	williams/tmaster.cpp	-	-	-	Touchmaster 7000 (v8.04 Standard)
+tm8k	williams/tmaster.cpp	-	-	-	Touchmaster 8000 (v9.04 Standard)
+tmek	atari/atarigt.cpp	-	-	-	T-MEK (v5.1, The Warlords)
+tmntmwb	nintendo/snesb.cpp	-	-	-	Teenage Mutant Ninja Turtles - Mutant Warriors (SNES bootleg)
+toggle	bally/balsente.cpp	-	mame4all	-	Toggle (prototype)
+tokkae	konami/konamigx.cpp	-	-	-	Taisen Tokkae-dama (ver JAA)
+tomagic	nmk/nmk16.cpp	-	mame4all	-	Tom Tom Magic
+tomahawk	dataeast/astrof.cpp	-	mame4all	-	Tomahawk 777 (rev 5)
+tomcat	atari/tomcat.cpp	-	-	-	TomCat (prototype)
+tonton	success/tonton.cpp	-	-	-	Waku Waku Doubutsu Land TonTon (Japan)
+toobin	atari/toobin.cpp	-	mame4all	-	Toobin' (rev 3)
+top21	misc/mil4000.cpp	-	-	-	Top XXI (Version 1.2)
+topbladv	misc/crystal.cpp	-	-	-	Top Blade V
+topdrive	tch/topdrive.cpp	-	-	-	Top Driving (version 1.1)
+topgunnr	exidy/vertigo.cpp	-	-	-	Top Gunner (Exidy)
+topland	taito/taitoair.cpp	-	-	-	Top Landing (World)
+topsecex	exidy/exidy440.cpp	-	mame4all	-	Top Secret (Exidy) (version 1.0)
+topshoot	sega/megadriv_sunmix.cpp	-	-	-	Top Shooter
+topspeed	taito/topspeed.cpp	-	-	-	Top Speed (World, rev 1)
+toratora	misc/toratora.cpp	-	-	-	Tora Tora (prototype?)
+toride2g	metro/metro.cpp	-	-	-	Toride II Adauchi Gaiden (Japan)
+torus	yunsung/paradise.cpp	-	-	-	Torus
+totcarn	williams/midyunit.cpp	-	mame4all	-	Total Carnage (rev LA1 03/10/92)
+totlvice	konami/konamim2.cpp	dspp/powerpc	-	chd	Total Vice (ver EBA)
+toucheme	misc/ladyfrog.cpp	-	-	-	Touche Me (set 1)
+touchgo	gaelco/gaelco2.cpp	-	-	-	Touch and Go (World, checksum 059D0235)
+tourpgum	misc/4enraya.cpp	-	-	-	unknown Paradise Automatique / TourVisión bowling themed poker game with gum prizes (France)
+tourtabl	atari/tourtabl.cpp	-	-	-	Tournament Table (set 1)
+touryuu	eolith/ghosteo.cpp	-	-	-	Touryuumon (V1.1, Apr 14 2005)
+toyland	misc/vamphalf.cpp	e132xs	-	-	Toy Land Adventure
+toypop	namco/toypop.cpp	-	mame4all	-	Toypop
+trapeze	exidy/circus.cpp	-	mame4all	-	Trapeze / Trampoline
+trckydoc	tecfri/sauro.cpp	-	mame4all	-	Tricky Doc (set 1)
+tripfev	igs/igs_m027xa.cpp	-	-	-	Triple Fever (V110US)
+triplhnt	atari/triplhnt.cpp	-	-	-	Triple Hunt
+trisport	bally/mcr68.cpp	-	mame4all	-	Tri-Sports
+triviabb	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (Baby Boomer Edition) (3/20/85)
+triviaes	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (Volumen III, Spanish, Maibesa license)
+triviag1	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (Think Tank - Genus Edition) (2/12/85)
+triviag2	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (Genus II Edition) (3/22/85)
+triviaqz	misc/triviaquiz.cpp	-	-	-	Professor Trivia (set 1)
+triviasp	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (All Star Sports Edition)
+triviayp	bally/balsente.cpp	-	mame4all	-	Trivial Pursuit (Young Players Edition) (3/29/85)
+trivrus	misc/trivrus.cpp	-	-	-	Trivia R Us (v1.07)
+trog	williams/midyunit.cpp	-	mame4all	-	Trog (rev LA5 3/29/91)
+trophyh	seta/seta2.cpp	-	-	-	Trophy Hunting - Bear & Moose V1.00
+trstar	taito/taito_f3.cpp	-	-	-	Top Ranking Stars (Ver 2.1O 1993/05/21) (New Version)
+truco	misc/truco.cpp	-	-	-	Truco-Tron
+trvhang	misc/smsmcorp.cpp	-	-	-	Trivia Hangup (version Trivia-1-050185)
+trvmadns	misc/trvmadns.cpp	-	-	-	Trivia Madness - Series A Question set
+trvquest	alliedleisure/trvquest.cpp	-	-	-	Trivia Quest
+tryout	dataeast/tryout.cpp	-	-	-	Pro Baseball Skill Tryout (Japan)
+tsamurai	taito/tsamurai.cpp	-	mame4all	-	Samurai Nihon-Ichi (rev 1)
+tsukande	konami/konmedal.cpp	-	-	-	Tsukande Toru Chicchi
+tsupenta	konami/konmedal.cpp	-	-	-	Tsurikko Penta
+tsururin	konami/konmedal.cpp	-	-	-	Tsururin Kun
+ttchamp	misc/ttchamp.cpp	-	-	-	Table Tennis Champions
+tubep	nichibutsu/tubep.cpp	-	-	-	Tube Panic
+tugboat	misc/tugboat.cpp	-	-	-	Tugboat
+tunhunt	atari/tunhunt.cpp	-	-	-	Tunnel Hunt
+turbo	sega/turbo.cpp	-	mame4all	-	Turbo (program 1513-1515)
+turbofrc	vsystem/pspikes.cpp	-	mame4all	-	Turbo Force (World, set 1)
+turbosub	misc/esripsys.cpp	-	-	-	Turbo Sub (prototype rev. TSCA)
+turkhunt	seta/seta2.cpp	-	-	-	Turkey Hunting USA V1.00
+turrett	namco/turrett.cpp	mips	-	chd	Turret Tower - The Enemy Has Arrived
+tutstomb	misc/tickee.cpp	-	-	-	Tut's Tomb
+twcup90	tecmo/wc90.cpp	-	-	-	Tecmo World Cup '90 (World set 1)
+twcup94	vsystem/gstriker.cpp	-	-	-	Tecmo World Cup '94 (set 1)
+twinactn	nmk/nmk16.cpp	-	mame4all	-	Twin Action
+twinbrat	edevices/stlforce.cpp	-	-	-	Twin Brats (set 1)
+twineag2	seta/ssv.cpp	-	-	-	Twin Eagle II - The Rescue Mission
+twinhawk	taito/taito_x.cpp	-	mame4all	-	Twin Hawk (World)
+twinqix	taito/taito_f3.cpp	-	-	-	Twin Qix (Ver 1.0A 1995/01/17, prototype)
+twins	edevices/twins.cpp	-	-	-	Twins (newer)
+tx1	tatsumi/tx1.cpp	-	-	-	TX-1 (World)
+uballoon	suna/suna16.cpp	-	-	-	Ultra Balloon
+ucytokyu	sigma/sigmab98.cpp	-	-	-	Uchuu Tokkyuu Medalian
+ultennis	misc/artmagic.cpp	-	-	-	Ultimate Tennis
+ultraman	konami/ultraman.cpp	-	mame4all	-	Ultraman (Japan)
+ultrax	seta/ssv.cpp	-	-	-	Ultra X Weapons / Ultra Keibitai
+umanclub	seta/seta.cpp	-	mame4all	-	Ultraman Club - Tatakae! Ultraman Kyoudai!!
+undrfire	taito/undrfire.cpp	-	-	-	Under Fire (World)
+unkpacg	misc/4enraya.cpp	-	-	-	unknown 'Pac-Man' gambling game (set 1)
+unksig	misc/4enraya.cpp	-	-	-	unknown 'Space Invaders' gambling game (encrypted, set 1)
+upscope	amiga/upscope.cpp	-	-	-	Up Scope
+upyoural	cinematronics/leland.cpp	-	mame4all	-	Up Your Alley
+urachamu	misc/crystal.cpp	-	-	-	Urachacha Mudaeri (Korea)
+usg32	misc/usgames.cpp	-	-	-	Super Duper Casino (California V3.2)
+usgames	misc/usgames.cpp	-	-	-	Games V25.4X
+utoukond	seta/seta.cpp	-	mame4all	-	Ultra Toukon Densetsu (Japan)
+valkyrie	namco/namcos2.cpp	-	mame4all	-	Valkyrie no Densetsu (Japan)
+valtric	jaleco/argus.cpp	-	mame4all	-	Valtric
+vamphalf	misc/vamphalf.cpp	e132xs	-	-	Vamf x1/2 (Europe, version 1.1.0908)
+vampire	misc/vampire.cpp	-	-	-	Vampire (prototype?)
+vandyke	nmk/nmk16.cpp	-	mame4all	-	Vandyke (Japan)
+vasara	seta/ssv.cpp	-	-	-	Vasara
+vasara2	seta/ssv.cpp	-	-	-	Vasara 2 (set 1)
+vblokbrk	kaneko/suprnova.cpp	sh	-	-	VS Block Breaker (Europe)
+vbowl	igs/igs011.cpp	-	-	-	Virtua Bowling (World, V101XCM)
+vcarn	misc/spool99.cpp	-	-	-	Video Carnival 1999 / Super Royal Card (Version 0.11)
+vcircle	atari/jaguar.cpp	mips	-	chd	Vicious Circle (prototype)
+venom	nintendo/snesb.cpp	-	-	-	Venom & Spider-Man - Separation Anxiety (SNES bootleg)
+victory	exidy/victory.cpp	-	mame4all	-	Victory
+video21	videogames/video21.cpp	-	-	-	Video 21
+videopin	atari/videopin.cpp	-	mame4all	-	Video Pinball (16 PROMs version)
+vindictr	atari/vindictr.cpp	-	mame4all	-	Vindicators (rev 5)
+viofight	taito/taito_b.cpp	-	mame4all	-	Violence Fight (World)
+viostorm	konami/mystwarr.cpp	-	-	-	Violent Storm (ver EAC)
+viper	cinematronics/leland.cpp	-	mame4all	-	Viper (rev 3)
+viprp1	seibu/seibuspi.cpp	-	-	-	Viper Phase 1 (New Version, World)
+virtpool	itech/iteagle.cpp	mips	-	chd	Virtual Pool
+vmetal	metro/metro.cpp	-	-	-	Varia Metal
+volfied	taito/volfied.cpp	-	-	-	Volfied (World, rev 1)
+vr	sega/model1.cpp	-	-	-	Virtua Racing
+vscaptfl	jaleco/scudhamm.cpp	-	-	-	Vs. Super Captain Flag (Japan)
+vsgongf	taito/tsamurai.cpp	-	mame4all	-	VS Gong Fight
+vshoot	namco/namconb1.cpp	-	-	-	J-League Soccer V-Shoot (Japan)
+vsnetscr	konami/konamigx.cpp	-	-	-	Versus Net Soccer (ver EAD)
+waijockey	konami/quickpick5.cpp	-	-	-	Wai Wai Jockey
+wallst	misc/cvs.cpp	-	-	-	Wall Street
+wanted	orca/marineb.cpp	-	mame4all	-	Wanted
+wantouch	sigma/sammymdl.cpp	-	-	-	Wantouchable
+wardner	toaplan/wardner.cpp	-	mame4all	-	Wardner (World)
+wargods	williams/midvunit.cpp	-	-	chd	War Gods (HD 10/09/1996 - Dual Resolution)
+warp1	sunelectronics/dai3wksi.cpp	-	-	-	Warp-1 (Japan)
+warpsped	meadows/warpsped.cpp	-	-	-	Warp Speed (prototype)
+warpwarp	namco/warpwarp.cpp	-	mame4all	-	Warp & Warp
+warrior	cinematronics/cinemat.cpp	-	mame4all	-	Warrior
+watrball	gaelco/blmbycar.cpp	-	-	-	Water Balls
+wbbc97	vsystem/pspikes.cpp	-	mame4all	-	Beach Festival World Championship 1997
+wbeachvl	playmark/playmark.cpp	-	-	-	World Beach Volley (set 1, PIC16C57 audio CPU)
+wcbowl	itech/itech32.cpp	-	-	-	World Class Bowling (v1.66)
+wcircus	excellent/lastbank.cpp	-	-	-	Wonder Circus (Japan, v1.1.1)
+wcvol95	dataeast/hvysmsh.cpp	-	-	-	World Cup Volleyball '95 (Asia Ver. 1.0)
+wecleman	konami/wecleman.cpp	-	mame4all	-	WEC Le Mans 24 (v2.01)
+welltris	vsystem/welltris.cpp	-	-	-	Welltris (World?, 2 players)
+wfortune	itech/itech8.cpp	-	-	-	Wheel Of Fortune (set 1)
+wheelrun	edevices/fantland.cpp	-	-	-	Wheels Runner
+whodunit	exidy/exidy440.cpp	-	mame4all	-	Who Dunit (version 9.0)
+wiggie	seta/seta.cpp	-	mame4all	-	Wiggie Waggie
+wilytowr	irem/m63.cpp	-	-	-	Wily Tower
+wingforc	kaneko/kaneko16.cpp	-	mame4all	-	Wing Force (Japan, prototype)
+wingwar	sega/model1.cpp	-	-	-	Wing War (World)
+winner82	misc/corona.cpp	-	-	-	Winners Circle (82)
+winspike	konami/konamigx.cpp	-	-	-	Winning Spike (ver EAA)
+wiping	nichibutsu/wiping.cpp	-	mame4all	-	Wiping
+witch	excellent/witch.cpp	-	-	-	Witch
+wits	seta/seta.cpp	-	mame4all	-	Wit's (Japan)
+wivernwg	misc/vamphalf.cpp	e132xs	-	-	Wivern Wings
+wiz	seibu/wiz.cpp	-	mame4all	-	Wiz
+wizdfire	dataeast/rohga.cpp	-	-	-	Wizard Fire (Over Sea v2.1)
+wldgunsb	nintendo/snesb.cpp	-	-	-	Wild Guns (SNES bootleg)
+wlstar	dataeast/tumbleb.cpp	-	-	-	Wonder League Star - Sok-Magicball Fighting (Korea)
+wmg	williams/wmg.cpp	-	-	-	Williams Multigame
+wolfpack	atari/wolfpack.cpp	-	-	-	Wolf Pack (prototype)
+wondl96	dataeast/tumbleb.cpp	-	-	-	Wonder League '96 (Korea)
+wondstck	yunsung/nmg5.cpp	-	-	-	Wonder Stick (set 1)
+worldadv	misc/vamphalf.cpp	e132xs	-	-	World Adventure
+wotw	cinematronics/cinemat.cpp	-	mame4all	-	War of the Worlds
+wownfant	kaneko/expro02.cpp	-	-	-	WOW New Fantasia (Explicit)
+wpksocv2	jaleco/ms32.cpp	-	-	-	World PK Soccer V2 (ver 1.1)
+wrally	gaelco/wrally.cpp	-	-	-	World Rally Championship (version 1.0, checksum DE0D, 08 Nov 1993)
+wrally2	gaelco/gaelco2.cpp	-	-	-	World Rally 2: Twin Racing (version 20-07, checksum B1B8)
+wrofaero	seta/seta.cpp	-	mame4all	-	War of Aero - Project MEIOU
+wschamp	seta/seta2.cpp	-	-	-	Wing Shooting Championship V2.00
+wseries	cinematronics/leland.cpp	-	mame4all	-	World Series: The Season (rev 1)
+wsf	cinematronics/leland.cpp	-	mame4all	-	World Soccer Finals (rev 4)
+wwfwfest	technos/ddragon3.cpp	-	mame4all	-	WWF WrestleFest (World)
+wyvernf0	taito/wyvernf0.cpp	-	-	-	Wyvern F-0 (Rev 1)
+x2222	promat/gstream.cpp	e132xs	-	-	X2222 (final debug?)
+xday2	namco/namcona1.cpp	-	-	-	X-Day 2 (Japan)
+xenophob	bally/mcr68.cpp	-	mame4all	-	Xenophobe
+xexex	konami/xexex.cpp	-	-	-	Xexex (ver EAA)
+xorwldms	gaelco/xorworld_ms.cpp	-	-	-	Xor World (Modular System, prototype, set 1)
+xorworld	gaelco/xorworld.cpp	-	-	-	Xor World (ver 1.2, checksum DB5D0F, prototype)
+xrally	snk/hng64.cpp	mips	-	-	Xtreme Rally / Off Beat Racer!
+xtheball	rare/xtheball.cpp	-	-	-	X the Ball
+xxmissio	upl/xxmissio.cpp	-	-	-	XX Mission
+xybots	atari/xybots.cpp	-	mame4all	-	Xybots (rev 2)
+xymg	igs/igs011.cpp	-	-	-	Xingyun Manguan (China, V651C, set 1)
+xyonix	misc/xyonix.cpp	-	-	-	Xyonix
+yakyuken	omori/yakyuken.cpp	-	-	-	The Yakyuken (bootleg)
+yamagchi	taito/tsamurai.cpp	-	mame4all	-	Go Go Mr. Yamaguchi / Yuke Yuke Yamaguchi-kun
+yamyam	dooyong/gundealr.cpp	-	mame4all	-	Yam! Yam!?
+ymcapsul	konami/konmedal68k.cpp	-	-	-	Yu-Gi-Oh Monster Capsule
+yujan	seta/macs.cpp	-	-	-	Yu-Jan
+yuka	seta/macs.cpp	-	-	-	Yu-Ka
+yukon	exidy/exidy440.cpp	-	mame4all	-	Yukon (version 2.0)
+yumefuda	seta/albazg.cpp	-	-	-	Yumefuda
+yunittst	williams/midyunit.cpp	-	mame4all	-	Y-Unit Test ROM (v1.40)
+zaviga	dataeast/bwing.cpp	-	-	-	Zaviga
+zektor	sega/segag80v.cpp	-	mame4all	-	Zektor (revision B)
+zerohour	universal/zerohour.cpp	-	-	-	Zero Hour (set 1)
+zeropnt	unico/unico.cpp	-	-	-	Zero Point (set 1)
+zeropnt2	unico/unico.cpp	-	-	-	Zero Point 2
+zerozone	comad/zerozone.cpp	-	mame4all	-	Zero Zone
+zingzip	seta/seta.cpp	-	mame4all	-	Zing Zing Zip (World) / Zhen Zhen Ji Pao (China?)
+zipzap	kaneko/expro02.cpp	-	-	-	Zip & Zap (Explicit)
+zodiack	orca/zodiack.cpp	-	mame4all	-	Zodiack
+zombraid	seta/seta.cpp	-	mame4all	-	Zombie Raid (9/28/95, US)
+zwackery	bally/zwackery.cpp	-	mame4all	-	Zwackery
