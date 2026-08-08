@@ -159,3 +159,49 @@ measurement, which is the trap `bench-results-lrmame.md` already documents. The
 `rgb32` bypass is ruled out (`pacman` is `PALETTE16`, the predicate engages
 0/300 frames), the rest is not. Isolating it needs a pacman-only build from
 today's tree.
+
+---
+
+# Full-library sweep — 1,662 romsets
+
+Every romset acquired (1,662 = the 1,645 zip-satisfiable parents under 8 MB from
+the 0.260 set, plus the 0.289 sets fetched for the earlier rejects and the two
+pre-existing ones). `lrmame-gap`, `MISTER_NO_NATIVE=1`, 60 frames, 25-second
+budget. Per-setname results in [`lrmame-sweep.tsv`](lrmame-sweep.tsv).
+
+| outcome | count | share |
+|---|---:|---:|
+| ran | **1,535** | 92.4% |
+| romset not accepted | 71 | 4.3% |
+| segfault | 35 | 2.1% |
+| exceeded the 25 s budget | 21 | 1.3% |
+
+**The crash surface is small and almost entirely one front-end.** Of 35
+segfaults, **31 are Hyperstone**, 2 PowerPC, and just **2 are drivers with no DRC
+at all** (`quiz18k`, `welltris`) — those two are the only genuine driver bugs in
+1,662 romsets. So `drcbearm32`'s defect costs 33 of 1,662 sets (2.0%).
+
+`TIMEOUT` and `SEGV` blur at the edges: a driver that faults after more than 25
+seconds of emulation is killed before it can fault, which is why `mushitam` and
+`bbust2` land in `TIMEOUT` here and in `SEGV` in the 45-driver sample, where the
+budget was longer.
+
+## Speed
+
+Median **40.7 fps**, present removed. 205 sets at 60 fps or better, 20 at 100+,
+481 below 30.
+
+**134 of the 205 have no mame4all fallback** — that is the genuinely new library
+at full speed, games this port cannot otherwise run at all: `cothello` 192,
+`embargo` 172, `warpsped` 153, `gomoku` 137, `clayshoo` 113, `mmagic` 113,
+`madball` 112 (`yunsung/paradise.cpp`), `coolpool` 99, `tgtpanic` 99,
+`para2dx` 107, `torus` 96.
+
+**115 of 626 families have at least one parent at 60 fps or better.**
+
+**These are upper bounds and need re-measuring with the core loaded.** The
+present path is cheap now that it is write-combined — 0.506 ms/frame, about 3%
+of a 60 Hz budget — so the gap should be small, but "should be" is not a
+measurement, and the ledger's own rule is that a present measurement with no
+core loaded measures nothing. The 205 is the candidate list, not the shipped
+list.
