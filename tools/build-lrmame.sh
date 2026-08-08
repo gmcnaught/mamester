@@ -295,6 +295,19 @@ if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$SIG" ]; then
     fi
 fi
 
+# A killed compile leaves a ZERO-BYTE .o whose timestamp is newer than its
+# source, so make considers it up to date and never rebuilds it. The link then
+# succeeds and the artefact is quietly missing whatever that file defined --
+# this cost two builds: emumem_hedw0.o (dispatch highbits 0-8) and then seven of
+# MAME's heaviest translation units. The build dies this way for ordinary
+# reasons: the Docker VM's OOM killer takes cc1plus when several of the big
+# driver files compile at once, and make exits with no message of its own.
+# Sweeping them costs a find and removes the whole failure mode.
+if [ -d "$SRC/$BUILDDIR" ]; then
+    EMPTY_OBJS="$(find "$SRC/$BUILDDIR" -name '*.o' -size 0 -print -delete | wc -l | tr -d ' ')"
+    [ "$EMPTY_OBJS" = "0" ] || echo "# removed $EMPTY_OBJS zero-byte object(s) from an interrupted build"
+fi
+
 [ "$HOST" = "1" ] || run arm-linux-gnueabihf-gcc -O2 -c \
     -o .glibc231-compat.o .glibc231-compat.c
 
