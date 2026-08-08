@@ -418,10 +418,11 @@ def main():
                     continue
                 rows.append((g["name"], family_raw, "/".join(v["drc"]) or "-",
                              "mame4all" if v.get("mame4all") else "-",
+                             "chd" if g.get("needs_chd") else "-",
                              g["description"]))
         rows.sort()
         with open(args.setnames, "w") as fh:
-            fh.write("# setname\tdriver_file\tdrc\tfallback\ttitle\n")
+            fh.write("# setname\tdriver_file\tdrc\tfallback\tchd\ttitle\n")
             for row in rows:
                 fh.write("\t".join(row) + "\n")
         print(f"{len(rows)} parent romsets written to {args.setnames}",

@@ -57,15 +57,41 @@ one SH failure.
 
 ## Romset acceptance: 0.260 sets in a 0.289 build
 
-9 of 45 rejected (20%). At least four are CHD-based — `kinst`, `virtpool`,
-`ppd`, `bm1stmix` are hard-disk games, and a zip-only non-merged set cannot
-satisfy them at any version. The rest (`dkmb`, `maxforce`, `turrett`,
-`polystar`, `x2222`) are candidates for ROM-definition drift between 0.260 and
-0.289 and would need checking individually.
+9 of 45 rejected — and re-fetching all nine as **0.289 standalone sets from
+mdk.cab** (`/download/standalone/<set>.7z`, extracted and rezipped) split them
+cleanly into three causes, only one of which is a version problem:
 
-Against the full subset, 1,947 of 2,017 parents (96.5%) exist in the 0.260 set
-at all — 7.97 GB — so the ceiling is 96.5% and this sample suggests the
-practical figure is nearer 75-80%.
+- **Six need a CHD**, and no ROM zip satisfies those at any MAME version:
+  `bm1stmix` (`753jaa11.chd`), `kinst`, `maxforce`, `polystar`, `ppd`,
+  `turrett` — the error is literally `*.chd NOT FOUND`.
+- **One is undumped**: `virtpool` wants `itvp-1.u53`, `NO GOOD DUMP KNOWN`. It
+  cannot work in any version from any source.
+- **Two were genuine 0.260→0.289 drift**: `dkmb` and `x2222`. Both then loaded
+  from the 0.289 set — and both **segfaulted**, joining the crash bucket
+  (PowerPC and Hyperstone respectively).
+
+So version drift is **2 of 45 (4.4%)**, not the 20% the raw reject count
+suggested, and it is fixable per-set from mdk.cab. An earlier reading of this
+sample as "75-80% practical" attributed the whole reject rate to drift and was
+wrong.
+
+**CHD dependence measured across the whole subset**, since it is the only one of
+the three that is both large and predictable: `lrmame-driver-index.py` now
+parses `ROM_START`…`ROM_END` for `DISK_IMAGE`/`DISK_REGION`, and **80 of 2,017
+parents (4.0%)** need one. It falls on whole families rather than scattering —
+`firebeat` 19/19, `djmain` 17/17, `iteagle` 12/12, `cubo` 5/5, `konamim2` 3/3,
+`kinst` 2/2 — so those families are unshippable from a zip library no matter
+what else is fixed.
+
+Net acquisition picture for the subset:
+
+| | parents |
+|---|---:|
+| subset total | 2,017 |
+| need a CHD — unobtainable as zips | 80 |
+| **zip-satisfiable** | **1,937** |
+| of those, present in the 0.260 set | 1,868 (96.4%) |
+| remainder, needing 0.289 sets from mdk.cab | 69 |
 
 ## Speed, present removed
 

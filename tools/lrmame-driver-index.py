@@ -109,6 +109,17 @@ def split_args(text, start):
     return None, start
 
 
+# ROM_START( name ) ... ROM_END, and whether that block wants a CHD. A driver
+# whose romset includes a DISK_IMAGE cannot be satisfied by any ROM zip at any
+# MAME version -- the hard-disk or CD image is a separate multi-hundred-megabyte
+# artefact. Six of the nine sets rejected in the first hardware run failed for
+# exactly this reason and no other, so it is worth knowing BEFORE downloading a
+# romset library rather than after.
+ROM_START_RE = re.compile(
+    r"^[ \t]*ROM_START\s*\(\s*([A-Za-z0-9_]+)\s*\)(.*?)^[ \t]*ROM_END",
+    re.MULTILINE | re.DOTALL)
+DISK_RE = re.compile(r"\bDISK_(IMAGE|REGION)\b")
+
 STRING_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
@@ -191,6 +202,7 @@ def expand_local_defines(flags, defines, depth=3):
 def parse_registrations(src_root, files):
     """-> {setname: {parent, description, company, flags}} from GAME()/GAMEL()."""
     found = {}
+    needs_chd = set()
     unreadable = 0
     for rel in files:
         path = os.path.join(src_root, rel)
@@ -202,6 +214,9 @@ def parse_registrations(src_root, files):
             continue
         defines = {name: body.split("//")[0].split("/*")[0].strip()
                    for name, body in DEFINE_RE.findall(text)}
+        for setname, block in ROM_START_RE.findall(text):
+            if DISK_RE.search(block):
+                needs_chd.add(setname.lower())
         for m in MACRO_RE.finditer(text):
             args, _ = split_args(text, m.end() - 1)
             if not args or len(args) <= ARG_FULLNAME:
@@ -221,10 +236,14 @@ def parse_registrations(src_root, files):
                 "description": dequote(args[ARG_FULLNAME]),
                 "company": dequote(args[ARG_COMPANY]),
                 "flags": flags,
+                "needs_chd": False,
             }
     if unreadable:
         print(f"note: {unreadable} driver files listed in mame.lst are missing",
               file=sys.stderr)
+    for name in needs_chd:
+        if name in found:
+            found[name]["needs_chd"] = True
     return found
 
 
@@ -262,6 +281,7 @@ def main():
             "description": reg["description"],
             "company": reg["company"],
             "flags": reg["flags"],
+            "needs_chd": reg.get("needs_chd", False),
             "width": None, "height": None, "refresh": None,
             "orientation": None, "status": None,
         })
@@ -275,6 +295,8 @@ def main():
     print(f"index:    {len(games)} arcade entries "
           f"({sum(1 for g in games if not g['cloneof'])} parents) "
           f"across {len(arcade_families)} families", file=sys.stderr)
+    print(f"needs a CHD: {sum(1 for g in games if g['needs_chd'])} entries "
+          "(no ROM zip can satisfy these at any MAME version)", file=sys.stderr)
     print(f"dropped:  {len(no_macro)} setnames with no GAME()/GAMEL() macro "
           "(CONS/COMP/SYST computers and consoles, plus GAME_CUSTOM token-paste "
           "sets)", file=sys.stderr)
