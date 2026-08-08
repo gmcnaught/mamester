@@ -1,5 +1,4 @@
-# Present path LIVE (MAMESTer core loaded, write-combined), 600 frames.
-# setname	fps	driver_file	drc	fallback	title
+setname	fps	driver_file	drc	fallback	title
 embargo	237.2	cinematronics/embargo.cpp	-	-	Embargo
 cothello	189.4	nintendo/cothello.cpp	-	-	Computer Othello
 warpsped	171.1	meadows/warpsped.cpp	-	-	Warp Speed (prototype)

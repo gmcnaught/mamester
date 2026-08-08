@@ -205,3 +205,27 @@ of a 60 Hz budget — so the gap should be small, but "should be" is not a
 measurement, and the ledger's own rule is that a present measurement with no
 core loaded measures nothing. The 205 is the candidate list, not the shipped
 list.
+
+---
+
+# The shippable list — present path live
+
+[`lrmame-shippable.tsv`](lrmame-shippable.tsv) is the measured list: **MAMESTer
+core loaded, write-combining confirmed active, 600-frame runs**, 1,174 games.
+
+| bar | games | no mame4all fallback | families |
+|---|---:|---:|---:|
+| **≥60 fps** | **353** | **226** | 188 |
+| ≥55 fps | 471 | 306 | 249 |
+| ≥50 fps | 579 | 369 | 301 |
+
+Median across everything benched: 49.6 fps.
+
+It supersedes the `fps_no_present` column of [`lrmame-sweep.tsv`](lrmame-sweep.tsv),
+which was 60-frame runs with no core loaded; the classification in that file
+(ran / SEGV / ROMFAIL / TIMEOUT) still stands.
+
+**Neither file carries a comment line.** GitHub renders a `.tsv` by taking line 1
+as the header row, so a leading `#` note makes every data row read as a
+column-count error and the table stops rendering. The conditions a file was
+measured under belong here, not in row 1.

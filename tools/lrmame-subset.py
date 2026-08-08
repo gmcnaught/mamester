@@ -422,7 +422,10 @@ def main():
                              g["description"]))
         rows.sort()
         with open(args.setnames, "w") as fh:
-            fh.write("# setname\tdriver_file\tdrc\tfallback\tchd\ttitle\n")
+            # No leading '#': GitHub renders a .tsv by taking line 1 as the
+            # header row, so a comment line makes every subsequent row look like
+            # a column-count error and the file stops rendering as a table.
+            fh.write("setname\tdriver_file\tdrc\tfallback\tchd\ttitle\n")
             for row in rows:
                 fh.write("\t".join(row) + "\n")
         print(f"{len(rows)} parent romsets written to {args.setnames}",

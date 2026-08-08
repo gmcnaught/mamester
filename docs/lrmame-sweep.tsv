@@ -1,4 +1,4 @@
-# setname	status	fps_no_present	driver_file	drc	fallback	title
+setname	status	fps_no_present	driver_file	drc	fallback	title
 cothello	OK	191.8	nintendo/cothello.cpp	-	-	Computer Othello
 satsf3d	OK	181.5	dataeast/astrof.cpp	-	mame4all	Saturn: Space Fighter 3D
 embargo	OK	171.9	cinematronics/embargo.cpp	-	-	Embargo

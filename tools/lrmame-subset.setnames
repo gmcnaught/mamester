@@ -1,4 +1,4 @@
-# setname	driver_file	drc	fallback	chd	title
+setname	driver_file	drc	fallback	chd	title
 005	sega/segag80r.cpp	-	mame4all	-	005
 10yard	irem/m58.cpp	-	-	-	10-Yard Fight (World, set 1)
 119	galaxian/119.cpp	-	-	-	119 (bootleg?)
